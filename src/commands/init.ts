@@ -26,16 +26,22 @@ export async function runInit(opts: InitOptions): Promise<void> {
   }
 
   const spinner = opts.yes ? null : clack.spinner()
-  spinner?.start('正在初始化工作区…')
 
-  // 创建目录（幂等）
-  fs.mkdirSync(projectsDir, { recursive: true })
+  try {
+    spinner?.start('正在初始化工作区…')
 
-  // 初始化 DB（幂等）
-  const db = initDatabase(opts.homeDir)
-  db.close()
+    // 创建目录（幂等）
+    fs.mkdirSync(projectsDir, { recursive: true })
 
-  spinner?.stop('工作区初始化完成')
+    // 初始化 DB（幂等）
+    const db = initDatabase(opts.homeDir)
+    db.close()
+
+    spinner?.stop('工作区初始化完成')
+  } catch (err) {
+    spinner?.stop('初始化失败')
+    throw err
+  }
 
   if (opts.yes) {
     console.log(pc.green('✓') + ' 工作区已就绪：' + workspaceDir)

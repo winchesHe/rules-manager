@@ -74,15 +74,17 @@ export function initDatabase(homeDir?: string): Database.Database {
 export function isDatabaseReady(homeDir?: string): boolean {
   const { dbPath } = resolveWorkspace(homeDir)
   if (!fs.existsSync(dbPath)) return false
+  let db: Database.Database | undefined
   try {
-    const db = new Database(dbPath, { readonly: true })
+    db = new Database(dbPath, { readonly: true })
     const row = db
       .prepare("SELECT value FROM schema_meta WHERE key = 'version'")
       .get() as { value: string } | undefined
-    db.close()
     return row !== undefined
   } catch {
     return false
+  } finally {
+    db?.close()
   }
 }
 

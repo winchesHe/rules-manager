@@ -25,4 +25,12 @@ program
     runStatus()
   })
 
-program.parseAsync(process.argv)
+export async function runCli(argv: string[]): Promise<void> {
+  await program.parseAsync(argv)
+}
+
+runCli(process.argv).catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err)
+  console.error(`error: ${message}`)
+  process.exit(1)
+})

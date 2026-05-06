@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import Database from 'better-sqlite3'
 import { resolveWorkspace } from '../../src/workspace'
 import { initDatabase, isDatabaseReady } from '../../src/db'
 import { runInit } from '../../src/commands/init'
@@ -189,5 +190,95 @@ describe('initDatabase schema', () => {
     for (const col of cols) {
       expect(allowed.has(col.name)).toBe(true)
     }
+  })
+})
+
+// ─── isDatabaseReady 异常路径 ─────────────────────────────────────────────────
+
+describe('isDatabaseReady 异常路径', () => {
+  let home: string
+
+  beforeEach(() => {
+    home = makeTempHome()
+    const ws = resolveWorkspace(home)
+    fs.mkdirSync(ws.workspaceDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    cleanHome(home)
+  })
+
+  it('DB 文件不存在时应返回 false', () => {
+    expect(isDatabaseReady(home)).toBe(false)
+  })
+
+  it('DB 文件存在但缺少 schema_meta 表时应返回 false（且不泄漏连接）', () => {
+    const ws = resolveWorkspace(home)
+    // 创建空 DB，不应用 schema
+    const db = new Database(ws.dbPath)
+    db.close()
+    expect(isDatabaseReady(home)).toBe(false)
+    // 验证文件仍可被正常打开（无文件句柄泄漏导致的锁）
+    const db2 = new Database(ws.dbPath)
+    expect(() => db2.close()).not.toThrow()
+  })
+
+  it('DB 文件内容损坏时应返回 false', () => {
+    const ws = resolveWorkspace(home)
+    fs.writeFileSync(ws.dbPath, Buffer.from('this is not a sqlite database'))
+    expect(isDatabaseReady(home)).toBe(false)
+  })
+})
+
+// ─── runStatus HOME 路径替换安全性 ───────────────────────────────────────────
+
+describe('runStatus HOME 路径替换安全性', () => {
+  let home: string
+  let output: string[]
+  let origLog: typeof console.log
+  let origHome: string | undefined
+
+  beforeEach(() => {
+    home = makeTempHome()
+    output = []
+    origLog = console.log
+    origHome = process.env.HOME
+    console.log = (...args: unknown[]) => {
+      output.push(args.map(String).join(' '))
+    }
+  })
+
+  afterEach(() => {
+    console.log = origLog
+    if (origHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = origHome
+    }
+    cleanHome(home)
+  })
+
+  it('HOME 未设置时路径不应以 ~ 开头', () => {
+    delete process.env.HOME
+    runStatus({ homeDir: home })
+    const homeLine = output.find((l) => l.startsWith('Home:'))
+    expect(homeLine).toBeDefined()
+    expect(homeLine!.replace('Home: ', '')).not.toMatch(/^~/)
+  })
+
+  it('HOME 与 workspaceDir 无前缀关系时不应替换', () => {
+    process.env.HOME = '/completely/different/path'
+    runStatus({ homeDir: home })
+    const homeLine = output.find((l) => l.startsWith('Home:'))
+    expect(homeLine).toBeDefined()
+    expect(homeLine!.replace('Home: ', '')).not.toMatch(/^~/)
+  })
+
+  it('HOME 匹配时应正确替换为 ~', () => {
+    process.env.HOME = home
+    runStatus({ homeDir: home })
+    const homeLine = output.find((l) => l.startsWith('Home:'))
+    expect(homeLine).toBeDefined()
+    expect(homeLine!.replace('Home: ', '')).toMatch(/^~\//)
   })
 })

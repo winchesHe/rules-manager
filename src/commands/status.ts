@@ -10,7 +10,11 @@ export interface StatusOptions {
 export function runStatus(opts: StatusOptions = {}): void {
   const { workspaceDir, projectsDir } = resolveWorkspace(opts.homeDir)
 
-  const homePath = workspaceDir.replace(process.env.HOME ?? '', '~')
+  const home = process.env.HOME
+  const homePath =
+    home && workspaceDir.startsWith(home + '/')
+      ? '~' + workspaceDir.slice(home.length)
+      : workspaceDir
   const dbReady = isDatabaseReady(opts.homeDir)
   const rulesDirReady = fs.existsSync(projectsDir)
 
