@@ -186,7 +186,10 @@ describe('initDatabase schema', () => {
     const db = initDatabase(home)
     const cols = db.pragma('table_info(sessions)') as Array<{ name: string }>
     db.close()
-    const allowed = new Set(['id', 'agent', 'source_path', 'updated_at', 'content_hash', 'project_key'])
+    const allowed = new Set([
+      'id', 'agent', 'source_path', 'updated_at', 'content_hash', 'project_key',
+      'source_kind', 'scan_state', 'first_seen_at', 'last_seen_at',
+    ])
     for (const col of cols) {
       expect(allowed.has(col.name)).toBe(true)
     }

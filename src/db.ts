@@ -3,7 +3,7 @@ import path from 'node:path'
 import Database from 'better-sqlite3'
 import { resolveWorkspace } from './workspace.js'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 /**
  * 初始化 DB schema：只存内部状态，不存完整 content。
@@ -19,12 +19,16 @@ function applySchema(db: Database.Database): void {
     );
 
     CREATE TABLE IF NOT EXISTS sessions (
-      id           TEXT PRIMARY KEY,
-      agent        TEXT NOT NULL,
-      source_path  TEXT NOT NULL,
-      updated_at   TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      project_key  TEXT
+      id            TEXT PRIMARY KEY,
+      agent         TEXT NOT NULL,
+      source_path   TEXT NOT NULL,
+      updated_at    TEXT NOT NULL,
+      content_hash  TEXT NOT NULL,
+      project_key   TEXT,
+      source_kind   TEXT NOT NULL DEFAULT '',
+      scan_state    TEXT NOT NULL DEFAULT 'new',
+      first_seen_at TEXT NOT NULL DEFAULT '',
+      last_seen_at  TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS projects (
@@ -60,6 +64,31 @@ function applySchema(db: Database.Database): void {
     db.prepare("INSERT INTO schema_meta (key, value) VALUES ('version', ?)").run(
       String(SCHEMA_VERSION),
     )
+    return
+  }
+
+  const currentVersion = Number(existing.value)
+  if (currentVersion < 2) {
+    migrateV1ToV2(db)
+    db.prepare("UPDATE schema_meta SET value = ? WHERE key = 'version'").run(
+      String(SCHEMA_VERSION),
+    )
+  }
+}
+
+function migrateV1ToV2(db: Database.Database): void {
+  const newColumns = [
+    "source_kind   TEXT NOT NULL DEFAULT ''",
+    "scan_state    TEXT NOT NULL DEFAULT 'new'",
+    "first_seen_at TEXT NOT NULL DEFAULT ''",
+    "last_seen_at  TEXT NOT NULL DEFAULT ''",
+  ]
+  for (const col of newColumns) {
+    try {
+      db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`)
+    } catch {
+      // column already exists
+    }
   }
 }
 
