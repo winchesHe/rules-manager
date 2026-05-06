@@ -215,9 +215,81 @@ test/
 - scanner 的 stderr 错误日志 + run_metadata 诊断行（依赖 03 引入的 parse 错误类型）
 - 命令层 `--agent foo` 友好提示
 
+### Plan 03 Round 拆分（最小可验证链路 → 渐进增强）
+
+**Round 1（MVP，解锁 Plan 04 输入）** — 当前进行中
+- types.ts 新增 `ProjectHint` 类型（kind / value / confidence / agent / source / locator?）
+- `AgentAdapter` 接口扩 `probe(dir): Promise<ProbeResult>` + `extractProjectHints(...): Promise<ProjectHint[]>`
+- 4 个内置 adapter 各自实现 probe + extractProjectHints
+- 每个 adapter 至少能从 fixture 抠出 1 个 hint
+- 验收：Plan 03 文档要求的 `probe matched=true` + `ProjectHint count >= 1`
+
+**Round 2（渐进增强，完整 parse 链路）** — 暂缓
+- types.ts 新增 ParsedSession / NormalizedSession
+- `AgentAdapter.parse(...)` 读 jsonl → ParsedSession（消息计数 / 时间戳 / cwd / 工具调用计数等）
+- `AgentAdapter.normalize(...)` 输出稳定 session_id + 全量 content_hash
+- 注：当前 discover 已经计算 content_hash 与 session_id，Round 2 把这部分迁到 normalize 里集中维护
+
+**Round 3（顺手收尾，借 03 引入的错误类型把 02 debt 拣完）** — 暂缓
+- scanner.ts: parse 失败的 session 写一行 `scan_state='error'` 的 stub 记录 + stderr 日志
+- run_metadata 表写诊断行
+- 命令层 `--agent foo` 白名单提示
+
+### Round 1 各 agent 的 hint 抽取来源（依据真实 fixture）
+
+| agent | extractProjectHints 至少输出 |
+|---|---|
+| claude | `kind=source_project_path` 从 `projects/<encoded-cwd>` 反解；如果 jsonl 首行 / cwd 字段可读则再加 `kind=cwd` |
+| codex | `kind=cwd` 从 `session_meta.payload.cwd` |
+| copilot | `kind=git_root` 从 `session.start.data.context.gitRoot`；`kind=cwd` 从 `session.start.data.context.cwd` |
+| cursor | `kind=source_project_path` 从 `projects/<encoded-cwd>` 反解 |
+
+confidence 基础分先按 Plan 04 文档：git_root=0.95 / cwd=0.90 / source_project_path=0.85。
+
+### Round 1 实现记录（2026-05-07）
+
+**类型新增**（src/types.ts）：
+- `ProjectHintKind`：cwd / git_root / git_remote / source_project_path / message_path / branch
+- `ProjectHintSource`：metadata / source_path / message_text
+- `ProjectHint`：{ kind, value, confidence, agent, source, locator? }
+- `ProbeResult`：{ matched, reason? }
+- `AgentAdapter` 接口扩到 3 个方法：probe / discover / extractProjectHints
+
+**4 adapter 实现要点**：
+
+| adapter | probe 区分点 | extractProjectHints 抽取 |
+|---|---|---|
+| claude | `projects/<*>/<UUID>` 或 `projects/<*>/<UUID>.jsonl`（区分 cursor：cursor 是 `projects/<*>/agent-transcripts/`） | jsonl 首行 `cwd` (0.9) + `gitBranch` (0.2) + sourcePath 中 `projects/<encoded>` (0.85) |
+| codex | `sessions/<YYYY 数字>/` | jsonl 首行 `session_meta.payload.cwd` (0.9) |
+| copilot | `session-state/<UUID>/` | jsonl 首行 `session.start.data.context.gitRoot` (0.95) + `cwd` (0.9) + `branch` (0.2) |
+| cursor | `projects/<*>/agent-transcripts/`（区分 claude） | sourcePath 中 `projects/<encoded>/agent-transcripts/` (0.85)。jsonl 内部无 cwd 元数据 |
+
+**测试**：58/58 全绿（41 → 58，新增 17 条；4 adapter × 3 probe + 4 adapter × 1~3 extract）。
+
+**Plan 04 输入对账**：
+
+| agent | Plan 04 期望项目名 | 最高 confidence hint | 是否能 basename 出预期值 |
+|---|---|---|---|
+| claude | Boarding_Desktop | cwd 0.9 | ✓ |
+| codex | cloud-code-master | cwd 0.9 | ✓ |
+| copilot | agent-memory-system | git_root 0.95 | ✓ |
+| cursor | moego-chrome-extension | source_project_path 0.85（lossy 编码） | ✗ 需 Plan 04 启发式或人工 |
+
+cursor 的 lossy 编码（`/`、`-`、`_` 都映射成 `-`）使无损反解不可能；这正是 Plan 04 文档里"unknown 策略 + `projects assign` 人工修正"的存在动机。Round 1 不在此越界。
+
+**Round 1 不做的事**（推到 Round 2）：
+- `parse(source) → ParsedSession`：读完整 jsonl 抽消息计数等
+- `normalize(parsed) → NormalizedSession`：稳定 session_id + content_hash 计算迁移到这里
+- claude `message_path` hint（从对话内容里抽 `/Users/...` 形态的路径）
+
+**对 02 debt 的影响**：
+- Round 1 没引入 parse 错误类型，所以"02 stderr 日志 + `'error'` ScanState 实现"暂未触发；推到 Round 2/3。
+- 但 extract 已经有自己的 try/catch（碰到非 JSON 首行就返回空 hints 而不抛），保持 happy path 不被噪声打断。
+
 ## 提交信息
 
-预期：
+实际：
 ```
 fix: 修复 Plan 02 review 发现的 --full / missing 重复计数 / 分类测试缺口
+feat: Plan 03 Round 1 — probe + extractProjectHints 接口与 4 adapter 实现
 ```

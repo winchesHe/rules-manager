@@ -88,6 +88,144 @@ describe('cursorAdapter.discover', () => {
   })
 })
 
+// ─── adapter probe ────────────────────────────────────────────────────────────
+
+describe('claudeAdapter.probe', () => {
+  it('正确目录 → matched true', async () => {
+    const r = await claudeAdapter.probe(path.join(SOURCES_DIR, 'claude'))
+    expect(r.matched).toBe(true)
+  })
+
+  it('cursor 目录（也有 projects/ 但结构不同） → matched false', async () => {
+    const r = await claudeAdapter.probe(path.join(SOURCES_DIR, 'cursor'))
+    expect(r.matched).toBe(false)
+  })
+
+  it('不存在的目录 → matched false', async () => {
+    const r = await claudeAdapter.probe('/nonexistent/dir')
+    expect(r.matched).toBe(false)
+  })
+})
+
+describe('claudeAdapter.extractProjectHints', () => {
+  it('从 jsonl 首行 cwd 抽出 cwd hint，值为 Boarding_Desktop 的完整路径', async () => {
+    const sessions = await claudeAdapter.discover(path.join(SOURCES_DIR, 'claude'))
+    expect(sessions.length).toBeGreaterThan(0)
+    const hints = await claudeAdapter.extractProjectHints(sessions[0])
+    const cwd = hints.find((h) => h.kind === 'cwd')
+    expect(cwd).toBeDefined()
+    expect(cwd!.value).toBe('/Users/moego-winches/Desktop/Company/Moe/Boarding_Desktop')
+    expect(cwd!.agent).toBe('claude')
+    expect(cwd!.source).toBe('metadata')
+    expect(cwd!.confidence).toBeGreaterThan(0.8)
+  })
+
+  it('从 sourcePath 中的 projects/<encoded> 抽出 source_project_path hint', async () => {
+    const sessions = await claudeAdapter.discover(path.join(SOURCES_DIR, 'claude'))
+    const hints = await claudeAdapter.extractProjectHints(sessions[0])
+    const spp = hints.find((h) => h.kind === 'source_project_path')
+    expect(spp).toBeDefined()
+    expect(spp!.value).toContain('Boarding')
+    expect(spp!.source).toBe('source_path')
+  })
+})
+
+describe('codexAdapter.probe', () => {
+  it('正确目录 → matched true', async () => {
+    const r = await codexAdapter.probe(path.join(SOURCES_DIR, 'codex'))
+    expect(r.matched).toBe(true)
+  })
+
+  it('claude 目录 → matched false', async () => {
+    const r = await codexAdapter.probe(path.join(SOURCES_DIR, 'claude'))
+    expect(r.matched).toBe(false)
+  })
+
+  it('不存在的目录 → matched false', async () => {
+    const r = await codexAdapter.probe('/nonexistent/dir')
+    expect(r.matched).toBe(false)
+  })
+})
+
+describe('codexAdapter.extractProjectHints', () => {
+  it('从 session_meta.payload.cwd 抽出 cwd hint = cloud-code-master 完整路径', async () => {
+    const sessions = await codexAdapter.discover(path.join(SOURCES_DIR, 'codex'))
+    expect(sessions.length).toBeGreaterThan(0)
+    const hints = await codexAdapter.extractProjectHints(sessions[0])
+    const cwd = hints.find((h) => h.kind === 'cwd')
+    expect(cwd).toBeDefined()
+    expect(cwd!.value).toBe('/Users/moego-winches/Desktop/Company/person/cloud-code-master')
+    expect(cwd!.agent).toBe('codex')
+    expect(cwd!.source).toBe('metadata')
+  })
+})
+
+describe('copilotAdapter.probe', () => {
+  it('正确目录 → matched true', async () => {
+    const r = await copilotAdapter.probe(path.join(SOURCES_DIR, 'copilot'))
+    expect(r.matched).toBe(true)
+  })
+
+  it('codex 目录 → matched false', async () => {
+    const r = await copilotAdapter.probe(path.join(SOURCES_DIR, 'codex'))
+    expect(r.matched).toBe(false)
+  })
+
+  it('不存在的目录 → matched false', async () => {
+    const r = await copilotAdapter.probe('/nonexistent/dir')
+    expect(r.matched).toBe(false)
+  })
+})
+
+describe('copilotAdapter.extractProjectHints', () => {
+  it('从 session.start.data.context 抽出 cwd / git_root / branch 三种 hint', async () => {
+    const sessions = await copilotAdapter.discover(path.join(SOURCES_DIR, 'copilot'))
+    expect(sessions.length).toBeGreaterThan(0)
+    const hints = await copilotAdapter.extractProjectHints(sessions[0])
+
+    const cwd = hints.find((h) => h.kind === 'cwd')
+    const gitRoot = hints.find((h) => h.kind === 'git_root')
+    const branch = hints.find((h) => h.kind === 'branch')
+
+    expect(cwd?.value).toBe('/Users/moego-winches/Desktop/Company/person/agent-memory-system')
+    expect(gitRoot?.value).toBe('/Users/moego-winches/Desktop/Company/person/agent-memory-system')
+    expect(branch?.value).toBe('main')
+
+    expect(gitRoot?.confidence).toBeGreaterThan(cwd!.confidence)
+    expect(branch?.confidence).toBeLessThan(cwd!.confidence)
+  })
+})
+
+describe('cursorAdapter.probe', () => {
+  it('正确目录 → matched true', async () => {
+    const r = await cursorAdapter.probe(path.join(SOURCES_DIR, 'cursor'))
+    expect(r.matched).toBe(true)
+  })
+
+  it('claude 目录（也有 projects/ 但无 agent-transcripts/） → matched false', async () => {
+    const r = await cursorAdapter.probe(path.join(SOURCES_DIR, 'claude'))
+    expect(r.matched).toBe(false)
+  })
+
+  it('不存在的目录 → matched false', async () => {
+    const r = await cursorAdapter.probe('/nonexistent/dir')
+    expect(r.matched).toBe(false)
+  })
+})
+
+describe('cursorAdapter.extractProjectHints', () => {
+  it('从 sourcePath 中的 projects/<encoded> 抽出 source_project_path hint = moego-chrome-extension', async () => {
+    const sessions = await cursorAdapter.discover(path.join(SOURCES_DIR, 'cursor'))
+    expect(sessions.length).toBeGreaterThan(0)
+    const hints = await cursorAdapter.extractProjectHints(sessions[0])
+    const spp = hints.find((h) => h.kind === 'source_project_path')
+    expect(spp).toBeDefined()
+    expect(spp!.value).toContain('moego-chrome-extension')
+    expect(spp!.agent).toBe('cursor')
+    expect(spp!.source).toBe('source_path')
+  })
+})
+
 // ─── runScan integration ──────────────────────────────────────────────────────
 
 describe('runScan --source test/sources --all', () => {
