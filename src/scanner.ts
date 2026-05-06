@@ -11,7 +11,7 @@ interface SessionRow {
   content_hash: string
 }
 
-function determineScanState(
+export function determineScanState(
   discovered: DiscoveredSession,
   existing: SessionRow | undefined,
 ): 'new' | 'updated' | 'unchanged' {
@@ -27,7 +27,10 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
   const db = initDatabase(opts.homeDir)
   const now = new Date().toISOString()
 
-  const adapters: AgentAdapter[] = opts.all
+  // --full 短期等价于 --all：覆盖所有内置 agent。
+  // custom path / config.toml 落地后，--full 会再额外覆盖已注册的 custom 源。
+  const useAllAdapters = opts.all || opts.full
+  const adapters: AgentAdapter[] = useAllAdapters
     ? ALL_ADAPTERS
     : getAdapters(opts.agents ?? [])
 
@@ -121,14 +124,21 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
     }
   }
 
-  // Mark sessions that were in DB but not found in this scan as missing
+  // 把"本轮扫到的 agent 范围内、DB 中存在但本轮未发现"的会话标记为 missing。
+  // 只统计**本轮新转入** missing 的（即先前 scan_state 不是 'missing' 的），
+  // 避免每次扫描都把同一会话重复计入 summary.missing。
   const allRows = db
-    .prepare('SELECT id, agent FROM sessions')
-    .all() as Array<{ id: string; agent: string }>
+    .prepare('SELECT id, agent, scan_state FROM sessions')
+    .all() as Array<{ id: string; agent: string; scan_state: string }>
 
+  const markMissing = db.prepare("UPDATE sessions SET scan_state = 'missing' WHERE id = ?")
   for (const row of allRows) {
-    if (scannedAgents.has(row.agent) && !discoveredIds.has(row.id)) {
-      db.prepare("UPDATE sessions SET scan_state = 'missing' WHERE id = ?").run(row.id)
+    if (
+      scannedAgents.has(row.agent) &&
+      !discoveredIds.has(row.id) &&
+      row.scan_state !== 'missing'
+    ) {
+      markMissing.run(row.id)
       summary.missing++
     }
   }
