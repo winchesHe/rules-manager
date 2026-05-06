@@ -1,0 +1,30 @@
+{
+  "name": "memory-manager",
+  "version": "0.1.0",
+  "description": "本地优先 AI agent session 管理与 rules 生成 CLI",
+  "type": "module",
+  "bin": {
+    "memory-manager": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:ci": "node --experimental-vm-modules node_modules/.bin/jest --ci"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.10.1",
+    "better-sqlite3": "^11.10.0",
+    "commander": "^13.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.21",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.4",
+    "tsdown": "^0.12.6",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "extensionsToTreatAsEsm": [".ts"],
+  "transform": {
+    "^.+\\.ts$": [
+      "ts-jest",
+      {
+        "useESM": true,
+        "tsconfig": {
+          "moduleResolution": "node"
+        }
+      }
+    ]
+  },
+  "moduleNameMapper": {
+    "^(\\.{1,2}/.*)\\.js$": "$1"
+  },
+  "testMatch": ["**/test/unit/**/*.test.ts"],
+  "testEnvironment": "node"
+}
