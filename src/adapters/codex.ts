@@ -103,7 +103,39 @@ export const codexAdapter: AgentAdapter = {
 
     const sessions: DiscoveredSession[] = []
 
-    // Walk sessions/YYYY/MM/ — withFileTypes 避免符号链接/权限错抛出 statSync
+    const collectFile = (filePath: string): void => {
+      const match = UUID_SUFFIX_RE.exec(path.basename(filePath))
+      if (!match) return
+      const sessionId = match[1]
+
+      let updatedAt = fileMtime(filePath)
+      try {
+        const firstLine = readFirstLine(filePath)
+        const event = JSON.parse(firstLine) as Record<string, unknown>
+        const payload = event.payload as Record<string, unknown> | undefined
+        if (event.type === 'session_meta' && typeof payload?.timestamp === 'string') {
+          updatedAt = payload.timestamp
+        } else if (typeof event.timestamp === 'string') {
+          updatedAt = event.timestamp
+        }
+      } catch {
+        // use mtime
+      }
+
+      sessions.push({
+        id: sessionId,
+        agent: 'codex',
+        sourcePath: filePath,
+        sourceKind: 'jsonl',
+        updatedAt,
+        contentHash: fileHash(filePath),
+      })
+    }
+
+    // sessions/YYYY/MM/ 下面同时支持两种布局：
+    //   - 旧：MM/<file>.jsonl（fixture 现状）
+    //   - 新：MM/DD/<file>.jsonl（codex 2026-05+ 本机真实布局）
+    // 只下钻 1 层（DD），不再深入。
     for (const yearEntry of fs.readdirSync(sessionsDir, { withFileTypes: true })) {
       if (!yearEntry.isDirectory()) continue
       const yearDir = path.join(sessionsDir, yearEntry.name)
@@ -112,35 +144,15 @@ export const codexAdapter: AgentAdapter = {
         if (!monthEntry.isDirectory()) continue
         const monthDir = path.join(yearDir, monthEntry.name)
 
-        for (const file of fs.readdirSync(monthDir)) {
-          const match = UUID_SUFFIX_RE.exec(file)
-          if (!match) continue
-
-          const sessionId = match[1]
-          const filePath = path.join(monthDir, file)
-
-          let updatedAt = fileMtime(filePath)
-          try {
-            const firstLine = readFirstLine(filePath)
-            const event = JSON.parse(firstLine) as Record<string, unknown>
-            const payload = event.payload as Record<string, unknown> | undefined
-            if (event.type === 'session_meta' && typeof payload?.timestamp === 'string') {
-              updatedAt = payload.timestamp
-            } else if (typeof event.timestamp === 'string') {
-              updatedAt = event.timestamp
+        for (const entry of fs.readdirSync(monthDir, { withFileTypes: true })) {
+          if (entry.isFile()) {
+            collectFile(path.join(monthDir, entry.name))
+          } else if (entry.isDirectory()) {
+            const dayDir = path.join(monthDir, entry.name)
+            for (const fileEntry of fs.readdirSync(dayDir, { withFileTypes: true })) {
+              if (fileEntry.isFile()) collectFile(path.join(dayDir, fileEntry.name))
             }
-          } catch {
-            // use mtime
           }
-
-          sessions.push({
-            id: sessionId,
-            agent: 'codex',
-            sourcePath: filePath,
-            sourceKind: 'jsonl',
-            updatedAt,
-            contentHash: fileHash(filePath),
-          })
         }
       }
     }

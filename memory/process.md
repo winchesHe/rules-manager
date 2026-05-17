@@ -691,3 +691,63 @@ Plan 05（LLM rule generation）的输入：
 feat: Plan 04 R1 — project classification（classifier + schema v4 + projects list）
 feat: Plan 04 R2 — projects assign / merge / reclassify（人工修正 + 全量重分类）
 ```
+
+---
+
+# Plan 04 之后：真实环境验证 + codex 日级目录修复（2026-05-17）
+
+## 验证背景
+
+用真实本机 `~/.{claude,codex,copilot,cursor}` 数据跑一遍 scan + projects list，验证 fixture 之外的链路。
+
+工作区隔离在 `<project>/.scratch/.memory-manager/`，sources/<agent> 软链到真实 home。
+
+## 发现的 adapter bug：codex 漏扫日级目录
+
+**现象**：第一次 scan 显示 489 sessions，但 codex 占 0 个；本机 `~/.codex/sessions/2026/05/` 明明有大量 jsonl。
+
+**根因**：codex 在 2026-05 之后改了目录布局——`sessions/YYYY/MM/DD/rollout-*.jsonl`（4 层），但 adapter 只走 `sessions/YYYY/MM/<file>` 3 层（plan 02 文档第 122 行写的也是旧布局）。`fs.readdirSync(monthDir)` 直接拿到 DD 目录名（如 `"01"`），不匹配 `UUID_SUFFIX_RE` 就 continue，悄无声息归零。
+
+**修复**（[src/adapters/codex.ts](../src/adapters/codex.ts) discover）：
+- 抽 `collectFile(filePath)` 闭包，集中处理"是 UUID 文件就抽 sessionId + 时间戳 + hash"。
+- MM/ 下用 `withFileTypes` 区分 entry 类型：
+  - `isFile()` → 直接 `collectFile`（旧 3 层布局，fixture 现状）
+  - `isDirectory()` → 进 1 层 DD/，里面的 file 全 `collectFile`（新 4 层布局）
+- **不再深入**：DD 下面的子目录（HH 之类的未来扩展）不下钻，避免误扫。专门测试断言这一点。
+
+## 测试（新增 [test/unit/codex-discover.test.ts](../test/unit/codex-discover.test.ts) 5 条）
+
+mkdtempSync 写临时 fixture（不污染 `test/sources/codex/`，沿用 Plan 02 R2 的"临时副本"惯例）：
+
+| 场景 | 期望 |
+|---|---|
+| 4 层 YYYY/MM/DD/file | discover 返回 1 个 session，sourcePath 含 `2026/05/01/` |
+| 3 层 YYYY/MM/file（旧布局） | 仍兼容，返回 1 个 |
+| 混合 3 层 + 4 层在同月份 | 两个都扫到（count=2） |
+| DD/HH/file 孙目录 + DD/README.txt 噪声 | 不扫孙级目录，不扫非 UUID 文件（count=1） |
+| 4 层布局上跑 parse + extractProjectHints | metadata.cwd / branch 正常，hints 返回 cwd 0.9 |
+
+测试 120 → 125 全绿。
+
+## 真实环境验证结果
+
+```
+sessions: 669 total（new=640, updated=29, errors=0）
+per agent: claude 144 / codex 180 / copilot 28 / cursor 288
+projects: 56+ 个，unknown=0
+codex top: cloud-code-master 75 / agent-slack 20 / moego-server-grooming 18 / ...
+```
+
+修复前 codex=0，修复后 codex=180，与本机 `find ~/.codex/sessions -name 'rollout-*.jsonl' | wc -l` 数量级一致。
+
+## 顺手记录的其它现象（不阻塞，留作后续）
+
+1. **`state.db` 0B 假阳性**：之前误用 `sqlite3 path/state.db` 自动建空文件，**不是 bug**，正确 db 名是 `memory.db`（[src/workspace.ts:6](../src/workspace.ts:6)）。
+2. **cursor source_project_path 启发式仍是 lossy**：本机扫出 `Moe-Boarding-Desktop` / `Company-AI-Agent` 这类 lossy 编码副作用，符合 Plan 04 R1 决策（靠 `projects assign` 人工修正）。
+3. **多 agent 同项目正确合并**：`cloud-code-master = codex+cursor`、`agent-slack = codex+copilot`、`agent-memory-system = claude+codex+copilot+cursor` —— rebuildProjectsSummary 的 agent 集合聚合验证通过。
+
+## 提交信息
+
+```
+fix: codex adapter 支持 YYYY/MM/DD/ 日级目录布局（2026-05+ 真实数据）
+```
