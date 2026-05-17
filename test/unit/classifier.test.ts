@@ -1,7 +1,7 @@
 import path from 'node:path'
-import { classifyHints, projectKeyFromHint } from '../../src/classifier'
+import { classify, normalizeSlug } from '../../src/classifier'
+import { DEFAULT_SLUG } from '../../src/workspace'
 import type { ProjectHint } from '../../src/types'
-import { UNKNOWN_PROJECT_KEY } from '../../src/types'
 import { claudeAdapter } from '../../src/adapters/claude'
 import { codexAdapter } from '../../src/adapters/codex'
 import { copilotAdapter } from '../../src/adapters/copilot'
@@ -11,7 +11,7 @@ const SOURCES_DIR = path.resolve('test/sources')
 
 const cwdHint: ProjectHint = {
   kind: 'cwd',
-  value: '/Users/u/Desktop/myapp',
+  value: '/Users/u/Desktop/Boarding_Desktop',
   confidence: 0.9,
   agent: 'claude',
   source: 'metadata',
@@ -19,7 +19,7 @@ const cwdHint: ProjectHint = {
 
 const gitRootHint: ProjectHint = {
   kind: 'git_root',
-  value: '/Users/u/Desktop/repo',
+  value: '/Users/u/Code/agent-memory-system',
   confidence: 0.95,
   agent: 'copilot',
   source: 'metadata',
@@ -33,109 +33,85 @@ const branchHint: ProjectHint = {
   source: 'metadata',
 }
 
-// ─── 单元测试 ──────────────────────────────────────────────────────────────────
+// ─── normalizeSlug ───────────────────────────────────────────────────────────
 
-describe('classifyHints', () => {
-  it('空数组 → unknown / confidence 0', () => {
-    const r = classifyHints([])
-    expect(r.projectKey).toBe(UNKNOWN_PROJECT_KEY)
-    expect(r.confidence).toBe(0)
-    expect(r.decisionHint).toBeNull()
+describe('normalizeSlug', () => {
+  it('lowercase + 非 [a-z0-9] 折叠成 -', () => {
+    expect(normalizeSlug('Boarding_Desktop')).toBe('boarding-desktop')
+    expect(normalizeSlug('Foo Bar Baz')).toBe('foo-bar-baz')
+    expect(normalizeSlug('agent_memory.system')).toBe('agent-memory-system')
   })
 
-  it('只有 branch hint → unknown（branch 不单独决定）', () => {
-    const r = classifyHints([branchHint])
-    expect(r.projectKey).toBe(UNKNOWN_PROJECT_KEY)
-    expect(r.decisionHint).toBeNull()
+  it('开头结尾 - 去掉', () => {
+    expect(normalizeSlug('--abc--')).toBe('abc')
+    expect(normalizeSlug('_abc_')).toBe('abc')
   })
 
-  it('cwd hint → basename', () => {
-    const r = classifyHints([cwdHint])
-    expect(r.projectKey).toBe('myapp')
-    expect(r.confidence).toBe(0.9)
-    expect(r.decisionHint).toBe(cwdHint)
+  it('空 / null / undefined → default', () => {
+    expect(normalizeSlug('')).toBe(DEFAULT_SLUG)
+    expect(normalizeSlug(null)).toBe(DEFAULT_SLUG)
+    expect(normalizeSlug(undefined)).toBe(DEFAULT_SLUG)
+    expect(normalizeSlug('___')).toBe(DEFAULT_SLUG)
   })
 
-  it('git_root 优先于 cwd（即使 cwd confidence 更高也不行）', () => {
-    const r = classifyHints([
-      cwdHint,
-      gitRootHint,
-      { ...cwdHint, confidence: 0.99 },
-    ])
-    expect(r.projectKey).toBe('repo')
-    expect(r.decisionHint?.kind).toBe('git_root')
-  })
-
-  it('branch + cwd 混合 → 选 cwd', () => {
-    const r = classifyHints([branchHint, cwdHint])
-    expect(r.projectKey).toBe('myapp')
+  it('防 path 注入：. .. / \\ 都被消成 -', () => {
+    expect(normalizeSlug('..')).toBe(DEFAULT_SLUG)
+    expect(normalizeSlug('a/b')).toBe('a-b')
+    expect(normalizeSlug('a/../b')).toBe('a-b')
+    expect(normalizeSlug('/etc/passwd')).toBe('etc-passwd')
   })
 })
 
-describe('projectKeyFromHint', () => {
-  it('cwd / git_root → basename', () => {
-    expect(projectKeyFromHint(cwdHint)).toBe('myapp')
-    expect(projectKeyFromHint(gitRootHint)).toBe('repo')
+// ─── classify(hints) ─────────────────────────────────────────────────────────
+
+describe('classify', () => {
+  it('空数组 → default', () => {
+    expect(classify([])).toBe(DEFAULT_SLUG)
   })
 
-  it('cursor source_project_path → 启发式取最后 3 段', () => {
-    expect(
-      projectKeyFromHint({
-        kind: 'source_project_path',
-        value: 'Users-moego-winches-Desktop-Company-Moe-moego-chrome-extension',
-        confidence: 0.85,
-        agent: 'cursor',
-        source: 'source_path',
-      }),
-    ).toBe('moego-chrome-extension')
+  it('只有 branch → default（branch 不单独决定）', () => {
+    expect(classify([branchHint])).toBe(DEFAULT_SLUG)
   })
 
-  it('source_project_path 总段数 < 3 → 取全部', () => {
-    expect(
-      projectKeyFromHint({
-        kind: 'source_project_path',
-        value: 'foo-bar',
-        confidence: 0.85,
-        agent: 'cursor',
-        source: 'source_path',
-      }),
-    ).toBe('foo-bar')
+  it('cwd hint → basename normalized', () => {
+    expect(classify([cwdHint])).toBe('boarding-desktop')
+  })
+
+  it('git_root 优先于 cwd（即使 cwd confidence 更高）', () => {
+    expect(classify([{ ...cwdHint, confidence: 0.99 }, gitRootHint])).toBe(
+      'agent-memory-system',
+    )
+  })
+
+  it('branch + cwd 混合 → 取 cwd', () => {
+    expect(classify([branchHint, cwdHint])).toBe('boarding-desktop')
   })
 })
 
-// ─── 4 fixture 集成断言（plan 04 验收表） ─────────────────────────────────────
+// ─── 4 fixture 真实分类（spec § 验收链路 第 9 条对账） ───────────────────────
 
-describe('4 fixture 真实分类', () => {
-  it('claude → Boarding_Desktop（cwd basename）', async () => {
+describe('4 fixture 真实分类（slug 形态）', () => {
+  it('claude → boarding-desktop', async () => {
     const sessions = await claudeAdapter.discover(path.join(SOURCES_DIR, 'claude'))
     const hints = await claudeAdapter.extractProjectHints(sessions[0])
-    const r = classifyHints(hints)
-    expect(r.projectKey).toBe('Boarding_Desktop')
-    expect(r.confidence).toBeGreaterThanOrEqual(0.8)
+    expect(classify(hints)).toBe('boarding-desktop')
   })
 
-  it('codex → cloud-code-master（cwd basename）', async () => {
+  it('codex → cloud-code-master', async () => {
     const sessions = await codexAdapter.discover(path.join(SOURCES_DIR, 'codex'))
     const hints = await codexAdapter.extractProjectHints(sessions[0])
-    const r = classifyHints(hints)
-    expect(r.projectKey).toBe('cloud-code-master')
-    expect(r.confidence).toBeGreaterThanOrEqual(0.8)
+    expect(classify(hints)).toBe('cloud-code-master')
   })
 
-  it('copilot → agent-memory-system（git_root 优先）', async () => {
+  it('copilot → agent-memory-system', async () => {
     const sessions = await copilotAdapter.discover(path.join(SOURCES_DIR, 'copilot'))
     const hints = await copilotAdapter.extractProjectHints(sessions[0])
-    const r = classifyHints(hints)
-    expect(r.projectKey).toBe('agent-memory-system')
-    expect(r.decisionHint?.kind).toBe('git_root')
-    expect(r.confidence).toBeGreaterThanOrEqual(0.8)
+    expect(classify(hints)).toBe('agent-memory-system')
   })
 
-  it('cursor → moego-chrome-extension（source_project_path 启发式）', async () => {
+  it('cursor → moego-chrome-extension', async () => {
     const sessions = await cursorAdapter.discover(path.join(SOURCES_DIR, 'cursor'))
     const hints = await cursorAdapter.extractProjectHints(sessions[0])
-    const r = classifyHints(hints)
-    expect(r.projectKey).toBe('moego-chrome-extension')
-    expect(r.confidence).toBeGreaterThanOrEqual(0.8)
+    expect(classify(hints)).toBe('moego-chrome-extension')
   })
 })

@@ -1,9 +1,9 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
 import { resolveWorkspace } from '../workspace.js'
 import { initDatabase } from '../db.js'
+import { ensureDefaultSlugDir } from '../fs-writer.js'
 
 export interface InitOptions {
   yes: boolean
@@ -11,7 +11,7 @@ export interface InitOptions {
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
-  const { workspaceDir, projectsDir } = resolveWorkspace(opts.homeDir)
+  const { workspaceDir, rulesDir, sourcesDir } = resolveWorkspace(opts.homeDir)
 
   if (!opts.yes) {
     clack.intro(pc.cyan('memory-manager init'))
@@ -30,8 +30,11 @@ export async function runInit(opts: InitOptions): Promise<void> {
   try {
     spinner?.start('正在初始化工作区…')
 
-    // 创建目录（幂等）
-    fs.mkdirSync(projectsDir, { recursive: true })
+    // 目录（幂等）：workspaceDir / rules / sources / projects/default
+    fs.mkdirSync(workspaceDir, { recursive: true })
+    fs.mkdirSync(rulesDir, { recursive: true })
+    fs.mkdirSync(sourcesDir, { recursive: true })
+    ensureDefaultSlugDir(opts.homeDir)
 
     // 初始化 DB（幂等）
     const db = initDatabase(opts.homeDir)

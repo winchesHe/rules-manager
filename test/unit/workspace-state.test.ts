@@ -23,7 +23,9 @@ describe('resolveWorkspace', () => {
     const ws = resolveWorkspace(home)
     expect(ws.workspaceDir).toBe(path.join(home, '.memory-manager'))
     expect(ws.dbPath).toBe(path.join(home, '.memory-manager', 'memory.db'))
-    expect(ws.projectsDir).toBe(path.join(home, '.memory-manager', 'rules', 'projects'))
+    // FS-first 重构后：projects 不再嵌在 rules/ 下
+    expect(ws.projectsDir).toBe(path.join(home, '.memory-manager', 'projects'))
+    expect(ws.rulesDir).toBe(path.join(home, '.memory-manager', 'rules'))
     cleanHome(home)
   })
 })
@@ -47,10 +49,23 @@ describe('runInit --yes', () => {
     expect(fs.existsSync(ws.workspaceDir)).toBe(true)
   })
 
-  it('应创建 ~/.memory-manager/rules/projects/', async () => {
+  it('应创建 ~/.memory-manager/projects/default/（FS-first 视图根）', async () => {
     await runInit({ yes: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.projectsDir)).toBe(true)
+    expect(fs.existsSync(path.join(ws.projectsDir, 'default'))).toBe(true)
+  })
+
+  it('应创建 ~/.memory-manager/rules/（Plan 07 用）', async () => {
+    await runInit({ yes: true, homeDir: home })
+    const ws = resolveWorkspace(home)
+    expect(fs.existsSync(ws.rulesDir)).toBe(true)
+  })
+
+  it('应创建 ~/.memory-manager/sources/（adapter 软链根）', async () => {
+    await runInit({ yes: true, homeDir: home })
+    const ws = resolveWorkspace(home)
+    expect(fs.existsSync(ws.sourcesDir)).toBe(true)
   })
 
   it('应创建 ~/.memory-manager/memory.db', async () => {
@@ -165,13 +180,22 @@ describe('initDatabase schema', () => {
     expect(row).toBeTruthy()
   })
 
-  it('应包含 rule_candidates 表', () => {
+  it('schema v5 只有 3 张表（schema_meta / sessions / run_metadata）', () => {
+    const db = initDatabase(home)
+    const tables = (db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all() as Array<{ name: string }>).map((r) => r.name)
+    db.close()
+    expect(tables).toEqual(['run_metadata', 'schema_meta', 'sessions'])
+  })
+
+  it('schema_meta.version = 5', () => {
     const db = initDatabase(home)
     const row = db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='rule_candidates'")
-      .get()
+      .prepare("SELECT value FROM schema_meta WHERE key = 'version'")
+      .get() as { value: string }
     db.close()
-    expect(row).toBeTruthy()
+    expect(row.value).toBe('5')
   })
 
   it('不应保存完整 content 字段（sessions 表无 content 列）', () => {
@@ -182,15 +206,15 @@ describe('initDatabase schema', () => {
     expect(hasContent).toBe(false)
   })
 
-  it('sessions 表应只含允许字段', () => {
+  it('sessions 表只含 v5 允许字段', () => {
     const db = initDatabase(home)
     const cols = db.pragma('table_info(sessions)') as Array<{ name: string }>
     db.close()
     const allowed = new Set([
-      'id', 'agent', 'source_path', 'updated_at', 'content_hash', 'project_key',
-      'source_kind', 'scan_state', 'first_seen_at', 'last_seen_at',
-      // schema v3：ParsedSession 字段
-      'message_count', 'tool_call_count', 'first_timestamp', 'last_timestamp', 'parsed_metadata',
+      'id', 'agent', 'source_path', 'workspace_link', 'slug',
+      'content_hash', 'updated_at', 'status',
+      'first_seen_at', 'last_seen_at',
+      'classified_at', 'rules_status', 'rules_generated_at',
     ])
     for (const col of cols) {
       expect(allowed.has(col.name)).toBe(true)

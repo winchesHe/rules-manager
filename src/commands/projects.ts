@@ -9,7 +9,7 @@ import {
 
 // Re-export 给老 import 路径用（test/unit/projects.test.ts）
 export { listProjects } from '../projects.js'
-export type { ProjectListItem, ProjectsHomeOptions } from '../projects.js'
+export type { ProjectListItem, ProjectListOptions } from '../projects.js'
 
 interface CommandOptions {
   homeDir?: string
@@ -30,11 +30,9 @@ export function runProjectsList(opts: CommandOptions = {}): void {
     return
   }
   for (const item of items) {
-    const conf = item.confidence.toFixed(2)
     const agents = item.agents.length ? item.agents.join(',') : '-'
     console.log(
-      `${pc.cyan(item.projectKey.padEnd(28))}  ` +
-        `confidence=${conf}  ` +
+      `${pc.cyan(item.slug.padEnd(32))}  ` +
         `sessions=${item.sessionCount}  ` +
         `agents=${agents}`,
     )
@@ -43,16 +41,13 @@ export function runProjectsList(opts: CommandOptions = {}): void {
 
 export function runProjectsAssign(
   sessionId: string,
-  projectKey: string,
+  slug: string,
   opts: CommandOptions = {},
 ): void {
   ensureWorkspace(opts.homeDir)
   try {
-    const r = assignSession(sessionId, projectKey, opts)
-    const from = r.previousKey ?? pc.dim('(未分类)')
-    console.log(
-      `${pc.green('✓')} session ${pc.cyan(sessionId)} 归到 ${pc.cyan(projectKey)}（原 ${from}）`,
-    )
+    assignSession(sessionId, slug, opts)
+    console.log(`${pc.green('✓')} session ${pc.cyan(sessionId)} 归到 ${pc.cyan(slug)}`)
   } catch (err) {
     console.error(pc.red('✗') + ' ' + (err instanceof Error ? err.message : String(err)))
     process.exit(1)
@@ -66,15 +61,8 @@ export function runProjectsMerge(
 ): void {
   ensureWorkspace(opts.homeDir)
   try {
-    const r = mergeProjects(from, to, opts)
-    if (r.sessionsMoved === 0) {
-      console.log(pc.dim('（from == to 或无 session 可移动，未做更改）'))
-      return
-    }
-    console.log(
-      `${pc.green('✓')} 合并 ${pc.cyan(from)} → ${pc.cyan(to)}：` +
-        `${r.sessionsMoved} 个 session 已转移`,
-    )
+    mergeProjects(from, to, opts)
+    console.log(`${pc.green('✓')} 合并 ${pc.cyan(from)} → ${pc.cyan(to)}`)
   } catch (err) {
     console.error(pc.red('✗') + ' ' + (err instanceof Error ? err.message : String(err)))
     process.exit(1)
@@ -86,10 +74,8 @@ export function runProjectsReclassify(
 ): void {
   ensureWorkspace(opts.homeDir)
   try {
-    const r = reclassifyAll(opts)
-    console.log(
-      `${pc.green('✓')} 重分类完成：${r.total} 个 session，${r.changed} 个 project_key 变化`,
-    )
+    reclassifyAll(opts)
+    console.log(`${pc.green('✓')} 重分类完成`)
   } catch (err) {
     console.error(pc.red('✗') + ' ' + (err instanceof Error ? err.message : String(err)))
     process.exit(1)

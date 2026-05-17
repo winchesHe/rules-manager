@@ -1,79 +1,56 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import Database from 'better-sqlite3'
 import { resolveWorkspace } from './workspace.js'
 
-const SCHEMA_VERSION = 4
+const SCHEMA_VERSION = 5
 
 /**
- * 初始化 DB schema：只存内部状态，不存完整 content。
- * 允许字段：session id / agent / source path / updated_at / content_hash /
- *           project_key / project hints / rule candidates / confidence /
- *           user feedback / evidence pointer / run metadata
+ * Schema v5：FS-first 模型。
  *
- * v3: sessions 表加 ParsedSession 列（messageCount / toolCallCount / 时间戳 / metadata JSON），
- *      run_metadata 表加 details 列（JSON：摘要 + 错误条目）。
+ * 只保留 3 张表：
+ *   - schema_meta：版本
+ *   - sessions：session 状态机（slug / status / classified_at / rules_status）
+ *   - run_metadata：scan/reclassify/generate-rules 运行日志
+ *
+ * 项目分类视图全部走 FS：<workspace>/projects/<slug>/<sid>.jsonl symlink。
+ * 详见 docs/specs/scan-classify-fs-rewrite.md。
  */
 function applySchema(db: Database.Database): void {
+  // 永久存在
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_meta (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+  `)
 
+  const existing = db
+    .prepare("SELECT value FROM schema_meta WHERE key = 'version'")
+    .get() as { value: string } | undefined
+
+  const currentVersion = existing ? Number(existing.value) : 0
+
+  // v1-v4 → v5：直接 drop 所有内容表 + 旧 sessions（spec 已声明本地用户手动 rm 重扫，不迁数据）
+  if (currentVersion > 0 && currentVersion < SCHEMA_VERSION) {
+    migrateToV5(db)
+  }
+
+  // v5 表（fresh init 或 migrate 后都走这里）
+  db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
-      id              TEXT PRIMARY KEY,
-      agent           TEXT NOT NULL,
-      source_path     TEXT NOT NULL,
-      updated_at      TEXT NOT NULL,
-      content_hash    TEXT NOT NULL,
-      project_key     TEXT,
-      source_kind     TEXT NOT NULL DEFAULT '',
-      scan_state      TEXT NOT NULL DEFAULT 'new',
-      first_seen_at   TEXT NOT NULL DEFAULT '',
-      last_seen_at    TEXT NOT NULL DEFAULT '',
-      message_count   INTEGER NOT NULL DEFAULT 0,
-      tool_call_count INTEGER NOT NULL DEFAULT 0,
-      first_timestamp TEXT,
-      last_timestamp  TEXT,
-      parsed_metadata TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS projects (
-      project_key  TEXT PRIMARY KEY,
-      hints        TEXT,
-      updated_at   TEXT NOT NULL,
-      confidence   REAL NOT NULL DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS session_projects (
-      session_id   TEXT PRIMARY KEY,
-      project_key  TEXT NOT NULL,
-      confidence   REAL NOT NULL DEFAULT 0,
-      decided_at   TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS project_hints (
-      session_id   TEXT NOT NULL,
-      kind         TEXT NOT NULL,
-      value        TEXT NOT NULL,
-      project_key  TEXT NOT NULL,
-      confidence   REAL NOT NULL,
-      agent        TEXT NOT NULL,
-      source       TEXT NOT NULL,
-      locator      TEXT,
-      updated_at   TEXT NOT NULL,
-      PRIMARY KEY (session_id, kind, value)
-    );
-
-    CREATE TABLE IF NOT EXISTS rule_candidates (
-      id             TEXT PRIMARY KEY,
-      project_key    TEXT,
-      content_hash   TEXT NOT NULL,
-      confidence     REAL NOT NULL DEFAULT 0,
-      user_feedback  TEXT,
-      evidence_ptr   TEXT,
-      updated_at     TEXT NOT NULL
+      id                   TEXT PRIMARY KEY,
+      agent                TEXT NOT NULL,
+      source_path          TEXT NOT NULL,
+      workspace_link       TEXT NOT NULL,
+      slug                 TEXT NOT NULL DEFAULT 'default',
+      content_hash         TEXT NOT NULL,
+      updated_at           TEXT NOT NULL,
+      status               TEXT NOT NULL DEFAULT 'new',
+      first_seen_at        TEXT NOT NULL,
+      last_seen_at         TEXT NOT NULL,
+      classified_at        TEXT,
+      rules_status         TEXT,
+      rules_generated_at   TEXT
     );
 
     CREATE TABLE IF NOT EXISTS run_metadata (
@@ -86,84 +63,26 @@ function applySchema(db: Database.Database): void {
     );
   `)
 
-  const existing = db
-    .prepare("SELECT value FROM schema_meta WHERE key = 'version'")
-    .get() as { value: string } | undefined
-
   if (!existing) {
     db.prepare("INSERT INTO schema_meta (key, value) VALUES ('version', ?)").run(
       String(SCHEMA_VERSION),
     )
-    return
-  }
-
-  const currentVersion = Number(existing.value)
-  if (currentVersion < 2) migrateV1ToV2(db)
-  if (currentVersion < 3) migrateV2ToV3(db)
-  if (currentVersion < 4) migrateV3ToV4(db)
-  if (currentVersion < SCHEMA_VERSION) {
+  } else if (currentVersion < SCHEMA_VERSION) {
     db.prepare("UPDATE schema_meta SET value = ? WHERE key = 'version'").run(
       String(SCHEMA_VERSION),
     )
   }
 }
 
-function addColumnIfMissing(db: Database.Database, table: string, columnDef: string): void {
-  try {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`)
-  } catch (err) {
-    // sqlite 唯一可接受的错误：duplicate column。其他错误抛出，避免半迁移。
-    const msg = err instanceof Error ? err.message : String(err)
-    if (!/duplicate column name/i.test(msg)) throw err
-  }
-}
-
-function migrateV1ToV2(db: Database.Database): void {
-  for (const col of [
-    "source_kind   TEXT NOT NULL DEFAULT ''",
-    "scan_state    TEXT NOT NULL DEFAULT 'new'",
-    "first_seen_at TEXT NOT NULL DEFAULT ''",
-    "last_seen_at  TEXT NOT NULL DEFAULT ''",
-  ]) {
-    addColumnIfMissing(db, 'sessions', col)
-  }
-}
-
-function migrateV2ToV3(db: Database.Database): void {
-  for (const col of [
-    'message_count   INTEGER NOT NULL DEFAULT 0',
-    'tool_call_count INTEGER NOT NULL DEFAULT 0',
-    'first_timestamp TEXT',
-    'last_timestamp  TEXT',
-    'parsed_metadata TEXT',
-  ]) {
-    addColumnIfMissing(db, 'sessions', col)
-  }
-  addColumnIfMissing(db, 'run_metadata', 'details TEXT')
-}
-
-function migrateV3ToV4(db: Database.Database): void {
-  addColumnIfMissing(db, 'projects', 'confidence REAL NOT NULL DEFAULT 0')
+function migrateToV5(db: Database.Database): void {
+  // 旧版本（v1-v4）→ v5：清空所有数据表，让外层 CREATE IF NOT EXISTS 建新 schema。
+  // 用户主 home 数据由用户自己决定何时清；这里只是 schema 升级路径上的兜底。
   db.exec(`
-    CREATE TABLE IF NOT EXISTS session_projects (
-      session_id   TEXT PRIMARY KEY,
-      project_key  TEXT NOT NULL,
-      confidence   REAL NOT NULL DEFAULT 0,
-      decided_at   TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS project_hints (
-      session_id   TEXT NOT NULL,
-      kind         TEXT NOT NULL,
-      value        TEXT NOT NULL,
-      project_key  TEXT NOT NULL,
-      confidence   REAL NOT NULL,
-      agent        TEXT NOT NULL,
-      source       TEXT NOT NULL,
-      locator      TEXT,
-      updated_at   TEXT NOT NULL,
-      PRIMARY KEY (session_id, kind, value)
-    );
+    DROP TABLE IF EXISTS rule_candidates;
+    DROP TABLE IF EXISTS project_hints;
+    DROP TABLE IF EXISTS session_projects;
+    DROP TABLE IF EXISTS projects;
+    DROP TABLE IF EXISTS sessions;
   `)
 }
 
