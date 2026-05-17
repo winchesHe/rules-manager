@@ -751,3 +751,33 @@ codex top: cloud-code-master 75 / agent-slack 20 / moego-server-grooming 18 / ..
 ```
 fix: codex adapter 支持 YYYY/MM/DD/ 日级目录布局（2026-05+ 真实数据）
 ```
+
+---
+
+# FS-first 重构（scan-classify-fs-rewrite，2026-05-17）
+
+Plan 02 / 04 的多表数据模型被 **「FS 是真理来源，DB 只记状态」** 重构取代。
+
+新文档结构（之前的 `memory/process.md` 累积式记录改成由 spec + plan 承接）：
+
+| 文件 | 角色 |
+|---|---|
+| [docs/specs/scan-classify-fs-rewrite.md](../docs/specs/scan-classify-fs-rewrite.md) | 产品设计图：工作区结构 / schema v5 / 接口 / 子系统 / 改动范围 / 验收链路 |
+| [docs/plans/scan-classify-fs-rewrite.md](../docs/plans/scan-classify-fs-rewrite.md) | 9 步执行节奏表 + Y-only 决策记录（含步 1-4 合并完成记录） |
+| [docs/plans/02-scan-sources.md](../docs/plans/02-scan-sources.md) | 顶部加 superseded 注 |
+| [docs/plans/04-project-classification.md](../docs/plans/04-project-classification.md) | 顶部加 superseded 注 |
+
+## 关键变化总结
+
+- DB 砍掉 4 张内容表（`projects` / `session_projects` / `project_hints` / `rule_candidates`），只剩 3 张（`schema_meta` / `sessions` / `run_metadata`）
+- 工作区新增 `<workspace>/projects/<slug>/<session-id>.jsonl` symlink 视图（`ls / cat / grep` 直接可用）
+- classifier 输出从 `{projectKey, confidence, decisionHint}` 简化为 slug 字符串，加 `normalizeSlug`（kebab 归一化）
+- assign / merge / reclassify 全部走 FS mv + DB 同步
+- 真实环境实测：638 sessions / 70 slug / default 占比 **0%**（远好于 spec § 假设 < 20%）
+
+## 提交信息（FS-first）
+
+```
+feat: FS-first 重构 步 1-4（schema v5 + fs-writer + scanner / classifier 重写）
+feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
+```

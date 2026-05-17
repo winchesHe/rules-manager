@@ -72,8 +72,8 @@ projects
   .command('reclassify')
   .description('基于现有 hints 重新跑 classifier 全量重算项目归类')
   .option('--full', '全量重算（当前等价默认；预留人工标记忽略语义）', false)
-  .action((opts: { full?: boolean }) => {
-    runProjectsReclassify(opts)
+  .action(async (opts: { full?: boolean }) => {
+    await runProjectsReclassify(opts)
   })
 
 export async function runCli(argv: string[]): Promise<void> {

@@ -7,7 +7,7 @@
 ## 红线
 
 - 不存对话原文 / tool output / LLM prompt —— DB 只存指纹（content_hash）+ 元数据（cwd / gitRoot / branch）+ 路径引用（source_path）
-- `project_hints.value` 只允许路径 / repo / branch 文本，**禁止**对话片段
+- adapter `extractProjectHints` 抽的 `hint.value` 只允许路径 / repo / branch 文本，**禁止**对话片段（hints 不入库，只用于即时分类）
 - scanner 错误不能静默吞 —— 用 `errorLog` 写入 `run_metadata.details`
 - schema 加列必须走 `addColumnIfMissing` 守卫（仅吞 `duplicate column name`，其他错抛出）
 - adapter 接口扩展走**非破坏式**：保留旧方法，新增 `parse / normalize / extractProjectHints`
@@ -28,12 +28,25 @@
 | 跑 CLI | `node dist/cli.js <cmd>` |
 | CLI 命令清单 | `init / status / scan [--all] [--source <dir>] [--agent <name>] / projects {list,assign,merge,reclassify}` |
 
-## DB / 状态
+## DB / 状态（FS-first 模型）
 
 - 单文件：`<workspace>/.memory-manager/memory.db` + `-shm` + `-wal`（WAL 模式）
 - 默认 workspace：`~/.memory-manager/`；隔离测试用 `HOME=$(pwd)/.scratch`
-- Schema 当前 **v4**（`schema_meta.value`）；表清单：`sessions / projects / session_projects / project_hints / rule_candidates / run_metadata / schema_meta`
-- 升级路径：v1→v2→v3→v4，迁移函数在 [src/db.ts](src/db.ts)
+- Schema 当前 **v5**（`schema_meta.value`）；表清单仅 **3 张**：`sessions / run_metadata / schema_meta`
+- 升级路径：v1-v4 → v5 走 `migrateToV5`（drop 旧内容表，不迁数据；本地用户手动 `rm memory.db && init`）
+
+## FS-first 项目视图
+
+```
+<workspace>/projects/
+├── default/                          ← classifier 兜底（未匹配 session）
+└── <slug>/
+    └── <session-id>.jsonl  -> /Users/.../agent jsonl   (symlink)
+```
+
+- **真理来源**：FS（`ls / cat / grep` 可直接看分类）
+- **DB 索引**：`sessions.slug` 与 FS 双向一致，scan / assign / merge / reclassify 都同步两边
+- 详见 [docs/specs/scan-classify-fs-rewrite.md](docs/specs/scan-classify-fs-rewrite.md)
 
 ### GUI 工具
 
@@ -54,7 +67,7 @@ open -a TablePlus <workspace>/.memory-manager/memory.db
 
 ```bash
 node -e "const db=new(require('better-sqlite3'))('<path>/memory.db',{readonly:true}); \
-console.log(db.prepare('SELECT * FROM projects LIMIT 5').all())"
+console.log(db.prepare('SELECT slug, COUNT(*) AS c FROM sessions GROUP BY slug').all())"
 ```
 
 ## 本机真实环境扫描（隔离工作区）
@@ -81,13 +94,14 @@ src/
   adapters/{claude,codex,copilot,cursor}.ts  4 内置 adapter
   adapters/shared.ts     fileHash / readJsonlObjects / defaultNormalize
   scanner.ts             discover → parse → normalize → 写库 + 归类
-  classifier.ts          hint → projectKey + confidence
-  projects.ts            数据层（assignSession / mergeProjects / reclassifyAll / rebuildProjectsSummary）
+  classifier.ts          hints → slug 纯函数（classify + normalizeSlug）
+  fs-writer.ts           symlink CRUD（linkSession / moveLink / removeLink / listLinks）
+  projects.ts            数据层（listProjects / assignSession / mergeProjects / reclassifyAll；全部 FS mv + DB 同步）
   db.ts                  schema + 迁移
   workspace.ts           工作区路径解析
 test/
-  unit/                  Jest 测试（125+ tests），新测试走 mkdtempSync 临时 fixture
-  sources/{claude,codex,copilot,cursor}/  真实 fixture，禁改（plan 04 验收依赖）
+  unit/                  Jest 测试（129+ tests），新测试走 mkdtempSync 临时 fixture
+  sources/{claude,codex,copilot,cursor}/  真实 fixture，禁改（4 fixture 分类对账 spec § 验收链路）
 docs/plans/{01-08}-*.md  8 个阶段计划
 docs/specs/              spec
 memory/process.md        实现决策上下文，每段完成后追加
@@ -97,7 +111,7 @@ memory/process.md        实现决策上下文，每段完成后追加
 
 - `normalize` **不重算** id / contentHash，复用 discover；仅权威化 updatedAt
 - `sessions.updated_at` 必须写 `discover.updatedAt`（不是 `normalize.updatedAt`）—— 否则 unchanged 判定永远失效，process.md R3a 踩坑过
-- 新加测试用 `mkdtempSync` 临时 fixture，**禁止改** `test/sources/<agent>/`（影响 plan 04 验收的 4 个 fixture 项目名）
+- 新加测试用 `mkdtempSync` 临时 fixture，**禁止改** `test/sources/<agent>/`（影响 4 个 fixture 的 slug 形态对账：boarding-desktop / cloud-code-master / agent-memory-system / moego-chrome-extension）
 - ESM Jest：`import { jest } from '@jest/globals'`，全局 `jest` 不可用
 - adapter `extractProjectHints` 输出只能基于 metadata 或文件路径，**禁止**把对话内容写进 `hint.value`
 

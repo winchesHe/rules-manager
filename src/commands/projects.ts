@@ -69,13 +69,16 @@ export function runProjectsMerge(
   }
 }
 
-export function runProjectsReclassify(
+export async function runProjectsReclassify(
   opts: CommandOptions & { full?: boolean } = {},
-): void {
+): Promise<void> {
   ensureWorkspace(opts.homeDir)
   try {
-    reclassifyAll(opts)
-    console.log(`${pc.green('✓')} 重分类完成`)
+    const r = await reclassifyAll(opts)
+    console.log(
+      `${pc.green('✓')} 重分类完成：` +
+        `total=${r.total} changed=${r.changed} unchanged=${r.unchanged} skipped=${r.skipped}`,
+    )
   } catch (err) {
     console.error(pc.red('✗') + ' ' + (err instanceof Error ? err.message : String(err)))
     process.exit(1)
