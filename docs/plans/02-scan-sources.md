@@ -1,5 +1,9 @@
 # Plan 02: Scan & Sources
 
+> ⚠ **Superseded by `docs/specs/scan-classify-fs-rewrite.md`**（2026-05-17）。
+> 本 plan 的多表写入 + classifier confidence 设计已被 FS-first 重构取代。
+> 仍可作为 scan 入口 + adapter 接口 + missing 处理的历史参考。
+
 ## 目标
 
 实现扫描入口，让用户可以选择内置 agent 或 custom path，并将扫描结果写入轻量 DB 状态。

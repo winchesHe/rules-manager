@@ -1,5 +1,9 @@
 # Plan 04: Project Classification
 
+> ⚠ **Superseded by `docs/specs/scan-classify-fs-rewrite.md`**（2026-05-17）。
+> 本 plan 的 projects / session_projects / project_hints 三表设计 + confidence 概念全部被 FS-first 重构砍掉；
+> 分类结果改为 `<workspace>/projects/<slug>/<sid>.jsonl` symlink，DB 只剩 `sessions.slug` 一列。
+
 ## 目标
 
 把 adapter 提供的 `ProjectHint` 聚合成稳定项目归类，并确保 `test/sources` 的真实 fixture 能按预期分类。
