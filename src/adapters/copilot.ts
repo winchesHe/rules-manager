@@ -1,7 +1,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { AgentAdapter, DiscoveredSession, ProjectHint } from '../types.js'
-import { fileHash, fileMtime, readFirstLine, isUuid } from './shared.js'
+import type {
+  AgentAdapter,
+  DiscoveredSession,
+  ParsedSession,
+  ProjectHint,
+} from '../types.js'
+import {
+  defaultNormalize,
+  fileHash,
+  fileMtime,
+  isUuid,
+  readFirstLine,
+  readJsonlObjects,
+} from './shared.js'
 
 export const copilotAdapter: AgentAdapter = {
   name: 'copilot',
@@ -17,6 +29,47 @@ export const copilotAdapter: AgentAdapter = {
     }
     return { matched: false, reason: 'no UUID-named session directory under session-state/' }
   },
+
+  async parse(discovered: DiscoveredSession): Promise<ParsedSession> {
+    const parsed: ParsedSession = {
+      agent: 'copilot',
+      sessionId: discovered.id,
+      sourcePath: discovered.sourcePath,
+      messageCount: 0,
+      toolCallCount: 0,
+      metadata: {},
+    }
+    if (!fs.existsSync(discovered.sourcePath)) return parsed
+
+    const objs = readJsonlObjects(discovered.sourcePath)
+    let firstTs: string | undefined
+    let lastTs: string | undefined
+
+    for (const obj of objs) {
+      if (typeof obj.timestamp === 'string') {
+        if (!firstTs) firstTs = obj.timestamp
+        lastTs = obj.timestamp
+      }
+      if (obj.type === 'user.message' || obj.type === 'assistant.message') {
+        parsed.messageCount++
+      } else if (obj.type === 'tool.execution_start') {
+        parsed.toolCallCount++
+      } else if (obj.type === 'session.start') {
+        const data = obj.data as Record<string, unknown> | undefined
+        const ctx = data?.context as Record<string, unknown> | undefined
+        if (typeof ctx?.cwd === 'string') parsed.metadata.cwd = ctx.cwd
+        if (typeof ctx?.gitRoot === 'string') parsed.metadata.gitRoot = ctx.gitRoot
+        if (typeof ctx?.branch === 'string') parsed.metadata.branch = ctx.branch
+        if (typeof ctx?.headCommit === 'string') parsed.metadata.headCommit = ctx.headCommit
+      }
+    }
+
+    if (firstTs) parsed.firstTimestamp = firstTs
+    if (lastTs) parsed.lastTimestamp = lastTs
+    return parsed
+  },
+
+  normalize: defaultNormalize,
 
   async extractProjectHints(discovered: DiscoveredSession): Promise<ProjectHint[]> {
     const hints: ProjectHint[] = []

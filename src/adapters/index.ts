@@ -16,9 +16,13 @@ const ADAPTER_MAP = new Map<AgentName, AgentAdapter>(
 )
 
 export function getAdapters(names: AgentName[]): AgentAdapter[] {
-  return names.map((name) => {
-    const adapter = ADAPTER_MAP.get(name)
-    if (!adapter) throw new Error(`Unknown agent: ${name}`)
-    return adapter
-  })
+  const unknown = names.filter((n) => !ADAPTER_MAP.has(n))
+  if (unknown.length > 0) {
+    const noun = unknown.length === 1 ? 'agent' : 'agents'
+    const available = ALL_ADAPTERS.map((a) => a.name).join(', ')
+    throw new Error(
+      `Unknown ${noun}: ${unknown.join(', ')} (available: ${available})`,
+    )
+  }
+  return names.map((name) => ADAPTER_MAP.get(name)!)
 }

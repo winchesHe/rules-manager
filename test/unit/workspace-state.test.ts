@@ -189,6 +189,8 @@ describe('initDatabase schema', () => {
     const allowed = new Set([
       'id', 'agent', 'source_path', 'updated_at', 'content_hash', 'project_key',
       'source_kind', 'scan_state', 'first_seen_at', 'last_seen_at',
+      // schema v3：ParsedSession 字段
+      'message_count', 'tool_call_count', 'first_timestamp', 'last_timestamp', 'parsed_metadata',
     ])
     for (const col of cols) {
       expect(allowed.has(col.name)).toBe(true)

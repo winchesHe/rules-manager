@@ -1,7 +1,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { AgentAdapter, DiscoveredSession, ProjectHint } from '../types.js'
-import { fileHash, fileMtime, isUuid } from './shared.js'
+import type {
+  AgentAdapter,
+  DiscoveredSession,
+  ParsedSession,
+  ProjectHint,
+} from '../types.js'
+import {
+  defaultNormalize,
+  fileHash,
+  fileMtime,
+  isUuid,
+  readJsonlObjects,
+} from './shared.js'
 
 export const cursorAdapter: AgentAdapter = {
   name: 'cursor',
@@ -21,6 +32,33 @@ export const cursorAdapter: AgentAdapter = {
     }
     return { matched: false, reason: 'no agent-transcripts/ directory under any project' }
   },
+
+  async parse(discovered: DiscoveredSession): Promise<ParsedSession> {
+    const parsed: ParsedSession = {
+      agent: 'cursor',
+      sessionId: discovered.id,
+      sourcePath: discovered.sourcePath,
+      messageCount: 0,
+      toolCallCount: 0,
+      metadata: {},
+    }
+    if (!fs.existsSync(discovered.sourcePath)) return parsed
+
+    for (const obj of readJsonlObjects(discovered.sourcePath)) {
+      if (obj.role === 'user' || obj.role === 'assistant') parsed.messageCount++
+      // cursor jsonl 没有顶层 timestamp / cwd —— 无可抽元数据
+      const message = obj.message as Record<string, unknown> | undefined
+      const content = message?.content as Array<Record<string, unknown>> | undefined
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (part?.type === 'tool_use') parsed.toolCallCount++
+        }
+      }
+    }
+    return parsed
+  },
+
+  normalize: defaultNormalize,
 
   async extractProjectHints(discovered: DiscoveredSession): Promise<ProjectHint[]> {
     const hints: ProjectHint[] = []

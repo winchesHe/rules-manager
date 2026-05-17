@@ -1,8 +1,20 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import type { AgentAdapter, DiscoveredSession, ProjectHint } from '../types.js'
-import { fileHash, fileMtime, readFirstLine, isUuid } from './shared.js'
+import type {
+  AgentAdapter,
+  DiscoveredSession,
+  ParsedSession,
+  ProjectHint,
+} from '../types.js'
+import {
+  defaultNormalize,
+  fileHash,
+  fileMtime,
+  isUuid,
+  readFirstLine,
+  readJsonlObjects,
+} from './shared.js'
 
 function collectJsonlFiles(dir: string): string[] {
   const result: string[] = []
@@ -51,6 +63,68 @@ export const claudeAdapter: AgentAdapter = {
     }
     return { matched: false, reason: 'no UUID-named session entries' }
   },
+
+  async parse(discovered: DiscoveredSession): Promise<ParsedSession> {
+    const parsed: ParsedSession = {
+      agent: 'claude',
+      sessionId: discovered.id,
+      sourcePath: discovered.sourcePath,
+      messageCount: 0,
+      toolCallCount: 0,
+      metadata: {},
+    }
+
+    if (!fs.existsSync(discovered.sourcePath)) return parsed
+
+    const stat = fs.statSync(discovered.sourcePath)
+    const files = stat.isDirectory()
+      ? collectJsonlFiles(discovered.sourcePath)
+      : [discovered.sourcePath]
+
+    let firstTs: string | undefined
+    let lastTs: string | undefined
+
+    for (const f of files) {
+      for (const obj of readJsonlObjects(f)) {
+        if (obj.type === 'user' || obj.type === 'assistant') {
+          parsed.messageCount++
+          if (obj.type === 'assistant') {
+            const message = obj.message as Record<string, unknown> | undefined
+            const content = message?.content as Array<Record<string, unknown>> | undefined
+            if (Array.isArray(content)) {
+              for (const part of content) {
+                if (part?.type === 'tool_use') parsed.toolCallCount++
+              }
+            }
+          }
+        }
+        if (typeof obj.timestamp === 'string') {
+          if (!firstTs || obj.timestamp < firstTs) firstTs = obj.timestamp
+          if (!lastTs || obj.timestamp > lastTs) lastTs = obj.timestamp
+        }
+      }
+    }
+
+    if (firstTs) parsed.firstTimestamp = firstTs
+    if (lastTs) parsed.lastTimestamp = lastTs
+
+    // 首行 metadata（cwd / gitBranch）
+    if (files.length > 0) {
+      try {
+        const head = JSON.parse(readFirstLine(files[0])) as Record<string, unknown>
+        if (typeof head.cwd === 'string' && head.cwd) parsed.metadata.cwd = head.cwd
+        if (typeof head.gitBranch === 'string' && head.gitBranch) {
+          parsed.metadata.branch = head.gitBranch
+        }
+      } catch {
+        // 首行非 JSON：保持 metadata 空
+      }
+    }
+
+    return parsed
+  },
+
+  normalize: defaultNormalize,
 
   async extractProjectHints(discovered: DiscoveredSession): Promise<ProjectHint[]> {
     const hints: ProjectHint[] = []

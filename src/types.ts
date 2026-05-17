@@ -35,10 +35,40 @@ export interface ProbeResult {
   reason?: string
 }
 
+export interface ParsedSessionMetadata {
+  cwd?: string
+  gitRoot?: string
+  branch?: string
+  headCommit?: string
+}
+
+export interface ParsedSession {
+  agent: AgentName
+  sessionId: string
+  sourcePath: string
+  messageCount: number
+  toolCallCount: number
+  firstTimestamp?: string
+  lastTimestamp?: string
+  metadata: ParsedSessionMetadata
+}
+
+export interface NormalizedSession {
+  sessionId: string
+  agent: AgentName
+  sourcePath: string
+  sourceKind: string
+  updatedAt: string
+  contentHash: string
+  parsed: ParsedSession
+}
+
 export interface AgentAdapter {
   name: AgentName
   probe(agentSourceDir: string): Promise<ProbeResult>
   discover(agentSourceDir: string): Promise<DiscoveredSession[]>
+  parse(discovered: DiscoveredSession): Promise<ParsedSession>
+  normalize(parsed: ParsedSession, discovered: DiscoveredSession): Promise<NormalizedSession>
   extractProjectHints(discovered: DiscoveredSession): Promise<ProjectHint[]>
 }
 
@@ -57,4 +87,12 @@ export interface ScanOptions {
   agents?: AgentName[]
   full?: boolean
   homeDir?: string
+}
+
+export const UNKNOWN_PROJECT_KEY = 'unknown'
+
+export interface ProjectClassification {
+  projectKey: string
+  confidence: number
+  decisionHint: ProjectHint | null
 }
