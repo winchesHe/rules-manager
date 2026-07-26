@@ -1,6 +1,6 @@
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
-import type { AgentName, ScanOptions } from '../types.js'
+import type { AgentName, ScanOptions, ScanProgress, ScanSummary } from '../types.js'
 import { ALL_ADAPTERS } from '../adapters/index.js'
 import { runScan } from '../scanner.js'
 import { workspaceExists } from '../workspace.js'
@@ -11,6 +11,40 @@ export interface ScanCommandOptions {
   agent?: string   // comma-separated agent names
   full?: boolean
   homeDir?: string
+}
+
+const SPINNER_FRAME_MS = 130
+
+async function waitForSpinnerFrame(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, SPINNER_FRAME_MS))
+}
+
+export function formatScanSummary(summary: ScanSummary): string {
+  return [
+    `Sessions: ${summary.total}`,
+    `New: ${summary.new}`,
+    summary.updated > 0 ? `Updated: ${summary.updated}` : undefined,
+    summary.unchanged > 0 ? `Unchanged: ${summary.unchanged}` : undefined,
+    summary.missing > 0 ? `Missing: ${summary.missing}` : undefined,
+    `Errors: ${summary.errors}`,
+  ]
+    .filter((item): item is string => item !== undefined)
+    .join(' · ')
+}
+
+function progressMessage(progress: ScanProgress): string {
+  switch (progress.phase) {
+    case 'discovering':
+      return `正在发现 ${progress.agent} sessions…`
+    case 'processing':
+      return `正在处理 ${progress.agent}：${progress.current ?? 0}/${progress.total ?? 0}`
+    case 'done':
+      return `${progress.agent} 完成：${progress.total ?? 0} sessions`
+    case 'skipped':
+      return `${progress.agent} 未找到数据源，已跳过`
+    case 'error':
+      return `${progress.agent} 扫描失败，继续下一个 agent`
+  }
 }
 
 export async function runScanCommand(opts: ScanCommandOptions): Promise<void> {
@@ -50,29 +84,30 @@ export async function runScanCommand(opts: ScanCommandOptions): Promise<void> {
     }
   }
 
+  const spinner = clack.spinner()
+  spinner.start('准备扫描…')
+
   const scanOpts: ScanOptions = {
     source: opts.source,
     all,
     agents,
     full: opts.full,
     homeDir: opts.homeDir,
+    onProgress: async (progress) => {
+      spinner.message(progressMessage(progress))
+      await waitForSpinnerFrame()
+    },
   }
-
-  const spinner = clack.spinner()
-  spinner.start('扫描中…')
 
   try {
     const summary = await runScan(scanOpts)
     spinner.stop('扫描完成')
 
-    console.log(`Sessions: ${summary.total} total`)
-    console.log(`New: ${summary.new}`)
-    if (summary.updated > 0) console.log(`Updated: ${summary.updated}`)
-    if (summary.unchanged > 0) console.log(`Unchanged: ${summary.unchanged}`)
-    if (summary.missing > 0) console.log(`Missing: ${summary.missing}`)
-    console.log(`Errors: ${summary.errors}`)
+    clack.log.info(formatScanSummary(summary))
+    clack.outro(summary.errors > 0 ? pc.yellow('扫描完成，存在错误') : pc.green('扫描成功'))
   } catch (err) {
-    spinner.stop('扫描失败')
+    spinner.stop('扫描失败', 1)
+    clack.outro(pc.red('扫描失败'))
     throw err
   }
 }

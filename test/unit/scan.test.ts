@@ -7,9 +7,25 @@ import { codexAdapter } from '../../src/adapters/codex'
 import { copilotAdapter } from '../../src/adapters/copilot'
 import { cursorAdapter } from '../../src/adapters/cursor'
 import { runScan, determineScanState } from '../../src/scanner'
+import { formatScanSummary } from '../../src/commands/scan'
 import type { DiscoveredSession } from '../../src/types'
 
 const SOURCES_DIR = path.resolve('test/sources')
+
+describe('formatScanSummary', () => {
+  it('以单行展示统计并省略值为 0 的可选状态', () => {
+    expect(
+      formatScanSummary({
+        total: 681,
+        new: 681,
+        updated: 0,
+        unchanged: 0,
+        missing: 0,
+        errors: 0,
+      }),
+    ).toBe('Sessions: 681 · New: 681 · Errors: 0')
+  })
+})
 
 function makeTempHome(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mm-scan-test-'))
@@ -233,7 +249,7 @@ describe('runScan --source test/sources --all', () => {
 
   beforeEach(async () => {
     home = makeTempHome()
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
   })
 
   afterEach(() => {
@@ -264,6 +280,60 @@ describe('runScan --source test/sources --all', () => {
   it('扫描结果 total = new + updated + unchanged（无 missing/error 时）', async () => {
     const summary = await runScan({ source: SOURCES_DIR, all: true, homeDir: home })
     expect(summary.new + summary.updated + summary.unchanged).toBe(summary.total)
+  })
+
+  it('通过回调报告 agent 的发现、处理和完成进度', async () => {
+    const progress: Array<{
+      agent: string
+      phase: string
+      current?: number
+      total?: number
+    }> = []
+    const options = {
+      source: SOURCES_DIR,
+      agents: ['codex'],
+      homeDir: home,
+      onProgress: (event: (typeof progress)[number]) => {
+        progress.push(event)
+      },
+    } as Parameters<typeof runScan>[0]
+
+    await runScan(options)
+
+    expect(progress).toContainEqual({ agent: 'codex', phase: 'discovering' })
+    expect(progress).toContainEqual(
+      expect.objectContaining({ agent: 'codex', phase: 'processing', current: 0 }),
+    )
+    expect(progress).toContainEqual(
+      expect.objectContaining({ agent: 'codex', phase: 'done', current: expect.any(Number) }),
+    )
+    const done = progress.find((event) => event.phase === 'done')
+    expect(done?.current).toBe(done?.total)
+  })
+
+  it('等待异步 progress 回调完成后再继续扫描', async () => {
+    let loadingPainted = false
+    let paintedBeforeProcessing = false
+    const options = {
+      source: SOURCES_DIR,
+      agents: ['codex'],
+      homeDir: home,
+      onProgress: async (event: { phase: string }) => {
+        if (event.phase === 'discovering') {
+          await new Promise<void>((resolve) => {
+            setTimeout(() => {
+              loadingPainted = true
+              resolve()
+            }, 5)
+          })
+        }
+        if (event.phase === 'processing') paintedBeforeProcessing = loadingPainted
+      },
+    } as Parameters<typeof runScan>[0]
+
+    await runScan(options)
+
+    expect(paintedBeforeProcessing).toBe(true)
   })
 })
 
@@ -323,7 +393,7 @@ describe('runScan: updated / missing 分类', () => {
   beforeEach(async () => {
     home = makeTempHome()
     sources = makeTempSources()
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
   })
 
   afterEach(() => {
@@ -385,7 +455,7 @@ describe('runScan --full', () => {
 
   beforeEach(async () => {
     home = makeTempHome()
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
   })
 
   afterEach(() => {

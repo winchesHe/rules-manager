@@ -8,6 +8,7 @@ import type {
   ProjectHint,
 } from '../types.js'
 import {
+  collectFilesRecursive,
   defaultNormalize,
   fileHash,
   fileMtime,
@@ -17,16 +18,19 @@ import {
 } from './shared.js'
 
 function collectJsonlFiles(dir: string): string[] {
-  const result: string[] = []
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      result.push(...collectJsonlFiles(fullPath))
-    } else if (entry.name.endsWith('.jsonl')) {
-      result.push(fullPath)
+  return collectFilesRecursive(dir, (filePath) => filePath.endsWith('.jsonl'))
+}
+
+function readClaudeSessionId(filePath: string): string {
+  try {
+    const first = JSON.parse(readFirstLine(filePath)) as Record<string, unknown>
+    if (typeof first.sessionId === 'string' && first.sessionId.trim()) {
+      return first.sessionId.trim()
     }
+  } catch {
+    // 文件名仍是 Claude 的稳定 provider handle。
   }
-  return result.sort()
+  return path.basename(filePath, '.jsonl')
 }
 
 function hashFiles(files: string[]): string {
@@ -45,23 +49,19 @@ export const claudeAdapter: AgentAdapter = {
     if (!fs.existsSync(projectsDir)) {
       return { matched: false, reason: 'no projects/ directory' }
     }
-    // 区分点：claude 的 projects/<*>/ 直接放 UUID 目录或 UUID.jsonl；
+    // 区分点：claude 的 projects/<*>/ 直接放 session 目录或 JSONL；
     // cursor 也有 projects/，但子目录是 agent-transcripts/，不会命中下面的判定。
     for (const projectEntry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
       if (!projectEntry.isDirectory()) continue
       const projectDir = path.join(projectsDir, projectEntry.name)
       for (const entry of fs.readdirSync(projectDir, { withFileTypes: true })) {
         if (entry.isDirectory() && isUuid(entry.name)) return { matched: true }
-        if (
-          entry.isFile() &&
-          entry.name.endsWith('.jsonl') &&
-          isUuid(entry.name.slice(0, -6))
-        ) {
+        if (entry.isFile() && entry.name.endsWith('.jsonl')) {
           return { matched: true }
         }
       }
     }
-    return { matched: false, reason: 'no UUID-named session entries' }
+    return { matched: false, reason: 'no session JSONL entries' }
   },
 
   async parse(discovered: DiscoveredSession): Promise<ParsedSession> {
@@ -189,7 +189,7 @@ export const claudeAdapter: AgentAdapter = {
     const projectsDir = path.join(agentSourceDir, 'projects')
     if (!fs.existsSync(projectsDir)) return []
 
-    const sessions: DiscoveredSession[] = []
+    const sessions = new Map<string, DiscoveredSession>()
 
     for (const projectEntry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
       if (!projectEntry.isDirectory()) continue
@@ -198,6 +198,7 @@ export const claudeAdapter: AgentAdapter = {
       for (const sessionEntry of fs.readdirSync(projectDir, { withFileTypes: true })) {
         // UUID directory → session whose content spans all .jsonl files within
         if (sessionEntry.isDirectory() && isUuid(sessionEntry.name)) {
+          if (sessions.has(sessionEntry.name)) continue
           const sessionDir = path.join(projectDir, sessionEntry.name)
           const files = collectJsonlFiles(sessionDir)
           if (files.length === 0) continue
@@ -213,7 +214,7 @@ export const claudeAdapter: AgentAdapter = {
             // use mtime
           }
 
-          sessions.push({
+          sessions.set(sessionEntry.name, {
             id: sessionEntry.name,
             agent: 'claude',
             sourcePath: sessionDir,
@@ -223,38 +224,24 @@ export const claudeAdapter: AgentAdapter = {
           })
         }
 
-        // UUID.jsonl file → direct session file
-        else if (
-          sessionEntry.isFile() &&
-          sessionEntry.name.endsWith('.jsonl') &&
-          isUuid(sessionEntry.name.slice(0, -6))
-        ) {
+        // Claude SDK/Paseo 的 provider handle 通常是文件名，也允许从首行 sessionId 权威化。
+        else if (sessionEntry.isFile() && sessionEntry.name.endsWith('.jsonl')) {
           const filePath = path.join(projectDir, sessionEntry.name)
-          const id = sessionEntry.name.slice(0, -6)
+          const sessionId = readClaudeSessionId(filePath)
+          if (sessions.has(sessionId)) continue
 
-          let updatedAt = fileMtime(filePath)
-          try {
-            const firstLine = readFirstLine(filePath)
-            const obj = JSON.parse(firstLine) as Record<string, unknown>
-            if (typeof obj.timestamp === 'string') {
-              updatedAt = obj.timestamp
-            }
-          } catch {
-            // use mtime
-          }
-
-          sessions.push({
-            id,
+          sessions.set(sessionId, {
+            id: sessionId,
             agent: 'claude',
             sourcePath: filePath,
             sourceKind: 'jsonl',
-            updatedAt,
+            updatedAt: fileMtime(filePath),
             contentHash: fileHash(filePath),
           })
         }
       }
     }
 
-    return sessions
+    return [...sessions.values()]
   },
 }

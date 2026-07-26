@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import type {
@@ -6,6 +7,7 @@ import type {
   DiscoveredSession,
   ProjectHint,
   ScanOptions,
+  ScanProgress,
   ScanSummary,
   SessionStatus,
 } from './types.js'
@@ -48,6 +50,43 @@ export function determineScanState(
   return 'unchanged'
 }
 
+function defaultAgentSourceDir(agent: AgentAdapter['name'], homeDir?: string): string {
+  const home = homeDir ?? os.homedir()
+  if (!homeDir && agent === 'claude' && process.env.CLAUDE_CONFIG_DIR) {
+    return path.resolve(process.env.CLAUDE_CONFIG_DIR)
+  }
+  if (!homeDir && agent === 'codex' && process.env.CODEX_HOME) {
+    return path.resolve(process.env.CODEX_HOME)
+  }
+  if (agent === 'opencode') {
+    const dataHome = !homeDir && process.env.XDG_DATA_HOME
+      ? path.resolve(process.env.XDG_DATA_HOME)
+      : path.join(home, '.local', 'share')
+    return path.join(dataHome, 'opencode')
+  }
+  if (agent === 'pi') {
+    if (!homeDir && process.env.PI_CODING_AGENT_SESSION_DIR) {
+      return path.resolve(process.env.PI_CODING_AGENT_SESSION_DIR)
+    }
+    if (!homeDir && process.env.PI_CODING_AGENT_DIR) {
+      return path.resolve(process.env.PI_CODING_AGENT_DIR)
+    }
+    return path.join(home, '.pi', 'agent')
+  }
+  return path.join(home, `.${agent}`)
+}
+
+export function resolveAgentSourceDir(
+  adapter: AgentAdapter,
+  opts: ScanOptions,
+  workspaceDir: string,
+): string {
+  if (opts.source) return path.join(path.resolve(opts.source), adapter.name)
+  const configured = path.join(workspaceDir, 'sources', adapter.name)
+  if (fs.existsSync(configured)) return configured
+  return defaultAgentSourceDir(adapter.name, opts.homeDir)
+}
+
 function logErr(
   agent: string,
   stage: ScanErrorEntry['stage'],
@@ -57,6 +96,10 @@ function logErr(
   const message = err instanceof Error ? err.message : String(err)
   console.error(`[scan] ${agent} ${stage} failed at ${detail}: ${message}`)
   return message
+}
+
+async function reportProgress(opts: ScanOptions, progress: ScanProgress): Promise<void> {
+  await opts.onProgress?.(progress)
 }
 
 export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
@@ -73,11 +116,6 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
   const adapters: AgentAdapter[] = useAllAdapters
     ? ALL_ADAPTERS
     : getAdapters(opts.agents ?? [])
-
-  // 默认 source 根：<workspaceDir>/sources/<agent>/（用户软链 ~/.claude 等）
-  const sourceBase = opts.source
-    ? path.resolve(opts.source)
-    : path.join(workspaceDir, 'sources')
 
   const summary: ScanSummary = {
     total: 0,
@@ -116,12 +154,16 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
     "UPDATE sessions SET status = 'missing', last_seen_at = ? WHERE id = ?",
   )
 
-  const scannedAgents = new Set<string>(adapters.map((a) => a.name))
+  const scannedAgents = new Set<string>()
   const discoveredIds = new Set<string>()
 
   for (const adapter of adapters) {
-    const agentSourceDir = path.join(sourceBase, adapter.name)
-    if (!fs.existsSync(agentSourceDir)) continue
+    const agentSourceDir = resolveAgentSourceDir(adapter, opts, workspaceDir)
+    await reportProgress(opts, { agent: adapter.name, phase: 'discovering' })
+    if (!fs.existsSync(agentSourceDir)) {
+      await reportProgress(opts, { agent: adapter.name, phase: 'skipped' })
+      continue
+    }
 
     let sessions: DiscoveredSession[]
     try {
@@ -133,10 +175,18 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
         stage: 'discover',
         message: logErr(adapter.name, 'discover', agentSourceDir, err),
       })
+      await reportProgress(opts, { agent: adapter.name, phase: 'error' })
       continue
     }
+    scannedAgents.add(adapter.name)
+    await reportProgress(opts, {
+      agent: adapter.name,
+      phase: 'processing',
+      current: 0,
+      total: sessions.length,
+    })
 
-    for (const session of sessions) {
+    for (const [index, session] of sessions.entries()) {
       discoveredIds.add(session.id)
       summary.total++
 
@@ -221,7 +271,23 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
           message: logErr(adapter.name, 'db', session.id, err),
         })
       }
+
+      const current = index + 1
+      if (current === sessions.length || current % 100 === 0) {
+        await reportProgress(opts, {
+          agent: adapter.name,
+          phase: 'processing',
+          current,
+          total: sessions.length,
+        })
+      }
     }
+    await reportProgress(opts, {
+      agent: adapter.name,
+      phase: 'done',
+      current: sessions.length,
+      total: sessions.length,
+    })
   }
 
   // missing 处理：本轮扫的 agent 范围内、DB 有但本轮未发现 → status='missing' + 删 FS link

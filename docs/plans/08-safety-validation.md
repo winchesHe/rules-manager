@@ -84,7 +84,7 @@ memory-manager rules generate --dry-run
 完整 MVP 验收命令：
 
 ```bash
-memory-manager init --yes
+memory-manager init --non-interactive
 memory-manager scan --source test/sources --all
 memory-manager projects list
 memory-manager rules generate --dry-run
@@ -119,4 +119,3 @@ MVP 不默认：
 1. 持久化完整 LLM prompt/response。
 2. 打印完整 session。
 3. 上传 session content。
-

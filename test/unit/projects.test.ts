@@ -24,7 +24,7 @@ describe('scan test/sources --all → FS projects/ 视图', () => {
   let home: string
   beforeEach(async () => {
     home = makeTempHome()
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
   })
   afterEach(() => clean(home))
 
@@ -136,7 +136,7 @@ describe('listProjects', () => {
   })
 
   it('init 但未 scan → 空数组（projects/default 目录里没 jsonl）', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     // default 目录虽然存在，但 listLinks 会返回 { default: [] }
     // listProjects 也应过滤空 slug，输出空数组
     const items = listProjects({ homeDir: home })
@@ -147,7 +147,7 @@ describe('listProjects', () => {
   })
 
   it('scan 后按 session_count 降序排列', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     await runScan({ source: SOURCES_DIR, all: true, homeDir: home })
     const items = listProjects({ homeDir: home })
     expect(items.length).toBeGreaterThanOrEqual(4)
@@ -157,7 +157,7 @@ describe('listProjects', () => {
   })
 
   it('items 字段：slug / sessionCount / agents', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     await runScan({ source: SOURCES_DIR, all: true, homeDir: home })
     const items = listProjects({ homeDir: home })
     const sample = items.find((i) => i.slug === 'boarding-desktop')

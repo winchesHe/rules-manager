@@ -3,12 +3,14 @@ import { Command } from 'commander'
 import { runInit } from './commands/init.js'
 import { runStatus } from './commands/status.js'
 import { runScanCommand } from './commands/scan.js'
+import { runSessionsShow } from './commands/sessions.js'
 import {
   runProjectsAssign,
   runProjectsList,
   runProjectsMerge,
   runProjectsReclassify,
 } from './commands/projects.js'
+import { WORKSPACE_ENV } from './workspace.js'
 
 const program = new Command()
 
@@ -16,13 +18,21 @@ program
   .name('memory-manager')
   .description('本地优先 AI agent session 管理与 rules 生成 CLI')
   .version('0.1.0')
+  .option('-w, --workspace <path>', '指定 .memory-manager 所在目录')
+  .hook('preAction', (command) => {
+    const workspace = command.opts().workspace as string | undefined
+    if (workspace) process.env[WORKSPACE_ENV] = workspace
+  })
+  .action(() => {
+    program.outputHelp()
+  })
 
 program
   .command('init')
-  .description('初始化 ~/.memory-manager 工作区')
-  .option('--yes', '非交互模式，跳过确认直接执行', false)
-  .action(async (opts: { yes: boolean }) => {
-    await runInit({ yes: opts.yes })
+  .description('初始化工作区')
+  .option('--non-interactive', '跳过确认，直接执行', false)
+  .action(async (opts: { nonInteractive: boolean }) => {
+    await runInit({ nonInteractive: opts.nonInteractive })
   })
 
 program
@@ -30,6 +40,17 @@ program
   .description('显示工作区状态')
   .action(() => {
     runStatus()
+  })
+
+const sessions = program
+  .command('sessions')
+  .description('按需读取 session 数据')
+
+sessions
+  .command('show <session-id>')
+  .description('读取 OpenCode/Codex session 原文到 stdout（不落盘）')
+  .action(async (sessionId: string) => {
+    await runSessionsShow(sessionId)
   })
 
 program

@@ -131,7 +131,7 @@ CLI 命令：
 
 ```bash
 # 行为不变
-memory-manager init --yes
+memory-manager init --non-interactive
 memory-manager status
 memory-manager scan [--all] [--agent <name>] [--source <dir>]
 
@@ -292,7 +292,7 @@ reclassify: for sid in sessions: 读 source_path jsonl → extractProjectHints �
 ```bash
 # 1. 隔离工作区初始化（无主 home 污染）
 SCRATCH="$(pwd)/.scratch" && rm -rf "$SCRATCH"
-HOME="$SCRATCH" node dist/cli.js init --yes
+HOME="$SCRATCH" node dist/cli.js init --non-interactive
 ls "$SCRATCH/.memory-manager/projects/"
 # 必须看到：default/
 

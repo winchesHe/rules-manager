@@ -3,6 +3,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 export const WORKSPACE_DIR = path.join(os.homedir(), '.memory-manager')
+export const WORKSPACE_ENV = 'MEMORY_MANAGER_WORKSPACE'
 
 export function resolveWorkspace(homeDir?: string): {
   workspaceDir: string
@@ -11,7 +12,12 @@ export function resolveWorkspace(homeDir?: string): {
   projectsDir: string
   sourcesDir: string
 } {
-  const base = homeDir ? path.join(homeDir, '.memory-manager') : WORKSPACE_DIR
+  const configuredWorkspace = process.env[WORKSPACE_ENV]
+  const base = homeDir
+    ? path.join(homeDir, '.memory-manager')
+    : configuredWorkspace
+      ? path.join(path.resolve(configuredWorkspace), '.memory-manager')
+      : WORKSPACE_DIR
   return {
     workspaceDir: base,
     dbPath: path.join(base, 'memory.db'),

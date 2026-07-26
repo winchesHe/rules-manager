@@ -26,7 +26,7 @@
 完整 MVP 最终需要通过：
 
 ```bash
-memory-manager init --yes
+memory-manager init --non-interactive
 memory-manager scan --source test/sources --all
 memory-manager projects list
 memory-manager rules generate --dry-run
@@ -44,4 +44,3 @@ memory-manager rules show --style
 4. rules 生成经过 `pi-code-agent` SDK。
 5. 正式 Markdown 只包含 `high` 和 `verified` rules。
 6. P0-P6 只用于最终 Markdown 文案优化。
-

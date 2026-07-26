@@ -6,7 +6,7 @@
       {
         "useESM": true,
         "tsconfig": {
-          "moduleResolution": "node"
+          "moduleResolution": "bundler"
         }
       }
     ]

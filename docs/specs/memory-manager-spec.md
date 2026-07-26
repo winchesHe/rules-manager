@@ -504,7 +504,7 @@ Renderer 限制：
 ## 16. MVP 验收链路
 
 ```bash
-memory-manager init --yes
+memory-manager init --non-interactive
 memory-manager scan --source test/sources --all
 memory-manager projects list
 memory-manager rules generate --dry-run

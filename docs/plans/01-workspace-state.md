@@ -8,7 +8,7 @@
 
 实现：
 
-1. `memory-manager init --yes`
+1. `memory-manager init --non-interactive`
 2. 创建 `~/.memory-manager/`
 3. 创建 `~/.memory-manager/rules/projects/`
 4. 创建 `~/.memory-manager/memory.db`
@@ -17,7 +17,7 @@
 验收：
 
 ```bash
-memory-manager init --yes
+memory-manager init --non-interactive
 memory-manager status
 ```
 
@@ -101,4 +101,3 @@ enabled = true
 2. rules generation。
 3. LLM 调用。
 4. logs/cache/snapshots 目录。
-

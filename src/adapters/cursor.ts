@@ -10,7 +10,6 @@ import {
   defaultNormalize,
   fileHash,
   fileMtime,
-  isUuid,
   readJsonlObjects,
 } from './shared.js'
 
@@ -63,7 +62,7 @@ export const cursorAdapter: AgentAdapter = {
   async extractProjectHints(discovered: DiscoveredSession): Promise<ProjectHint[]> {
     const hints: ProjectHint[] = []
     // cursor jsonl 没有 cwd / gitRoot 元数据，只能依赖目录编码。
-    // sourcePath = .../projects/<encoded>/agent-transcripts/<UUID>/<UUID>.jsonl
+    // sourcePath = .../projects/<encoded>/agent-transcripts/<session>/<transcript>.jsonl
     const m = /\/projects\/([^/]+)\/agent-transcripts\//.exec(discovered.sourcePath)
     if (m) {
       hints.push({
@@ -91,11 +90,18 @@ export const cursorAdapter: AgentAdapter = {
       if (!fs.existsSync(transcriptsDir)) continue
 
       for (const sessionEntry of fs.readdirSync(transcriptsDir, { withFileTypes: true })) {
-        if (!sessionEntry.isDirectory() || !isUuid(sessionEntry.name)) continue
+        if (!sessionEntry.isDirectory()) continue
 
         const sessionDir = path.join(transcriptsDir, sessionEntry.name)
-        const sessionFile = path.join(sessionDir, `${sessionEntry.name}.jsonl`)
-        if (!fs.existsSync(sessionFile)) continue
+        const preferredFile = path.join(sessionDir, `${sessionEntry.name}.jsonl`)
+        const sessionFile = fs.existsSync(preferredFile)
+          ? preferredFile
+          : fs
+              .readdirSync(sessionDir, { withFileTypes: true })
+              .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+              .map((entry) => path.join(sessionDir, entry.name))
+              .sort()[0]
+        if (!sessionFile) continue
 
         sessions.push({
           id: sessionEntry.name,

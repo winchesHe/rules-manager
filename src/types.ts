@@ -1,4 +1,4 @@
-export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor'
+export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'pi'
 
 /**
  * scan session 的状态机：
@@ -89,10 +89,18 @@ export interface ScanSummary {
   errors: number
 }
 
+export interface ScanProgress {
+  agent: AgentName
+  phase: 'discovering' | 'processing' | 'done' | 'skipped' | 'error'
+  current?: number
+  total?: number
+}
+
 export interface ScanOptions {
   source?: string
   all?: boolean
   agents?: AgentName[]
   full?: boolean
   homeDir?: string
+  onProgress?: (progress: ScanProgress) => void | Promise<void>
 }

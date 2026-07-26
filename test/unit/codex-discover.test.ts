@@ -92,7 +92,7 @@ describe('codexAdapter.discover 跨目录布局', () => {
     }
   })
 
-  it('DD 目录下的非 UUID 文件 / 嵌套孙目录不被扫到', async () => {
+  it('DD 目录下的非 UUID 文件不被扫到，未来新增层级仍递归发现 rollout', async () => {
     const tmp = makeTempDir()
     try {
       const uuid = '019de3cf-bc35-7922-9eb7-3eee9610b8d3'
@@ -103,7 +103,7 @@ describe('codexAdapter.discover 跨目录布局', () => {
       )
       // 无 UUID 后缀的文件
       fs.writeFileSync(path.join(tmp, 'sessions', '2026', '05', '01', 'README.txt'), 'noise')
-      // 多余的孙级目录（HH 之类的将来扩展点 —— 当前 adapter 不应下钻）
+      // 新增的孙级目录（HH 等未来布局）也应继续下钻。
       fs.mkdirSync(path.join(tmp, 'sessions', '2026', '05', '01', '12'), { recursive: true })
       writeJsonl(
         path.join(
@@ -120,9 +120,10 @@ describe('codexAdapter.discover 跨目录布局', () => {
       )
 
       const sessions = await codexAdapter.discover(tmp)
-      // 只该扫到 1 个（DD 下的 file），不下钻到 DD/HH/
-      expect(sessions).toHaveLength(1)
-      expect(sessions[0].id).toBe(uuid)
+      expect(sessions).toHaveLength(2)
+      expect(sessions.map((session) => session.id).sort()).toEqual(
+        [uuid, '019de3cf-bc35-7922-9eb7-3eee9610b8d4'].sort(),
+      )
     } finally {
       clean(tmp)
     }

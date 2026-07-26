@@ -24,7 +24,7 @@ function clean(dir: string): void {
 }
 
 async function setupScanned(home: string): Promise<void> {
-  await runInit({ yes: true, homeDir: home })
+  await runInit({ nonInteractive: true, homeDir: home })
   await runScan({ source: SOURCES_DIR, all: true, homeDir: home })
 }
 

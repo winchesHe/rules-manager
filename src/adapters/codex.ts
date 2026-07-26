@@ -7,6 +7,7 @@ import type {
   ProjectHint,
 } from '../types.js'
 import {
+  collectFilesRecursive,
   defaultNormalize,
   fileHash,
   fileMtime,
@@ -98,10 +99,11 @@ export const codexAdapter: AgentAdapter = {
   },
 
   async discover(agentSourceDir: string): Promise<DiscoveredSession[]> {
-    const sessionsDir = path.join(agentSourceDir, 'sessions')
-    if (!fs.existsSync(sessionsDir)) return []
-
-    const sessions: DiscoveredSession[] = []
+    const roots = [
+      path.join(agentSourceDir, 'sessions'),
+      path.join(agentSourceDir, 'archived_sessions'),
+    ]
+    const sessions = new Map<string, DiscoveredSession>()
 
     const collectFile = (filePath: string): void => {
       const match = UUID_SUFFIX_RE.exec(path.basename(filePath))
@@ -122,7 +124,8 @@ export const codexAdapter: AgentAdapter = {
         // use mtime
       }
 
-      sessions.push({
+      if (sessions.has(sessionId)) return
+      sessions.set(sessionId, {
         id: sessionId,
         agent: 'codex',
         sourcePath: filePath,
@@ -132,31 +135,14 @@ export const codexAdapter: AgentAdapter = {
       })
     }
 
-    // sessions/YYYY/MM/ 下面同时支持两种布局：
-    //   - 旧：MM/<file>.jsonl（fixture 现状）
-    //   - 新：MM/DD/<file>.jsonl（codex 2026-05+ 本机真实布局）
-    // 只下钻 1 层（DD），不再深入。
-    for (const yearEntry of fs.readdirSync(sessionsDir, { withFileTypes: true })) {
-      if (!yearEntry.isDirectory()) continue
-      const yearDir = path.join(sessionsDir, yearEntry.name)
-
-      for (const monthEntry of fs.readdirSync(yearDir, { withFileTypes: true })) {
-        if (!monthEntry.isDirectory()) continue
-        const monthDir = path.join(yearDir, monthEntry.name)
-
-        for (const entry of fs.readdirSync(monthDir, { withFileTypes: true })) {
-          if (entry.isFile()) {
-            collectFile(path.join(monthDir, entry.name))
-          } else if (entry.isDirectory()) {
-            const dayDir = path.join(monthDir, entry.name)
-            for (const fileEntry of fs.readdirSync(dayDir, { withFileTypes: true })) {
-              if (fileEntry.isFile()) collectFile(path.join(dayDir, fileEntry.name))
-            }
-          }
-        }
+    for (const root of roots) {
+      for (const filePath of collectFilesRecursive(root, (candidate) => {
+        return UUID_SUFFIX_RE.test(path.basename(candidate))
+      })) {
+        collectFile(filePath)
       }
     }
 
-    return sessions
+    return [...sessions.values()]
   },
 }

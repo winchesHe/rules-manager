@@ -44,7 +44,7 @@ rules-manager/
     workspace.ts        # 路径解析，resolveWorkspace()
     db.ts               # SQLite 初始化，schema 应用
     commands/
-      init.ts           # memory-manager init --yes
+      init.ts           # memory-manager init --non-interactive
       status.ts         # memory-manager status
   test/
     unit/
@@ -67,7 +67,7 @@ npm test
 ```
 覆盖：
 - `resolveWorkspace` 路径构造
-- `runInit --yes` 创建工作区/DB/projects 目录
+- `runInit --non-interactive` 创建工作区/DB/projects 目录
 - 不创建 config.toml / logs / cache / snapshots
 - 幂等执行
 - `isDatabaseReady` 检测
@@ -77,7 +77,7 @@ npm test
 ### 端对端验收
 ```bash
 FAKE_HOME=$(mktemp -d)
-HOME="$FAKE_HOME" node dist/cli.js init --yes
+HOME="$FAKE_HOME" node dist/cli.js init --non-interactive
 HOME="$FAKE_HOME" node dist/cli.js status
 ```
 期望输出：
@@ -781,3 +781,99 @@ Plan 02 / 04 的多表数据模型被 **「FS 是真理来源，DB 只记状态�
 feat: FS-first 重构 步 1-4（schema v5 + fs-writer + scanner / classifier 重写）
 feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 ```
+
+---
+
+# Agent Session 获取逻辑重构（2026-07-24）
+
+## 背景与范围
+
+参考 `paseo` 的 provider session listing 实现，修复 4 个 adapter 因固定目录层级、UUID 文件名和单一 transcript 文件假设造成的漏扫。保留 FS-first、DB v5 和“不存对话原文”红线。
+
+执行与验收记录见 [docs/plans/session-discovery-refactor.md](../docs/plans/session-discovery-refactor.md)。
+
+## 关键决策
+
+1. source 优先级统一为：显式 `--source` > `<workspace>/sources/<agent>` > agent 默认 home。默认 home 对齐 paseo：Claude 支持 `CLAUDE_CONFIG_DIR`，Codex 支持 `CODEX_HOME`，其余使用 `~/.<agent>`；显式 `homeDir` 用于测试隔离时高于进程环境变量。
+2. Claude 扫描 `projects/*/` 下全部顶层 JSONL，不再要求 UUID 文件名；首行 `sessionId` 优先于文件名，并按 provider sessionId 去重。
+3. Codex 递归扫描 `sessions/` 与 `archived_sessions/`，不再绑定 YYYY/MM/DD 固定深度；active 与 archived 重复时 first-seen-wins。
+4. Copilot 每个 `session-state/<UUID>` 都视为 session：有 `events.jsonl` 时继续链接 transcript；没有时链接 `workspace.yaml`，用 `yaml` 结构化解析 cwd/git_root/branch/时间。YAML 原文和对话内容均不入 memory-manager DB。
+5. Cursor 扫描 `agent-transcripts/<session>/` 下顶层 JSONL，不再要求 session 目录是 UUID，也不要求 transcript 与目录同名；仍不扫描 `subagents/`。
+6. 只有 source 存在且 discover 成功的 agent 才加入 missing 对账集合，避免 provider 枚举失败时把该 agent 的全部历史 session 误标 missing。
+
+## 测试与真实验收
+
+- 新增跨版本回归：默认 home、Claude 非 UUID/重复 provider ID、Codex archived/任意深度、Copilot metadata-only、Cursor 宽松命名。
+- `npm test`：135/135 通过。
+- `npm run build`：通过；tsdown 仍输出既有 `define` 配置 warning，不影响产物。
+- 隔离真实扫描：1290 total，Claude 9 / Codex 676 / Copilot 293 / Cursor 312，errors=0。
+- FS 对账：1290 个 symlink，broken=0；最新 `run_metadata.status=success` 且 errors 明细为空。
+- 第二次扫描：1289 unchanged / 1 updated。真实 agent 正在运行，1 个 source 在两轮之间变化，符合 hash/mtime 状态机。
+
+## Review 结论
+
+- 修复 Claude 重复 provider sessionId 触发 DB 主键冲突的问题，行为与 Codex Map 去重一致。
+- Copilot metadata-only symlink 仍按 FS-first 规范命名为 `<session-id>.jsonl`，target 可以是 `workspace.yaml`；这是为了保持 `listLinks` 和项目视图契约，不代表复制或改写 YAML 内容。
+- 递归 helper 只进入真实 directory entry，不跟随 symlink 目录，避免 source 内软链循环。
+
+## OpenCode / Pi 补充（2026-07-24）
+
+用户补充指出“全部 agent”还应包含 OpenCode 与 Pi，原四 agent 验收不完整。本轮把内置 adapter 从 4 个扩为 6 个。
+
+### OpenCode
+
+- 对齐 paseo `experimental.session.list({ archived: true, roots: true })`：从 `~/.local/share/opencode/opencode.db` 的 `session` 表读取 active + archived root sessions，排除 `parent_id` 非空的 child session。
+- 只查询 session 的 id / directory / title / created/updated 时间，以及消息 `COUNT(*)`；不读取 `message.data` / `session_message.data`，不导出 transcript。
+- 每 session 的 contentHash 只基于该行元数据，不 hash 整个数据库，避免任意 session 变化导致全部 updated。
+- OpenCode 没有逐 session JSONL，且 export 会复制对话原文，所以 `source_path` 与 FS symlink target 指向权威 `opencode.db`。固定 `.jsonl` link 名是现有 `listLinks` 契约，target 实际是 SQLite，已在 plan 明示。
+- 默认 source 支持 `XDG_DATA_HOME/opencode`，否则使用 `~/.local/share/opencode`。
+
+### Pi
+
+- 直接移植 paseo descriptor 的核心契约：递归扫描 sessionDir 的 JSONL，只有首行满足 `type=session` 且包含 id/cwd 才视为 session。
+- 默认 source 是 `~/.pi/agent`，支持 `PI_CODING_AGENT_DIR`、`PI_CODING_AGENT_SESSION_DIR` 和 `settings.json.sessionDir`。
+- parse 只计数 message/tool call 和时间戳；ProjectHint 只取首行 cwd，不保存消息内容。
+
+### 验收
+
+- `npm test`：139/139 通过；`npm run build` 通过（仍有既有 tsdown `define` warning）。
+- 真实隔离 `scan --all`：1482 total，Claude 9 / Codex 676 / Copilot 293 / Cursor 312 / OpenCode 118 / Pi 74，errors=0。
+- 1482 个项目 symlink，broken=0；OpenCode 115/118、Pi 74/74 成功归入非 default slug。
+- 当前 schema 仍以 `sessions.id` 单列为主键；六 provider 的真实数据无 ID 冲突。跨 agent 原始 ID 理论碰撞留作 schema debt，后续应改 `(agent, id)` 复合身份，不能在本轮直接加前缀破坏已有 assign/link 契约。
+
+## 本地 CLI script（2026-07-24）
+
+- `package.json` 新增 `cli: tsx src/cli.ts`，直接执行 TypeScript 源码，不依赖 `dist` 或预先构建。
+- `tsx` 是显式 devDependency；仓库继续只维护既有 `package-lock.json`，不引入第二份 lockfile。
+- 验收：`pnpm cli --help` 与 `pnpm cli scan --help` 均显示实际执行命令为 `tsx src/cli.ts`，参数可透传到 Commander。
+
+## Workspace CLI 参数（2026-07-24）
+
+- `init --yes` 改为 `init --non-interactive`，明确表达“跳过确认”的行为；旧参数不保留兼容。
+- 新增全局 `--workspace <path>` / `-w <path>`，参数表示 workspace 的父目录，实际数据统一放在 `<path>/.memory-manager/`。
+- override 通过 `MEMORY_MANAGER_WORKSPACE` 传给统一的 `resolveWorkspace`，因此 `init / status / scan / projects` 使用同一解析入口；它不修改 `HOME`，不会把 agent 默认 source 一并切到临时目录。
+- 默认行为不变：未传参数时仍使用 `~/.memory-manager`；现有测试专用 `homeDir` 优先于环境 override。
+- 黑盒验收覆盖：指定路径 init 后出现 `.memory-manager/memory.db`、父目录根部没有散落 `memory.db`、status 可复用、旧 `--yes` 被拒绝。
+- 全量验收：141/141 tests 通过，`npm run build` 通过，CLI root help 正确显示 workspace 参数。
+- 根命令仅传 `-w/--workspace` 而未给子命令时，输出帮助并以 0 退出，不创建目录；避免 pnpm 把正常帮助显示成 `ELIFECYCLE`。对应黑盒回归加入 `cli-options.test.ts`。
+
+## OpenCode session 按需读取（2026-07-24）
+
+- 新增 `sessions show <session-id>`，当前仅支持 OpenCode；消息以结构化 JSON 输出到 stdout，不写 DB、不生成 transcript。
+- 对齐 paseo：使用 `@opencode-ai/sdk/v2` 临时启动本机 `opencode serve`，调用 `client.session.messages({ sessionID, directory })`，无论成功失败都关闭 server。
+- workspace DB 只读查询 agent/source_path，OpenCode DB 只读查询该 session 的 directory；原文只存在于 SDK 返回值和 stdout 生命周期中。
+- `sessions show` 对非 OpenCode session 明确拒绝，避免假装能从其他 provider 的 JSONL 走同一读取协议。
+- Jest 的 moduleResolution 从旧 `node` 对齐项目 `bundler`，以解析 SDK 公开的 `./v2` package export，不引用 `dist/` 私有路径。
+- 验收：测试断言 stdout 能得到消息、workspace/OpenCode 主 DB hash 不变、无 session transcript 新文件；真实 session smoke test输出重定向 `/dev/null` 后成功。
+- 最终验收：144/144 tests、`npm run build`、`git diff --check` 全部通过；构建仍只有既有 tsdown `define` warning。
+
+## Codex 原文读取与 scan 进度（2026-07-25）
+
+- Codex 的权威 session 来源本身是 rollout JSONL；`scan` 继续只提取 hash、计数和项目元数据，不把对话原文写入 DB。
+- `sessions show <codex-id>` 新增只读 JSONL 分支，将可解析行作为结构化 `records` 输出到 stdout；源文件不存在、无可解析内容或超过 50 MiB 时明确报错，不复制 transcript。
+- `ScanOptions` 新增可选异步 `onProgress` 回调。scanner 在每个 agent 的 discovering / processing / done / skipped / error 阶段上报并等待状态绘制，处理阶段每 100 条更新一次。
+- clack spinner 首帧依赖 80/120ms interval；CLI 每次状态更新后等待 130ms，确保同步 I/O 开始前实际显示“正在发现/正在处理 current/total”。
+- 扫描结果不使用 `clack.note` 的嵌套盒子；改用 `clack.log.info` 输出单行统计，再由 `clack.outro` 收尾，避免主流程竖线内出现边框错位。
+- 回归测试先验证旧实现会拒绝 Codex 且无进度事件，再实现通过；隔离 CLI smoke test完成 1 条 Codex scan + show，临时工作区已清理。
+- 最终验收：146/146 tests、`npm run build`、`git diff --check` 全部通过；只读审查无阻塞问题，构建仍只有既有 tsdown `define` warning。
+- 最终 CLI 视觉验收：148/148 tests；伪 TTY 输出为单行 `● Sessions: 1 · New: 1 · Errors: 0`，随后 `└ 扫描成功`，无嵌套 note 边框；构建与 `git diff --check` 通过。

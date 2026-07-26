@@ -1,5 +1,7 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import crypto from 'node:crypto'
+import { parse as parseYaml } from 'yaml'
 import type {
   DiscoveredSession,
   NormalizedSession,
@@ -19,6 +21,24 @@ export function fileHash(filePath: string): string {
 
 export function fileMtime(filePath: string): string {
   return fs.statSync(filePath).mtime.toISOString()
+}
+
+export function collectFilesRecursive(
+  root: string,
+  predicate: (filePath: string) => boolean,
+): string[] {
+  if (!fs.existsSync(root)) return []
+  const files: string[] = []
+  const directories = [root]
+  while (directories.length > 0) {
+    const directory = directories.pop()!
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) directories.push(entryPath)
+      else if (entry.isFile() && predicate(entryPath)) files.push(entryPath)
+    }
+  }
+  return files.sort()
 }
 
 export function readFirstLine(filePath: string): string {
@@ -43,6 +63,13 @@ export function readJsonlObjects(filePath: string): Record<string, unknown>[] {
     }
   }
   return out
+}
+
+export function readYamlObject(filePath: string): Record<string, unknown> {
+  if (!fs.existsSync(filePath)) return {}
+  const value = parseYaml(fs.readFileSync(filePath, 'utf8')) as unknown
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
 }
 
 // 4 adapter 通用：normalize 把 discover + parse 的结果合并成权威值。

@@ -32,7 +32,7 @@ describe('resolveWorkspace', () => {
 
 // ─── init ────────────────────────────────────────────────────────────────────
 
-describe('runInit --yes', () => {
+describe('runInit --non-interactive', () => {
   let home: string
 
   beforeEach(() => {
@@ -44,69 +44,69 @@ describe('runInit --yes', () => {
   })
 
   it('应创建 ~/.memory-manager/', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.workspaceDir)).toBe(true)
   })
 
   it('应创建 ~/.memory-manager/projects/default/（FS-first 视图根）', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.projectsDir)).toBe(true)
     expect(fs.existsSync(path.join(ws.projectsDir, 'default'))).toBe(true)
   })
 
   it('应创建 ~/.memory-manager/rules/（Plan 07 用）', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.rulesDir)).toBe(true)
   })
 
   it('应创建 ~/.memory-manager/sources/（adapter 软链根）', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.sourcesDir)).toBe(true)
   })
 
   it('应创建 ~/.memory-manager/memory.db', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.dbPath)).toBe(true)
   })
 
   it('不应创建 config.toml', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(path.join(ws.workspaceDir, 'config.toml'))).toBe(false)
   })
 
   it('不应创建 logs/ 目录', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(path.join(ws.workspaceDir, 'logs'))).toBe(false)
   })
 
   it('不应创建 cache/ 目录', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(path.join(ws.workspaceDir, 'cache'))).toBe(false)
   })
 
   it('不应创建 snapshots/ 目录', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(path.join(ws.workspaceDir, 'snapshots'))).toBe(false)
   })
 
   it('应可以幂等执行两次', async () => {
-    await runInit({ yes: true, homeDir: home })
-    await expect(runInit({ yes: true, homeDir: home })).resolves.not.toThrow()
+    await runInit({ nonInteractive: true, homeDir: home })
+    await expect(runInit({ nonInteractive: true, homeDir: home })).resolves.not.toThrow()
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.dbPath)).toBe(true)
   })
 
   it('init 后 isDatabaseReady 应为 true', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     expect(isDatabaseReady(home)).toBe(true)
   })
 })
@@ -139,7 +139,7 @@ describe('runStatus', () => {
   })
 
   it('初始化后：应输出四行验收文本', async () => {
-    await runInit({ yes: true, homeDir: home })
+    await runInit({ nonInteractive: true, homeDir: home })
     output = []
 
     // 暂时替换 HOME 使 status 能正确替换 ~ 路径

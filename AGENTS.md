@@ -2,7 +2,7 @@
 
 ## 项目本质
 
-本地优先 AI agent session 管理 CLI。扫描 4 个 agent（claude / codex / copilot / cursor）的本地 jsonl session，聚合成 project 归类，后续用于生成 rule 文件。当前进度：Plan 04 已落（共 8 plan，见 [docs/plans/](docs/plans/)）。
+本地优先 AI agent session 管理 CLI。扫描 6 个 agent（claude / codex / copilot / cursor / opencode / pi）的本地 session，聚合成 project 归类，后续用于生成 rule 文件。OpenCode 的权威来源是 SQLite，其余主要是 JSONL/YAML。当前进度：Plan 04 已落（共 8 plan，见 [docs/plans/](docs/plans/)）。
 
 ## 红线
 
@@ -26,7 +26,7 @@
 | 构建 | `npm run build`（产物 `dist/cli.js`） |
 | 测试 | `npm test`（ESM Jest，已配 `--experimental-vm-modules`） |
 | 跑 CLI | `node dist/cli.js <cmd>` |
-| CLI 命令清单 | `init / status / scan [--all] [--source <dir>] [--agent <name>] / projects {list,assign,merge,reclassify}` |
+| CLI 命令清单 | `init / status / scan [--all] [--source <dir>] [--agent <name>] / sessions show <id> / projects {list,assign,merge,reclassify}` |
 
 ## DB / 状态（FS-first 模型）
 
@@ -74,11 +74,13 @@ console.log(db.prepare('SELECT slug, COUNT(*) AS c FROM sessions GROUP BY slug')
 
 ```bash
 SCRATCH="$(pwd)/.scratch" && rm -rf "$SCRATCH" && mkdir -p "$SCRATCH"
-HOME="$SCRATCH" node dist/cli.js init --yes
+HOME="$SCRATCH" node dist/cli.js init --non-interactive
 mkdir -p "$SCRATCH/.memory-manager/sources"
 for a in claude codex copilot cursor; do
   ln -sfn ~/.$a "$SCRATCH/.memory-manager/sources/$a"
 done
+ln -sfn ~/.local/share/opencode "$SCRATCH/.memory-manager/sources/opencode"
+ln -sfn ~/.pi/agent "$SCRATCH/.memory-manager/sources/pi"
 HOME="$SCRATCH" node dist/cli.js scan --all
 HOME="$SCRATCH" node dist/cli.js projects list
 ```
@@ -90,8 +92,8 @@ HOME="$SCRATCH" node dist/cli.js projects list
 ```
 src/
   cli.ts                 Commander 入口（命令注册）
-  commands/              命令实现层（init / scan / projects）
-  adapters/{claude,codex,copilot,cursor}.ts  4 内置 adapter
+  commands/              命令实现层（init / scan / sessions / projects）
+  adapters/{claude,codex,copilot,cursor,opencode,pi}.ts  6 内置 adapter
   adapters/shared.ts     fileHash / readJsonlObjects / defaultNormalize
   scanner.ts             discover → parse → normalize → 写库 + 归类
   classifier.ts          hints → slug 纯函数（classify + normalizeSlug）
@@ -100,7 +102,7 @@ src/
   db.ts                  schema + 迁移
   workspace.ts           工作区路径解析
 test/
-  unit/                  Jest 测试（129+ tests），新测试走 mkdtempSync 临时 fixture
+  unit/                  Jest 测试（139+ tests），新测试走 mkdtempSync 临时 fixture
   sources/{claude,codex,copilot,cursor}/  真实 fixture，禁改（4 fixture 分类对账 spec § 验收链路）
 docs/plans/{01-08}-*.md  8 个阶段计划
 docs/specs/              spec

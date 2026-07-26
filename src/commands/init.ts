@@ -6,14 +6,14 @@ import { initDatabase } from '../db.js'
 import { ensureDefaultSlugDir } from '../fs-writer.js'
 
 export interface InitOptions {
-  yes: boolean
+  nonInteractive: boolean
   homeDir?: string
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
   const { workspaceDir, rulesDir, sourcesDir } = resolveWorkspace(opts.homeDir)
 
-  if (!opts.yes) {
+  if (!opts.nonInteractive) {
     clack.intro(pc.cyan('memory-manager init'))
     const confirmed = await clack.confirm({
       message: `初始化工作区到 ${workspaceDir}？`,
@@ -25,7 +25,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
     }
   }
 
-  const spinner = opts.yes ? null : clack.spinner()
+  const spinner = opts.nonInteractive ? null : clack.spinner()
 
   try {
     spinner?.start('正在初始化工作区…')
@@ -46,7 +46,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
     throw err
   }
 
-  if (opts.yes) {
+  if (opts.nonInteractive) {
     console.log(pc.green('✓') + ' 工作区已就绪：' + workspaceDir)
   } else {
     clack.outro(pc.green('初始化完成'))
