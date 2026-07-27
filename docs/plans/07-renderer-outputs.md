@@ -4,6 +4,10 @@
 
 把 `high` 和 `verified` rules 渲染成最终 Markdown 文件。
 
+## 与全局来源管理的边界
+
+已落地的 `rules show <agent>` 用于只读查看 agent live 全局 instruction source，不代表本 Plan 的生成产物，也不允许 renderer 直接覆盖这些 live 文件。渲染产物继续写入 `~/.memory-manager/rules/`，未来安装到 agent 全局来源必须另写含备份、冲突检测和 compare-and-swap 的 spec。
+
 ## 输出目录
 
 ```text
@@ -20,9 +24,9 @@
 实现命令：
 
 ```bash
-memory-manager rules show --project Boarding_Desktop
-memory-manager rules show --global
-memory-manager rules show --style
+memory-manager rules output --project Boarding_Desktop
+memory-manager rules output --global
+memory-manager rules output --style
 ```
 
 生成命令：
@@ -112,4 +116,3 @@ MVP 不做：
 1. `snapshots/` 目录。
 2. `review.md` 文件。
 3. `evidence.jsonl` 文件。
-

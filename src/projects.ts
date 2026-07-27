@@ -1,6 +1,11 @@
 import fs from 'node:fs'
 import Database from 'better-sqlite3'
-import type { AgentAdapter, AgentName, DiscoveredSession } from './types.js'
+import type {
+  AgentAdapter,
+  AgentName,
+  DiscoveredSession,
+  SessionStatus,
+} from './types.js'
 import { resolveWorkspace } from './workspace.js'
 import { getDbPath, initDatabase, isDatabaseReady } from './db.js'
 import { listLinks, linkSession, moveLink } from './fs-writer.js'
@@ -15,6 +20,42 @@ export interface ProjectListItem {
 
 export interface ProjectListOptions {
   homeDir?: string
+}
+
+export interface ProjectSessionListOptions extends ProjectListOptions {
+  slug?: string
+}
+
+export interface ProjectSessionMetadata {
+  id: string
+  agent: AgentName
+  sourcePath: string
+  workspaceLink: string
+  slug: string
+  contentHash: string
+  updatedAt: string
+  status: SessionStatus
+  firstSeenAt: string
+  lastSeenAt: string
+  classifiedAt: string | null
+  rulesStatus: string | null
+  rulesGeneratedAt: string | null
+}
+
+interface ProjectSessionRow {
+  id: string
+  agent: AgentName
+  source_path: string
+  workspace_link: string
+  slug: string
+  content_hash: string
+  updated_at: string
+  status: SessionStatus
+  first_seen_at: string
+  last_seen_at: string
+  classified_at: string | null
+  rules_status: string | null
+  rules_generated_at: string | null
 }
 
 // ─── listProjects（FS 真理 + DB 反查 agent） ─────────────────────────────────
@@ -44,6 +85,79 @@ export function listProjects(opts: ProjectListOptions = {}): ProjectListItem[] {
       return a.slug.localeCompare(b.slug)
     })
     return items
+  } finally {
+    db.close()
+  }
+}
+
+// ─── listProjectSessions（FS 范围 + DB metadata） ───────────────────────────
+
+export function listProjectSessions(
+  opts: ProjectSessionListOptions = {},
+): ProjectSessionMetadata[] {
+  if (!isDatabaseReady(opts.homeDir)) {
+    throw new Error('listProjectSessions: workspace not initialized')
+  }
+
+  const { workspaceDir } = resolveWorkspace(opts.homeDir)
+  const links = listLinks(workspaceDir)
+  if (opts.slug !== undefined && !links.has(opts.slug)) {
+    throw new Error(`project not found: ${opts.slug}`)
+  }
+
+  let selectedLinks: Array<[string, string[]]>
+  if (opts.slug !== undefined) {
+    selectedLinks = [[opts.slug, links.get(opts.slug) ?? []]]
+  } else {
+    selectedLinks = Array.from(links)
+  }
+  const db = new Database(getDbPath(opts.homeDir), { readonly: true })
+
+  try {
+    const rows = db.prepare(`
+      SELECT id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+             status, first_seen_at, last_seen_at, classified_at, rules_status,
+             rules_generated_at
+      FROM sessions
+    `).all() as ProjectSessionRow[]
+    const sessionsById = new Map(rows.map((row) => [row.id, row]))
+    const sessions: ProjectSessionMetadata[] = []
+
+    for (const [fsSlug, sessionIds] of selectedLinks) {
+      for (const id of sessionIds) {
+        const row = sessionsById.get(id)
+        if (!row) {
+          throw new Error(`project session missing from database: ${fsSlug}/${id}`)
+        }
+        if (row.slug !== fsSlug) {
+          throw new Error(
+            `project session slug mismatch: ${id} (fs=${fsSlug}, db=${row.slug})`,
+          )
+        }
+
+        sessions.push({
+          id: row.id,
+          agent: row.agent,
+          sourcePath: row.source_path,
+          workspaceLink: row.workspace_link,
+          slug: row.slug,
+          contentHash: row.content_hash,
+          updatedAt: row.updated_at,
+          status: row.status,
+          firstSeenAt: row.first_seen_at,
+          lastSeenAt: row.last_seen_at,
+          classifiedAt: row.classified_at,
+          rulesStatus: row.rules_status,
+          rulesGeneratedAt: row.rules_generated_at,
+        })
+      }
+    }
+
+    return sessions.sort((a, b) => {
+      const aKey = `${a.slug}\0${a.agent}\0${a.id}`
+      const bKey = `${b.slug}\0${b.agent}\0${b.id}`
+      return aKey < bKey ? -1 : aKey > bKey ? 1 : 0
+    })
   } finally {
     db.close()
   }

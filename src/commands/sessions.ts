@@ -1,6 +1,7 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import Database from 'better-sqlite3'
-import { readJsonlObjects } from '../adapters/shared.js'
+import { collectFilesRecursive } from '../adapters/shared.js'
 import { resolveWorkspace } from '../workspace.js'
 
 interface SessionsShowOptions {
@@ -20,6 +21,9 @@ interface StoredSessionRow {
   agent: string
   source_path: string
 }
+
+const MAX_SHOW_BYTES = 50 * 1024 * 1024
+const JSONL_AGENTS = new Set(['claude', 'codex', 'cursor', 'pi'])
 
 async function readOpenCodeMessages(input: OpenCodeReadInput): Promise<unknown> {
   const { createOpencode } = await import('@opencode-ai/sdk/v2')
@@ -70,14 +74,78 @@ function loadOpenCodeDirectory(sourcePath: string, sessionId: string): string {
   }
 }
 
-function readCodexRecords(sourcePath: string): Array<Record<string, unknown>> {
-  if (!fs.existsSync(sourcePath)) throw new Error(`Codex session 源文件不存在：${sourcePath}`)
-  if (fs.statSync(sourcePath).size > 50 * 1024 * 1024) {
-    throw new Error(`Codex session 超过 50 MiB，暂不支持一次性输出：${sourcePath}`)
+function jsonlFiles(sourcePath: string, agent: string): string[] {
+  if (!fs.existsSync(sourcePath)) throw new Error(`${agent} session 源不存在：${sourcePath}`)
+  const stat = fs.statSync(sourcePath)
+  const files = stat.isDirectory()
+    ? collectFilesRecursive(sourcePath, (filePath) => filePath.endsWith('.jsonl'))
+    : [sourcePath]
+  if (files.length === 0) throw new Error(`${agent} session 没有 JSONL 文件：${sourcePath}`)
+  const totalBytes = files.reduce((sum, filePath) => sum + fs.statSync(filePath).size, 0)
+  if (totalBytes > MAX_SHOW_BYTES) {
+    throw new Error(`${agent} session 超过 50 MiB，暂不支持一次性输出：${sourcePath}`)
   }
-  const records = readJsonlObjects(sourcePath)
-  if (records.length === 0) throw new Error(`Codex session 没有可解析内容：${sourcePath}`)
+  return files
+}
+
+function readJsonlRecords(sourcePath: string, agent: string): unknown[] {
+  const records: unknown[] = []
+  for (const filePath of jsonlFiles(sourcePath, agent)) {
+    const lines = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)
+    for (const [index, line] of lines.entries()) {
+      if (!line.trim()) continue
+      try {
+        records.push(JSON.parse(line))
+      } catch {
+        throw new Error(`${agent} JSONL 解析失败：${filePath}:${index + 1}`)
+      }
+    }
+  }
+  if (records.length === 0) throw new Error(`${agent} session 没有可解析内容：${sourcePath}`)
   return records
+}
+
+function copilotStorePath(sourcePath: string): string | undefined {
+  let directory = path.dirname(sourcePath)
+  while (directory !== path.dirname(directory)) {
+    if (path.basename(directory) === 'session-state') {
+      const candidate = path.join(path.dirname(directory), 'session-store.db')
+      return fs.existsSync(candidate) ? candidate : undefined
+    }
+    directory = path.dirname(directory)
+  }
+  return undefined
+}
+
+function readCopilotSession(sessionId: string, sourcePath: string): Record<string, unknown> {
+  const eventsPath = path.basename(sourcePath) === 'events.jsonl'
+    ? sourcePath
+    : path.join(path.dirname(sourcePath), 'events.jsonl')
+  if (fs.existsSync(eventsPath)) {
+    return { source: 'events.jsonl', records: readJsonlRecords(eventsPath, 'copilot') }
+  }
+
+  const storePath = copilotStorePath(sourcePath)
+  if (!storePath) {
+    throw new Error(`Copilot session 只有 metadata，源端未持久化对话：${sessionId}`)
+  }
+  const db = new Database(storePath, { readonly: true, fileMustExist: true })
+  try {
+    const turns = db
+      .prepare(`
+        SELECT turn_index, user_message, assistant_response, timestamp
+        FROM turns
+        WHERE session_id = ?
+        ORDER BY turn_index
+      `)
+      .all(sessionId)
+    if (turns.length === 0) {
+      throw new Error(`Copilot session 只有 metadata，源端未持久化对话：${sessionId}`)
+    }
+    return { source: 'session-store.db', turns }
+  } finally {
+    db.close()
+  }
 }
 
 export async function runSessionsShow(
@@ -86,13 +154,18 @@ export async function runSessionsShow(
   deps: SessionsShowDeps = {},
 ): Promise<void> {
   const session = loadStoredSession(sessionId, opts.homeDir)
-  if (session.agent === 'codex') {
-    const records = readCodexRecords(session.source_path)
+  if (JSONL_AGENTS.has(session.agent)) {
+    const records = readJsonlRecords(session.source_path, session.agent)
     console.log(JSON.stringify({ sessionId, agent: session.agent, records }, null, 2))
     return
   }
+  if (session.agent === 'copilot') {
+    const content = readCopilotSession(sessionId, session.source_path)
+    console.log(JSON.stringify({ sessionId, agent: session.agent, ...content }, null, 2))
+    return
+  }
   if (session.agent !== 'opencode') {
-    throw new Error(`sessions show 当前仅支持 OpenCode/Codex，实际 agent：${session.agent}`)
+    throw new Error(`sessions show 不支持的 agent：${session.agent}`)
   }
 
   const directory = loadOpenCodeDirectory(session.source_path, sessionId)

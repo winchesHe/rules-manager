@@ -31,9 +31,9 @@ memory-manager scan --source test/sources --all
 memory-manager projects list
 memory-manager rules generate --dry-run
 memory-manager rules generate
-memory-manager rules show --project Boarding_Desktop
-memory-manager rules show --global
-memory-manager rules show --style
+memory-manager rules output --project Boarding_Desktop
+memory-manager rules output --global
+memory-manager rules output --style
 ```
 
 必须证明：

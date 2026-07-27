@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import Database from 'better-sqlite3'
 import { runInit } from '../../src/commands/init'
 import { claudeAdapter } from '../../src/adapters/claude'
 import { codexAdapter } from '../../src/adapters/codex'
@@ -8,6 +9,7 @@ import { copilotAdapter } from '../../src/adapters/copilot'
 import { cursorAdapter } from '../../src/adapters/cursor'
 import { runScan, determineScanState } from '../../src/scanner'
 import { formatScanSummary } from '../../src/commands/scan'
+import { resolveWorkspace } from '../../src/workspace'
 import type { DiscoveredSession } from '../../src/types'
 
 const SOURCES_DIR = path.resolve('test/sources')
@@ -22,8 +24,9 @@ describe('formatScanSummary', () => {
         unchanged: 0,
         missing: 0,
         errors: 0,
+        changes: { new: [], updated: [], missing: [] },
       }),
-    ).toBe('Sessions: 681 · New: 681 · Errors: 0')
+    ).toBe('新增 681 · 更新 0 · 删除 0 · 错误 0')
   })
 })
 
@@ -264,7 +267,20 @@ describe('runScan --source test/sources --all', () => {
     })
     expect(summary.total).toBeGreaterThanOrEqual(4)
     expect(summary.new).toBeGreaterThanOrEqual(4)
+    expect(summary.changes.new).toHaveLength(summary.new)
+    expect(summary.changes.new[0]).toEqual({
+      agent: expect.any(String),
+      id: expect.any(String),
+      slug: expect.any(String),
+    })
     expect(summary.errors).toBe(0)
+
+    const db = new Database(resolveWorkspace(home).dbPath, { readonly: true })
+    const row = db
+      .prepare("SELECT details FROM run_metadata WHERE run_type = 'scan' ORDER BY started_at DESC LIMIT 1")
+      .get() as { details: string }
+    db.close()
+    expect(JSON.parse(row.details).summary.changes.new).toEqual(summary.changes.new)
   })
 
   it('第二次扫描：全为 unchanged，new = 0，updated = 0，errors = 0', async () => {
@@ -274,6 +290,7 @@ describe('runScan --source test/sources --all', () => {
     expect(summary.unchanged).toBe(summary.total)
     expect(summary.new).toBe(0)
     expect(summary.updated).toBe(0)
+    expect(summary.changes).toEqual({ new: [], updated: [], missing: [] })
     expect(summary.errors).toBe(0)
   })
 
@@ -382,6 +399,17 @@ describe('determineScanState', () => {
       }),
     ).toBe('unchanged')
   })
+
+  it('旧状态为 missing 且内容相同 → updated', () => {
+    expect(
+      determineScanState(discovered, {
+        id: 'session-x',
+        updated_at: '2026-05-01T00:00:00.000Z',
+        content_hash: 'hash-current',
+        status: 'missing',
+      }),
+    ).toBe('updated')
+  })
 })
 
 // ─── runScan 集成（updated / missing / --full） ────────────────────────────────
@@ -416,6 +444,9 @@ describe('runScan: updated / missing 分类', () => {
 
     const summary = await runScan({ source: sources, all: true, homeDir: home })
     expect(summary.updated).toBeGreaterThanOrEqual(1)
+    expect(summary.changes.updated).toContainEqual(
+      expect.objectContaining({ agent: 'codex', id: '019d638b-1936-7f31-a505-a38278eebe9d' }),
+    )
     expect(summary.errors).toBe(0)
   })
 
@@ -430,6 +461,9 @@ describe('runScan: updated / missing 分类', () => {
 
     const summary = await runScan({ source: sources, all: true, homeDir: home })
     expect(summary.missing).toBeGreaterThanOrEqual(1)
+    expect(summary.changes.missing).toContainEqual(
+      expect.objectContaining({ agent: 'codex', id: '019d638b-1936-7f31-a505-a38278eebe9d' }),
+    )
     expect(summary.errors).toBe(0)
   })
 
@@ -447,6 +481,28 @@ describe('runScan: updated / missing 分类', () => {
 
     const second = await runScan({ source: sources, all: true, homeDir: home })
     expect(second.missing).toBe(0)
+  })
+
+  it('missing session 以相同内容恢复后计为 updated', async () => {
+    await runScan({ source: sources, all: true, homeDir: home })
+
+    const codexFile = path.join(
+      sources,
+      'codex/sessions/2026/04/rollout-2026-04-07T00-05-53-019d638b-1936-7f31-a505-a38278eebe9d.jsonl',
+    )
+    const content = fs.readFileSync(codexFile)
+    const timestamps = fs.statSync(codexFile)
+    fs.rmSync(codexFile)
+    await runScan({ source: sources, all: true, homeDir: home })
+
+    fs.writeFileSync(codexFile, content)
+    fs.utimesSync(codexFile, timestamps.atime, timestamps.mtime)
+    const restored = await runScan({ source: sources, all: true, homeDir: home })
+
+    expect(restored.updated).toBeGreaterThanOrEqual(1)
+    expect(restored.changes.updated).toContainEqual(
+      expect.objectContaining({ agent: 'codex', id: '019d638b-1936-7f31-a505-a38278eebe9d' }),
+    )
   })
 })
 

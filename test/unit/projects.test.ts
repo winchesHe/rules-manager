@@ -8,6 +8,7 @@ import { listProjects } from '../../src/commands/projects'
 import { listLinks } from '../../src/fs-writer'
 import { getDbPath } from '../../src/db'
 import { resolveWorkspace, DEFAULT_SLUG } from '../../src/workspace'
+import { listProjectSessions } from '../../src/projects'
 
 const SOURCES_DIR = path.resolve('test/sources')
 
@@ -164,5 +165,89 @@ describe('listProjects', () => {
     expect(sample).toBeDefined()
     expect(sample!.sessionCount).toBeGreaterThanOrEqual(1)
     expect(sample!.agents).toContain('claude')
+  })
+})
+
+describe('listProjectSessions', () => {
+  let home: string
+
+  beforeEach(async () => {
+    home = makeTempHome()
+    await runInit({ nonInteractive: true, homeDir: home })
+    await runScan({ source: SOURCES_DIR, all: true, homeDir: home })
+  })
+
+  afterEach(() => clean(home))
+
+  it('按 FS project 范围返回全部 session metadata，并稳定排序', () => {
+    const sessions = listProjectSessions({ homeDir: home })
+    const { workspaceDir } = resolveWorkspace(home)
+    const linkCount = Array.from(listLinks(workspaceDir).values()).reduce(
+      (sum, ids) => sum + ids.length,
+      0,
+    )
+
+    expect(sessions).toHaveLength(linkCount)
+    expect(Object.keys(sessions[0])).toEqual([
+      'id',
+      'agent',
+      'sourcePath',
+      'workspaceLink',
+      'slug',
+      'contentHash',
+      'updatedAt',
+      'status',
+      'firstSeenAt',
+      'lastSeenAt',
+      'classifiedAt',
+      'rulesStatus',
+      'rulesGeneratedAt',
+    ])
+
+    const sortKeys = sessions.map((session) =>
+      [session.slug, session.agent, session.id].join('\0'),
+    )
+    expect(sortKeys).toEqual([...sortKeys].sort())
+  })
+
+  it('传 slug 时只返回该项目', () => {
+    const sessions = listProjectSessions({ homeDir: home, slug: 'boarding-desktop' })
+
+    expect(sessions.length).toBeGreaterThan(0)
+    expect(sessions.every((session) => session.slug === 'boarding-desktop')).toBe(true)
+  })
+
+  it('指定不存在的项目时明确报错', () => {
+    expect(() => listProjectSessions({ homeDir: home, slug: 'not-found' })).toThrow(
+      'project not found: not-found',
+    )
+  })
+
+  it('FS link 找不到 DB session 时明确报一致性错误', () => {
+    const { workspaceDir } = resolveWorkspace(home)
+    const [slug, ids] = Array.from(listLinks(workspaceDir)).find(
+      ([, sessionIds]) => sessionIds.length > 0,
+    )!
+    const db = new Database(getDbPath(home))
+    db.prepare('DELETE FROM sessions WHERE id = ?').run(ids[0])
+    db.close()
+
+    expect(() => listProjectSessions({ homeDir: home, slug })).toThrow(
+      `project session missing from database: ${slug}/${ids[0]}`,
+    )
+  })
+
+  it('FS 与 DB slug 不一致时明确报一致性错误', () => {
+    const { workspaceDir } = resolveWorkspace(home)
+    const [slug, ids] = Array.from(listLinks(workspaceDir)).find(
+      ([, sessionIds]) => sessionIds.length > 0,
+    )!
+    const db = new Database(getDbPath(home))
+    db.prepare("UPDATE sessions SET slug = 'drifted' WHERE id = ?").run(ids[0])
+    db.close()
+
+    expect(() => listProjectSessions({ homeDir: home, slug })).toThrow(
+      `project session slug mismatch: ${ids[0]} (fs=${slug}, db=drifted)`,
+    )
   })
 })

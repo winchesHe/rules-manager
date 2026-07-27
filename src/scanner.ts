@@ -22,6 +22,7 @@ interface ScanCompareRow {
   id: string
   updated_at: string
   content_hash: string
+  status?: SessionStatus
 }
 
 // scanner 内 SELECT 拿到的完整行
@@ -41,6 +42,7 @@ export function determineScanState(
   existing: ScanCompareRow | undefined,
 ): 'new' | 'updated' | 'unchanged' {
   if (!existing) return 'new'
+  if (existing.status === 'missing') return 'updated'
   if (
     existing.updated_at !== discovered.updatedAt ||
     existing.content_hash !== discovered.contentHash
@@ -124,11 +126,16 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
     unchanged: 0,
     missing: 0,
     errors: 0,
+    changes: {
+      new: [],
+      updated: [],
+      missing: [],
+    },
   }
   const errorLog: ScanErrorEntry[] = []
 
   const getSession = db.prepare(
-    'SELECT id, slug, updated_at, content_hash FROM sessions WHERE id = ?',
+    'SELECT id, slug, updated_at, content_hash, status FROM sessions WHERE id = ?',
   )
   const insertSession = db.prepare(`
     INSERT INTO sessions
@@ -238,6 +245,11 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
             classified_at: now,
           })
           summary.new++
+          summary.changes.new.push({
+            agent: session.agent,
+            id: session.id,
+            slug,
+          })
         } else {
           // 已存在 → 检查 slug 是否变化（classifier 可能给出不同 slug）
           if (existing.slug !== slug) {
@@ -259,8 +271,16 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
             last_seen_at: now,
             classified_at: now,
           })
-          if (state === 'updated') summary.updated++
-          else summary.unchanged++
+          if (state === 'updated') {
+            summary.updated++
+            summary.changes.updated.push({
+              agent: session.agent,
+              id: session.id,
+              slug,
+            })
+          } else {
+            summary.unchanged++
+          }
         }
       } catch (err) {
         summary.errors++
@@ -308,6 +328,11 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
         // FS 已不一致就跳过，DB 是真理
       }
       summary.missing++
+      summary.changes.missing.push({
+        agent: row.agent as AgentAdapter['name'],
+        id: row.id,
+        slug: row.slug,
+      })
     }
   }
 

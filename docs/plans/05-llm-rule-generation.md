@@ -4,6 +4,12 @@
 
 通过 `pi-code-agent` SDK 从已分类 session 中生成候选 rules，并确保 DB 只保存候选规则和 evidence pointer。
 
+## 前置能力边界
+
+已落地的 `rules list [agent]` / `rules show <agent>` 只发现和读取 agent live 全局 instruction source，不是候选规则存储。本 Plan 后续可将 effective source 作为显式上下文输入，但不得把其正文写入 DB、evidence pointer 或日志，也不得在生成过程中修改 live 文件。
+
+`rules generate` 与上述只读 source 命令共享 `rules` namespace，但数据模型保持分离；实现前需另行补齐 schema 与敏感内容裁剪 spec。
+
 ## LLM 接入
 
 调用链路：
@@ -138,4 +144,3 @@ type EvidenceBundle = {
 1. 最终 Markdown rewrite。
 2. 人工 review 命令。
 3. 自动接受高置信规则。
-

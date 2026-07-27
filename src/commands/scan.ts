@@ -1,6 +1,11 @@
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
-import type { AgentName, ScanOptions, ScanProgress, ScanSummary } from '../types.js'
+import type {
+  AgentName,
+  ScanOptions,
+  ScanProgress,
+  ScanSummary,
+} from '../types.js'
 import { ALL_ADAPTERS } from '../adapters/index.js'
 import { runScan } from '../scanner.js'
 import { workspaceExists } from '../workspace.js'
@@ -20,16 +25,7 @@ async function waitForSpinnerFrame(): Promise<void> {
 }
 
 export function formatScanSummary(summary: ScanSummary): string {
-  return [
-    `Sessions: ${summary.total}`,
-    `New: ${summary.new}`,
-    summary.updated > 0 ? `Updated: ${summary.updated}` : undefined,
-    summary.unchanged > 0 ? `Unchanged: ${summary.unchanged}` : undefined,
-    summary.missing > 0 ? `Missing: ${summary.missing}` : undefined,
-    `Errors: ${summary.errors}`,
-  ]
-    .filter((item): item is string => item !== undefined)
-    .join(' · ')
+  return `新增 ${summary.new} · 更新 ${summary.updated} · 删除 ${summary.missing} · 错误 ${summary.errors}`
 }
 
 function progressMessage(progress: ScanProgress): string {

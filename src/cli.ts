@@ -4,11 +4,13 @@ import { runInit } from './commands/init.js'
 import { runStatus } from './commands/status.js'
 import { runScanCommand } from './commands/scan.js'
 import { runSessionsShow } from './commands/sessions.js'
+import { runRulesList, runRulesShow } from './commands/rules.js'
 import {
   runProjectsAssign,
   runProjectsList,
   runProjectsMerge,
   runProjectsReclassify,
+  runProjectsSessions,
 } from './commands/projects.js'
 import { WORKSPACE_ENV } from './workspace.js'
 
@@ -48,9 +50,27 @@ const sessions = program
 
 sessions
   .command('show <session-id>')
-  .description('读取 OpenCode/Codex session 原文到 stdout（不落盘）')
+  .description('读取 session 原文到 stdout（不落盘）')
   .action(async (sessionId: string) => {
     await runSessionsShow(sessionId)
+  })
+
+const rules = program
+  .command('rules')
+  .description('查看 agent 全局持久化指令')
+
+rules
+  .command('list [agent]')
+  .description('列出全部或指定 agent 的全局指令来源（JSON）')
+  .action((agent?: string) => {
+    runRulesList(agent)
+  })
+
+rules
+  .command('show <agent>')
+  .description('读取指定 agent 的主要全局指令正文到 stdout（不落盘）')
+  .action((agent: string) => {
+    runRulesShow(agent)
   })
 
 program
@@ -73,6 +93,13 @@ projects
   .description('列出当前项目归类（含 confidence 与 session 数）')
   .action(() => {
     runProjectsList()
+  })
+
+projects
+  .command('sessions [slug]')
+  .description('列出全部或指定项目的 session metadata（JSON）')
+  .action((slug?: string) => {
+    runProjectsSessions(slug)
   })
 
 projects

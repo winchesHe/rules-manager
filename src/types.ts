@@ -87,6 +87,19 @@ export interface ScanSummary {
   unchanged: number
   missing: number
   errors: number
+  changes: ScanChanges
+}
+
+export interface ScanChange {
+  agent: AgentName
+  id: string
+  slug: string
+}
+
+export interface ScanChanges {
+  new: ScanChange[]
+  updated: ScanChange[]
+  missing: ScanChange[]
 }
 
 export interface ScanProgress {

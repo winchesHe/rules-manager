@@ -65,3 +65,53 @@ OpenCode 当前没有逐 session JSONL，且 export 会复制对话内容，违�
 | 4 | 全链路验收并同步上下文 | DB 不新增原文字段，源 JSONL hash 不变 | 全量测试、构建、`git diff --check` | 完成 |
 
 补充验收：`sessions show <codex-id>` 输出源 JSONL 的结构化 records，不写 DB、不复制 transcript；`scan` 在 agent discover 前、处理期间和完成后更新可见状态，底层 `runScan` 在未提供回调时保持无额外输出。
+
+## Scan 变更清单补充轮次
+
+| 步骤 | 独立改动 | 观察点 | 验证方式 | 状态 |
+| --- | --- | --- | --- | --- |
+| 1 | 定义本轮变更条目 | new / updated / missing 均包含 agent、session id、slug | 类型与 formatter 测试先失败 | 完成 |
+| 2 | scanner 收集并持久化 changes | summary 与 `run_metadata.details` 使用同一份变更清单 | 集成测试读取返回值和 DB details | 完成 |
+| 3 | CLI 输出变更计数 | scan 结束后显示新增、更新、删除、错误数量，不展开 session | formatter 测试 + 伪 TTY smoke test | 完成 |
+| 4 | 全链路验收与上下文同步 | 重复扫描不把 unchanged 塞进 changes | 全量测试、构建、`git diff --check` | 完成 |
+
+删除语义固定为“本轮成功扫描该 agent 后，源端不再存在”：session 行保留并标记 `missing`，FS 项目链接删除。变更清单不记录对话内容或 tool output，只记录 `{agent, id, slug}`。
+
+CLI 只展示 `新增 X · 更新 X · 删除 X · 错误 X`；具体 changes 保留在 `run_metadata.details`，避免首次扫描输出数百行。
+
+补充状态转移：已标记 `missing` 的 session 即使以相同 hash/updatedAt 恢复，也计为 `updated`，避免误报 unchanged。
+
+## 六 Agent Session Show 补充轮次
+
+| Agent | show 权威来源 | 不可读取条件 |
+| --- | --- | --- |
+| Claude | `source_path` 文件或目录下全部 JSONL | 源不存在、JSONL 非法或总量超过上限 |
+| Codex | rollout JSONL | 同上 |
+| Cursor | transcript JSONL | 同上 |
+| Pi | session JSONL | 同上 |
+| Copilot | 优先 `events.jsonl`；metadata-only 回退同一 Copilot 根的 `session-store.db.turns` | events 不存在且 turns 为 0 |
+| OpenCode | SDK `session.messages` | SDK/本机服务读取失败 |
+
+| 步骤 | 独立改动 | 观察点 | 验证方式 | 状态 |
+| --- | --- | --- | --- | --- |
+| 1 | 新增四类未支持 agent 与 Copilot 双路径测试 | 旧命令明确拒绝 Claude/Cursor/Pi/Copilot | 目标 Jest 先失败 | 完成 |
+| 2 | 实现严格 JSONL show | 单文件与 Claude 多文件目录均完整返回 records | stdout + 源文件 hash 不变断言 | 完成 |
+| 3 | 实现 Copilot turns fallback | 只读固定 `session-state` 父目录的 DB，按 turn_index 输出 | 临时 SQLite fixture + 无 turns 错误测试 | 完成 |
+| 4 | 全链路验收与上下文同步 | 六 agent 均有明确结果或源端缺失错误 | 全量测试、构建、真实 smoke、`git diff --check` | 完成 |
+
+所有 show 内容只存在于进程内存与 stdout，不写 memory-manager DB、不生成 transcript、不修改 agent 源数据。
+
+JSONL show 兼容 UTF-8 BOM 与 CRLF；任一非空行解析失败则带文件和行号报错，不静默返回部分内容。单次聚合上限为 50 MiB。
+
+## Project Sessions Metadata 补充轮次
+
+命令：`projects sessions [slug]`。未传 slug 时读取 `projects/` 下全部 session，传入时只读取该项目。FS link 决定结果范围，DB 提供 sessions 表 metadata；不读取任何 source transcript。
+
+| 步骤 | 独立改动 | 观察点 | 验证方式 | 状态 |
+| --- | --- | --- | --- | --- |
+| 1 | 新增 metadata 查询测试 | 全量与单 slug 返回稳定字段和排序 | 目标 Jest 先失败 | 完成 |
+| 2 | 实现 FS 范围 + DB metadata join | FS/DB 缺行或 slug 不一致明确报错 | 数据层测试 | 完成 |
+| 3 | 注册 CLI 命令并输出 JSON | `projects sessions` 与 `projects sessions <slug>` 均可执行 | CLI smoke test | 完成 |
+| 4 | 全链路验收与上下文同步 | 输出不包含对话原文 | 全量测试、构建、`git diff --check` | 完成 |
+
+输出字段覆盖 sessions 表全部 metadata：id、agent、sourcePath、workspaceLink、slug、contentHash、updatedAt、status、firstSeenAt、lastSeenAt、classifiedAt、rulesStatus、rulesGeneratedAt。

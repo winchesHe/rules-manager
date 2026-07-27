@@ -877,3 +877,53 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 回归测试先验证旧实现会拒绝 Codex 且无进度事件，再实现通过；隔离 CLI smoke test完成 1 条 Codex scan + show，临时工作区已清理。
 - 最终验收：146/146 tests、`npm run build`、`git diff --check` 全部通过；只读审查无阻塞问题，构建仍只有既有 tsdown `define` warning。
 - 最终 CLI 视觉验收：148/148 tests；伪 TTY 输出为单行 `● Sessions: 1 · New: 1 · Errors: 0`，随后 `└ 扫描成功`，无嵌套 note 边框；构建与 `git diff --check` 通过。
+
+## Scan 变更清单（2026-07-25）
+
+- `ScanSummary` 新增 `changes.new / updated / missing`，每项只含 `{agent, id, slug}`；unchanged 只计数，不进入清单。
+- new 在 session 首次成功写库后记录；updated 在已有行成功更新且 hash/updatedAt 变化后记录；missing 在本轮成功扫描该 agent、确认源端缺失并标记 DB 后记录。
+- 旧状态为 `missing` 的 session 重新出现时，即使内容完全相同也判为 updated，表达“恢复”这一真实状态转移。
+- `run_metadata.details.summary` 直接持久化同一份 changes，后续可按 scan run 追溯具体变更；不新增表或对话内容字段。
+- CLI 只显示单行 `新增 X · 更新 X · 删除 X · 错误 X`，不展开具体 session；完整 changes 仅保留在 `run_metadata.details`。伪 TTY 已验证该计数布局。
+- 最终验收：150/150 tests、`npm run build`、`git diff --check` 全部通过；只读审查无阻塞问题，构建仍只有既有 tsdown `define` warning。
+
+## 六 Agent Session Show（2026-07-25）
+
+- Claude/Codex/Cursor/Pi 统一走严格 JSONL reader；Claude `source_path` 为目录时递归聚合全部 JSONL（与 adapter scan 范围一致）。
+- JSONL 总量上限 50 MiB，兼容 UTF-8 BOM/CRLF；任一非空行非法即带 `file:line` 报错，避免静默丢失后声称“完整”。JSON primitive/array 也保留，因为 show 负责呈现源记录而非做 adapter 语义过滤。
+- Copilot 在 show 时优先检查 session 同目录的 `events.jsonl`；metadata-only session 仅回退读取 `session-state` 直接父目录下的 `session-store.db.turns`，按 `turn_index` 排序。turns 为空明确报“源端未持久化对话”。
+- OpenCode 保持 SDK `session.messages` 路径。全部读取只进入进程内存与 stdout，DB 和源文件均只读，不生成 transcript。
+- 隔离真实默认 source 扫描后，Claude/Codex/Copilot(events)/Cursor/OpenCode/Pi 各取一条执行 show，六类全部成功。
+- 最终验收：158/158 tests、`npm run build`、`git diff --check` 全部通过；只读审查无阻塞问题，构建仍只有既有 tsdown `define` warning。
+
+## Project Sessions Metadata（2026-07-26）
+
+- 新增 `projects sessions [slug]`：无 slug 时列出 `projects/` 下全部 session，传 slug 时只列该项目；输出 `{ project, count, sessions }` 格式化 JSON。
+- FS link 是查询范围真理，DB 只补 sessions 表 metadata。FS link 缺少对应 DB 行，或 FS slug 与 DB slug 不一致时明确报错，不静默跳过、不伪造结果。
+- 每条结果覆盖 sessions 表全部 metadata：id、agent、sourcePath、workspaceLink、slug、contentHash、updatedAt、status、firstSeenAt、lastSeenAt、classifiedAt、rulesStatus、rulesGeneratedAt，并按 slug / agent / id 稳定排序。
+- 命令不调用 `sessions show` 或 adapter，不读取 source transcript；输出不包含对话原文、tool output 或 prompt。
+- 回归覆盖全量、slug 筛选、不存在项目、DB 缺行、slug 漂移和 CLI 黑盒 JSON 输出。
+- 最终验收：164/164 tests、`npm run build`、`git diff --check` 全部通过；构建仍只有既有 tsdown `define` warning。
+
+## 全局 Instruction Source 只读管理（2026-07-26）
+
+- 范围限定为六个 agent 的全局持久化 instruction source；不扫描项目级规则，不读取 Cursor 私有 SQLite value，不展开 OpenCode `opencode.json(c)`，不提供 apply/edit/switch。
+- 新增 `rules list [agent]` 与 `rules show <agent>`，不依赖 workspace init。list 只输出路径、status/effective 等 metadata；show 正文只进入内存和 stdout，不写 DB、日志或副本。
+- Claude 支持 managed/`CLAUDE.md`/`rules/**/*.md`；Codex 支持非空 override 遮蔽；Copilot 支持主指令、条件目录和绝对 custom dirs；Cursor 明确返回 unsupported capability；OpenCode 支持 AGENTS、Claude fallback 与禁用状态；Pi 支持 AGENTS/SYSTEM/APPEND_SYSTEM。
+- 目录遍历不跟随目录 symlink，允许文件 symlink，单目录最多 1,000 个文件；show 限制 1 MiB、强校验 UTF-8，并校验读取前后 stat 一致。
+- Plan 05 的 candidate generation 与 live source inventory 保持数据域分离；Plan 07 的产物查看预留为 `rules output`，避免与已落地的 source show 命令冲突。未来把产物安装到 live 文件必须另写备份、冲突检测和 compare-and-swap spec。
+- 最终验收：14 suites、183/183 tests、`npm run build`、`git diff --check` 全部通过；真实 `nr cli rules list cursor` 和 OpenCode list/show smoke 成功，抽样 source hash 前后不变。构建仍只有既有 tsdown `define` warning。
+
+## 全局 Instruction Source 范围收窄（2026-07-26）
+
+- 根据产品反馈，每个 agent 只展示一个主要全局 instruction 入口；辅助来源不返回 metadata，也不能按旧 source id show。
+- 明确排除 Claude managed policy/`rules`、Codex override、Copilot 条件/custom rules、OpenCode config/Claude fallback、Pi SYSTEM/APPEND_SYSTEM。
+- 保留 Claude `CLAUDE.md`、Codex/Copilot/OpenCode/Pi 的主 instruction 文件，以及 Cursor User Rules unsupported capability。
+- 删除辅助 locator、目录遍历、realpath 去重、override/fallback 状态机和相关类型；保留固定主路径环境变量、1 MiB、UTF-8、读取前后 stat 与只读 hash 防护。
+- 回归测试先在旧实现上出现 10 个预期失败；代码收窄后 14 suites、183/183 tests、`npm run build`、真实六来源 list smoke 和 `git diff --check` 全部通过。构建仍只有既有 tsdown `define` warning。
+
+## Rules Show 命令简化（2026-07-26）
+
+- 每个 agent 只剩一个主要 instruction source，因此 `rules show <agent> <source-id>` 简化为 `rules show <agent>`；内部 `showGlobalInstructionSource` 和 command runner 同步删除 source id 参数。
+- source id 仍作为返回 metadata 和错误诊断字段，但不再由用户选择；辅助来源也因此没有 show 入口。
+- CLI 回归明确要求旧的第三位置参数报 `too many arguments`；最终验收为 14 suites、174/174 tests、`npm run build`、新旧命令真实 smoke 和 `git diff --check` 全部通过。构建仍只有既有 tsdown `define` warning。

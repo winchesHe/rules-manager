@@ -103,6 +103,190 @@ describe('sessions show', () => {
     expect(fileHash(sourcePath)).toBe(sourceHash)
   })
 
+  it.each([
+    ['cursor', false],
+    ['pi', false],
+    ['claude', true],
+  ] as const)('按需读取 %s 完整 JSONL records', async (agent, usesDirectory) => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sessionId = `${agent}-test`
+    const sourcePath = usesDirectory ? path.join(home, sessionId) : path.join(home, `${sessionId}.jsonl`)
+    const files = usesDirectory
+      ? [path.join(sourcePath, 'main.jsonl'), path.join(sourcePath, 'subagents/agent.jsonl')]
+      : [sourcePath]
+    for (const [index, filePath] of files.entries()) {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
+      fs.writeFileSync(filePath, `${JSON.stringify({ type: 'message', text: `${agent}-${index}` })}\n`)
+    }
+
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES (?, ?, ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sessionId, agent, sourcePath, path.join(workspaceDir, `projects/default/${sessionId}.jsonl`))
+    workspace.close()
+
+    const sourceHashes = files.map(fileHash)
+    const output = jest.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await runSessionsShow(sessionId, { homeDir: home })
+
+    expect(output).toHaveBeenCalledWith(expect.stringContaining(`${agent}-0`))
+    if (usesDirectory) expect(output).toHaveBeenCalledWith(expect.stringContaining(`${agent}-1`))
+    expect(files.map(fileHash)).toEqual(sourceHashes)
+  })
+
+  it('按需读取 Copilot events.jsonl', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sourcePath = path.join(home, 'copilot/session-state/copilot-events/events.jsonl')
+    fs.mkdirSync(path.dirname(sourcePath), { recursive: true })
+    fs.writeFileSync(sourcePath, `${JSON.stringify({ type: 'user.message', text: 'copilot event' })}\n`)
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('copilot-events', 'copilot', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/copilot-events.jsonl'))
+    workspace.close()
+    const sourceHash = fileHash(sourcePath)
+    const output = jest.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await runSessionsShow('copilot-events', { homeDir: home })
+
+    expect(output).toHaveBeenCalledWith(expect.stringContaining('copilot event'))
+    expect(fileHash(sourcePath)).toBe(sourceHash)
+  })
+
+  it('Copilot metadata-only session 回退读取 session-store.db turns', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const copilotRoot = path.join(home, 'copilot')
+    const sourcePath = path.join(copilotRoot, 'session-state/copilot-turns/workspace.yaml')
+    fs.mkdirSync(path.dirname(sourcePath), { recursive: true })
+    fs.writeFileSync(sourcePath, 'id: copilot-turns\n')
+    const storePath = path.join(copilotRoot, 'session-store.db')
+    const store = new Database(storePath)
+    store.exec(`
+      CREATE TABLE turns (
+        id INTEGER PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        turn_index INTEGER NOT NULL,
+        user_message TEXT,
+        assistant_response TEXT,
+        timestamp TEXT
+      )
+    `)
+    store
+      .prepare('INSERT INTO turns (session_id, turn_index, user_message, assistant_response) VALUES (?, 0, ?, ?)')
+      .run('copilot-turns', 'copilot private prompt', 'copilot private response')
+    store.close()
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('copilot-turns', 'copilot', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/copilot-turns.jsonl'))
+    workspace.close()
+    const sourceHash = fileHash(sourcePath)
+    const storeHash = fileHash(storePath)
+    const output = jest.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await runSessionsShow('copilot-turns', { homeDir: home })
+
+    expect(output).toHaveBeenCalledWith(expect.stringContaining('copilot private prompt'))
+    expect(output).toHaveBeenCalledWith(expect.stringContaining('copilot private response'))
+    expect(fileHash(sourcePath)).toBe(sourceHash)
+    expect(fileHash(storePath)).toBe(storeHash)
+  })
+
+  it('Copilot metadata-only 且 turns 为空时明确报源端未持久化对话', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const copilotRoot = path.join(home, 'copilot')
+    const sourcePath = path.join(copilotRoot, 'session-state/copilot-empty/workspace.yaml')
+    fs.mkdirSync(path.dirname(sourcePath), { recursive: true })
+    fs.writeFileSync(sourcePath, 'id: copilot-empty\n')
+    const store = new Database(path.join(copilotRoot, 'session-store.db'))
+    store.exec('CREATE TABLE turns (session_id TEXT, turn_index INTEGER, user_message TEXT, assistant_response TEXT, timestamp TEXT)')
+    store.close()
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('copilot-empty', 'copilot', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/copilot-empty.jsonl'))
+    workspace.close()
+
+    await expect(runSessionsShow('copilot-empty', { homeDir: home })).rejects.toThrow(
+      '源端未持久化对话',
+    )
+  })
+
+  it('JSONL 存在非法行时明确报文件和行号，不静默返回部分内容', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sourcePath = path.join(home, 'invalid.jsonl')
+    fs.writeFileSync(sourcePath, '{"type":"message"}\nnot-json\n')
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('invalid-jsonl', 'pi', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/invalid-jsonl.jsonl'))
+    workspace.close()
+
+    await expect(runSessionsShow('invalid-jsonl', { homeDir: home })).rejects.toThrow(
+      `${sourcePath}:2`,
+    )
+  })
+
+  it('兼容 UTF-8 BOM 和 CRLF JSONL', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sourcePath = path.join(home, 'bom-crlf.jsonl')
+    fs.writeFileSync(sourcePath, '\uFEFF{"text":"first"}\r\n{"text":"second"}\r\n')
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('bom-crlf', 'cursor', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/bom-crlf.jsonl'))
+    workspace.close()
+    const output = jest.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await runSessionsShow('bom-crlf', { homeDir: home })
+
+    expect(output).toHaveBeenCalledWith(expect.stringContaining('first'))
+    expect(output).toHaveBeenCalledWith(expect.stringContaining('second'))
+  })
+
   it('拒绝读取不支持的 session', async () => {
     await runInit({ nonInteractive: true, homeDir: home })
     const { dbPath, workspaceDir } = resolveWorkspace(home)
@@ -112,7 +296,7 @@ describe('sessions show', () => {
         INSERT INTO sessions
           (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
            status, first_seen_at, last_seen_at)
-        VALUES (?, 'claude', '/tmp/source.jsonl', ?, 'default', 'hash', '2026-01-01',
+        VALUES (?, 'unknown', '/tmp/source.jsonl', ?, 'default', 'hash', '2026-01-01',
                 'new', '2026-01-01', '2026-01-01')
       `)
       .run('claude-session', path.join(workspaceDir, 'projects/default/claude-session.jsonl'))
@@ -121,7 +305,7 @@ describe('sessions show', () => {
 
     await expect(
       runSessionsShow('claude-session', { homeDir: home }, { readOpenCodeMessages }),
-    ).rejects.toThrow('仅支持 OpenCode/Codex')
+    ).rejects.toThrow('不支持的 agent')
     expect(readOpenCodeMessages).not.toHaveBeenCalled()
   })
 })

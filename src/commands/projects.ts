@@ -2,6 +2,7 @@ import pc from 'picocolors'
 import { isDatabaseReady } from '../db.js'
 import {
   assignSession,
+  listProjectSessions,
   listProjects,
   mergeProjects,
   reclassifyAll,
@@ -37,6 +38,22 @@ export function runProjectsList(opts: CommandOptions = {}): void {
         `agents=${agents}`,
     )
   }
+}
+
+export function runProjectsSessions(slug?: string, opts: CommandOptions = {}): void {
+  ensureWorkspace(opts.homeDir)
+  const sessions = listProjectSessions({ ...opts, slug })
+  console.log(
+    JSON.stringify(
+      {
+        project: slug ?? null,
+        count: sessions.length,
+        sessions,
+      },
+      null,
+      2,
+    ),
+  )
 }
 
 export function runProjectsAssign(
