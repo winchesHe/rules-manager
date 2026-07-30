@@ -391,6 +391,8 @@ function boundedProjectResponse(
           .slice(0, MAX_EVIDENCE_REFS_PER_CANDIDATE)
           .map((reference) => reference.slice(0, 512)),
       })),
+    ...(response.status ? { status: response.status } : {}),
+    ...(response.error ? { error: response.error.slice(0, MAX_DETAIL_LENGTH) } : {}),
   }
 }
 

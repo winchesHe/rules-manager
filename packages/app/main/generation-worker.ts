@@ -180,6 +180,7 @@ void (async () => {
     flushAssistantText()
     finishRunMetadata('completed', {
       candidateCount: result.candidateCount ?? 0,
+      failedProjectCount: result.failedProjectCount ?? 0,
     })
     port.postMessage({ type: 'done', result })
   } catch (error) {

@@ -149,3 +149,29 @@ batch”仍会在 Read tool result 中重新形成大上下文。完整收集不
   `agent-workspace` 选择性读取约 1.27 MB Evidence 后返回 8 条候选；
   `ai-guanglinglu` 返回 10 条候选。三者均出现 Thinking / Search / Read，未再出现
   502、Prompt too long、max-turns 或结构化解析失败。
+
+## 多项目部分失败隔离（2026-07-31）
+
+Recent / Full generation 的 Project 是独立分析单元。单个 Project 的 Provider 或
+结构化解析失败不得丢弃其他 Project 已完成的候选。
+
+观察点：
+
+- 失败 Project 追加一条带错误原因的失败响应，后续 Project 继续生成。
+- 只要至少一个 Project 成功完成，Run 最终状态为 completed；成功候选统一落库并在
+  Chat 完成态一次性展示，失败 Project 单独标记。
+- 所有 Project 都失败时，Run 才进入 failed；用户取消仍立即终止且不落任何 Draft。
+- Claude 回复在 YAML 根列表前附带说明文字时，解析器跳过说明并按 Schema 识别根列表。
+
+验证方式：
+
+- 三 Project 回归测试中间 Project 抛错，断言第三个仍被调用、首尾成功候选均落库，
+  最终进度包含 `failedProjectCount: 1`。
+- 全失败回归测试断言 Run 失败且候选表为空。
+- App ChatStore 回归测试断言部分失败 Thread 为 completed、成功 Candidate 保留，
+  失败 Project 以独立 Activity 和 Response 保存。
+- 真实 `ai-guanglinglu` Claude dry-run 读取 362 excerpts / 3 batches 并成功返回
+  11 条候选，确认说明文字后的 YAML 根列表可在真实 Provider 输出中解析。
+- 对旧版已失败但保存了成功 `projectResponses` 的历史 Thread，failed 终态允许展示
+  非 failed Project 的完整候选；running / cancelling / cancelled / interrupted
+  仍不暴露 Artifact。

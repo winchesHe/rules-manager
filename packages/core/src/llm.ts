@@ -628,6 +628,7 @@ function extractClaudeStructuredOutput<T>(
   const candidates = [
     fenced,
     trimmed,
+    ...yamlRootSequenceSlices(trimmed),
     ...balancedJsonSlices(trimmed, '[', ']'),
     ...balancedJsonSlices(trimmed, '{', '}'),
   ].filter((value, index, values): value is string => (
@@ -651,6 +652,15 @@ function extractClaudeStructuredOutput<T>(
     ? lastParseError.message
     : '未找到可解析的 YAML 或 JSON'
   throw new Error(`结构化输出解析失败：${message}`)
+}
+
+function yamlRootSequenceSlices(value: string): string[] {
+  const slices: string[] = []
+  const rootItem = /^-\s+\S/gm
+  for (const match of value.matchAll(rootItem)) {
+    if (match.index !== undefined) slices.push(value.slice(match.index))
+  }
+  return slices
 }
 
 function isDeterministicLlmFailure(error: unknown): boolean {

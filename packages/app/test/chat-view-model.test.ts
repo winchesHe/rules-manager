@@ -23,7 +23,6 @@ describe('chat view model', () => {
     'running',
     'cancelling',
     'cancelled',
-    'failed',
     'interrupted',
   ] as const)('%s 不暴露半成品 Rules', (status) => {
     expect(visibleProjectResponses(status, responses)).toEqual([])
@@ -31,6 +30,24 @@ describe('chat view model', () => {
 
   it('completed 一次性返回全部 Rules', () => {
     expect(visibleProjectResponses('completed', responses)).toBe(responses)
+  })
+
+  it('failed 终态仍展示已完成项目并过滤失败项目', () => {
+    const failedProject = {
+      projectSlug: 'broken',
+      summary: 'failed',
+      candidates: [],
+      status: 'failed' as const,
+      error: 'invalid output',
+    }
+
+    expect(visibleProjectResponses('failed', [
+      { ...responses[0], status: 'completed' },
+      failedProject,
+    ])).toEqual([
+      { ...responses[0], status: 'completed' },
+    ])
+    expect(visibleProjectResponses('failed', responses)).toEqual(responses)
   })
 
   it('格式化秒级 elapsed time', () => {

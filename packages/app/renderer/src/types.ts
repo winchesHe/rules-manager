@@ -180,6 +180,7 @@ export interface GenerateProgress {
   total?: number
   projectSlug?: string
   candidateCount?: number
+  failedProjectCount?: number
 }
 
 export type GenerationMode = 'recent' | 'changed7d' | 'full' | 'projects'
@@ -209,6 +210,8 @@ export interface ProjectGenerationResponse {
   projectSlug: string
   summary: string
   candidates: ProjectGenerationCandidate[]
+  status?: 'completed' | 'failed'
+  error?: string
 }
 
 export interface AgentActivity {

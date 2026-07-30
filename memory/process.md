@@ -1430,3 +1430,32 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 252 tests、App 12 suites / 83 tests、Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Rules 多项目部分失败隔离（2026-07-31）
+
+- 真实 Recent activity Run `afb5b2e8-08b1-494d-bb6d-0b5680ef1ec1` 中，
+  `agent-workspace` 已生成 10 条候选，但第三个 `ai-guanglinglu` 的结构化解析异常
+  直接跳出了项目循环；持久化事务位于循环之后，导致前面成功候选没有落库，最终
+  Thread 也因 failed 门控隐藏全部 Artifact。
+- `runRulesGenerate` 改为项目级错误隔离：非取消错误记录为失败响应并继续后续项目；
+  成功 Project 仍进入统一事务落库。只要至少一个 Project 成功，Run 以 completed
+  完成并携带 `failedProjectCount`；只有全部 Project 失败才抛出聚合错误。取消仍
+  立即抛出，保持“取消不产生 Draft”的既有语义。
+- `ProjectGenerationResponse` 增加 completed / failed 状态和可选错误。Worker
+  metadata 记录失败项目数；Chat timeline 将失败项目显示为独立 Failed Activity，
+  完成态仍展示所有成功 Candidate；Rules 过程视图也区分失败响应。
+- 同一真实 Run 的第三个 Provider 输出并非没有候选，而是在英文说明后输出 YAML
+  根列表。Claude parser 新增根级 `- ...` 序列切片，并继续以 Zod Schema 选择有效
+  候选，兼容“说明文字 + YAML 列表”。
+- 回归测试覆盖：说明 + YAML 根列表、三项目中间失败仍继续并持久化首尾候选、全项目
+  失败仍失败、部分成功 Chat Thread 保持 completed 且失败项目单独记录。
+- 真实 `ai-guanglinglu` Claude dry-run 读取 20 个索引 Session，过滤形成
+  362 excerpts / 3 batches，最终成功解析并返回 11 条候选，`projectFailures` 为空，
+  没有写库。
+- failed 历史 Thread 的展示门控改为只过滤显式 failed Project，并展示此前已完成
+  Project 的候选；因此真实失败 Run 中已经保存在 `projectResponses` 的 10 条候选
+  可在新版 App 中恢复可见。running / cancelling / cancelled / interrupted 仍隐藏
+  Artifact，保持流式阶段不展示半成品。
+- 最终验收：Core 25 suites / 255 tests、App 12 suites / 84 tests、Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。

@@ -232,6 +232,30 @@ describe('getStructuredResponse', () => {
     )).resolves.toEqual([])
   })
 
+  it('Claude 在 YAML 根列表前附带说明文字时仍返回候选', async () => {
+    queryMock.mockReturnValue(response([
+      'Based on the evidence, here are the reusable rules.',
+      '',
+      '- scope: project',
+      '  project_slug: demo',
+      '  rule_text: |-',
+      '    Always run tests',
+      '  confidence_level: high',
+      '  reasoning: |-',
+      '    Explicit requirement',
+      '  evidence_refs:',
+      '    - s1:0',
+    ].join('\n')))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual([expect.objectContaining({
+      rule_text: 'Always run tests',
+    })])
+  })
+
   it('Claude YAML block scalar 可包含未转义的双引号', async () => {
     queryMock.mockReturnValue(response([
       '- scope: project',

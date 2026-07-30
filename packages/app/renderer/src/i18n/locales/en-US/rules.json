@@ -283,6 +283,7 @@
     "responseDescription": "One response is appended as each project completes.",
     "working": "Agent is working",
     "responseComplete": "response complete",
+    "responseFailed": "project generation failed",
     "candidate": "Candidate {{index}}",
     "viewCandidate": "View candidate details for {{project}}",
     "generatingProject": "Agent is generating {{project}}…",

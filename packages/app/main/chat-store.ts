@@ -433,13 +433,16 @@ function buildActivities(
           ...(current !== undefined ? { status: 'completed' } : {}),
         }
       } else if (phase === 'done') {
+        const failedProjectCount = event.progress.failedProjectCount ?? 0
         activity = {
           seq: envelope.seq,
           at: envelope.at,
           id: 'validate',
           kind: 'validate',
           label: 'Validate',
-          detail: `${event.progress.candidateCount ?? 0} candidates`,
+          detail: `${event.progress.candidateCount ?? 0} candidates${
+            failedProjectCount > 0 ? ` · ${failedProjectCount} projects failed` : ''
+          }`,
           status: 'completed',
         }
       } else {
@@ -457,13 +460,18 @@ function buildActivities(
         }
       }
     } else if (event.kind === 'project_response') {
+      const failed = event.response.status === 'failed'
       activity = {
         seq: envelope.seq,
         at: envelope.at,
         id: `draft-${event.response.projectSlug}`,
-        kind: 'draft',
-        label: 'Draft',
-        detail: event.response.projectSlug,
+        kind: failed ? 'retry' : 'draft',
+        label: failed ? 'Failed' : 'Draft',
+        detail: failed
+          ? `${event.response.projectSlug}: ${
+            event.response.error ?? event.response.summary
+          }`
+          : event.response.projectSlug,
         status: 'completed',
       }
     } else if (event.kind === 'candidate_count') {

@@ -283,6 +283,7 @@
     "responseDescription": "每完成一个项目就追加一份响应。",
     "working": "Agent 正在工作",
     "responseComplete": "响应完成",
+    "responseFailed": "该项目生成失败",
     "candidate": "候选规则 {{index}}",
     "viewCandidate": "查看 {{project}} 的候选规则详情",
     "generatingProject": "Agent 正在生成 {{project}}…",

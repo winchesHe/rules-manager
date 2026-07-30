@@ -7,7 +7,11 @@ export function visibleProjectResponses(
   status: ChatThread['status'],
   responses: ProjectGenerationResponse[],
 ): ProjectGenerationResponse[] {
-  return status === 'completed' ? responses : []
+  if (status === 'completed') return responses
+  if (status === 'failed') {
+    return responses.filter((response) => response.status !== 'failed')
+  }
+  return []
 }
 
 export function mergeTimelineActivities(

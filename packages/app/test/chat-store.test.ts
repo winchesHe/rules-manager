@@ -176,6 +176,75 @@ describe('ChatStore', () => {
     expect(JSON.stringify(restored)).not.toContain('raw provider output')
   })
 
+  it('部分项目失败时以 completed 保存成功候选并记录失败项目', () => {
+    const { store } = createStore()
+    store.createGenerationThread({
+      runId: 'run-partial',
+      request: { mode: 'projects', projects: ['rules-manager', 'broken'] },
+      startedAt: '2026-07-30T00:00:00.000Z',
+    })
+    const successful = runningStatus('run-partial').projectResponses[0]
+    const failed = {
+      projectSlug: 'broken',
+      summary: 'Failed to generate rule candidates for broken: invalid output',
+      candidates: [],
+      status: 'failed' as const,
+      error: 'invalid output',
+    }
+
+    store.syncGeneration({
+      ...runningStatus('run-partial'),
+      running: false,
+      state: 'completed',
+      progress: {
+        phase: 'done',
+        candidateCount: 1,
+        failedProjectCount: 1,
+      },
+      projectResponses: [
+        { ...successful, status: 'completed' },
+        failed,
+      ],
+      events: [{
+        runId: 'run-partial',
+        seq: 1,
+        at: '2026-07-30T00:00:01.000Z',
+        event: { kind: 'project_response', response: failed },
+      }],
+      endedAt: '2026-07-30T00:00:02.000Z',
+    })
+
+    expect(store.readThread('run-partial')).toMatchObject({
+      status: 'completed',
+      candidateCount: 1,
+      projectResponses: [
+        {
+          projectSlug: 'rules-manager',
+          status: 'completed',
+          candidates: [{ rule: '每次实现后运行完整测试。' }],
+        },
+        {
+          projectSlug: 'broken',
+          status: 'failed',
+          error: 'invalid output',
+          candidates: [],
+        },
+      ],
+      activities: [{
+        kind: 'retry',
+        label: 'Failed',
+        detail: 'broken: invalid output',
+      }],
+      messages: [{
+        role: 'user',
+      }, {
+        role: 'assistant',
+        status: 'completed',
+        content: expect.stringContaining('Failed to generate rule candidates for broken'),
+      }],
+    })
+  })
+
   it('启动恢复时把遗留运行 Thread 标为 interrupted 并保留已写正文', () => {
     const { store } = createStore()
     store.createGenerationThread({

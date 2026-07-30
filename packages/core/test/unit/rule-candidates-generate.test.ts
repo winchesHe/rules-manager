@@ -213,6 +213,7 @@ describe('runRulesGenerate', () => {
       {
         projectSlug: 'demo',
         summary: expect.any(String),
+        status: 'completed',
         candidates: [{
           rule: 'Always run tests',
           scope: 'project',
@@ -224,6 +225,7 @@ describe('runRulesGenerate', () => {
       {
         projectSlug: 'second-project',
         summary: expect.any(String),
+        status: 'completed',
         candidates: [{
           rule: 'Always run tests',
           scope: 'project',
@@ -260,6 +262,82 @@ describe('runRulesGenerate', () => {
     const db = initDatabase(home)
     expect((db.prepare('SELECT COUNT(*) AS count FROM rule_candidates').get() as { count: number }).count).toBe(0)
     expect((db.prepare('SELECT COUNT(*) AS count FROM llm_runs').get() as { count: number }).count).toBe(0)
+    db.close()
+  })
+
+  it('单个项目失败时继续后续项目并持久化成功候选', async () => {
+    const projectResponses: unknown[] = []
+    const progress: unknown[] = []
+    const bundles = ['first', 'broken', 'third'].map((projectSlug, index) => ({
+      ...evidence[0],
+      projectSlug,
+      sourceSessions: [`s${index + 1}`],
+      excerpts: evidence[0].excerpts.map((excerpt) => ({
+        ...excerpt,
+        locator: {
+          ...excerpt.locator,
+          sessionId: `s${index + 1}`,
+        },
+      })),
+    }))
+    const generate = jest.fn<() => Promise<typeof generated>>()
+      .mockResolvedValueOnce(generated)
+      .mockRejectedValueOnce(new Error('invalid structured output'))
+      .mockResolvedValueOnce(generated)
+
+    await expect(runRulesGenerate(
+      {
+        homeDir: home,
+        onProgress: (value) => progress.push(value),
+        onProjectResponse: (response) => projectResponses.push(response),
+      },
+      {
+        extract: async () => bundles,
+        generate,
+      },
+    )).resolves.toBeUndefined()
+
+    expect(generate).toHaveBeenCalledTimes(3)
+    expect(projectResponses).toEqual([
+      expect.objectContaining({ projectSlug: 'first', status: 'completed' }),
+      expect.objectContaining({
+        projectSlug: 'broken',
+        status: 'failed',
+        candidates: [],
+        error: 'invalid structured output',
+      }),
+      expect.objectContaining({ projectSlug: 'third', status: 'completed' }),
+    ])
+    expect(progress).toContainEqual(expect.objectContaining({
+      phase: 'done',
+      candidateCount: 2,
+      failedProjectCount: 1,
+    }))
+
+    const db = initDatabase(home)
+    expect((db.prepare('SELECT COUNT(*) AS count FROM rule_candidates').get() as { count: number }).count).toBe(2)
+    expect((db.prepare('SELECT COUNT(*) AS count FROM llm_runs').get() as { count: number }).count).toBe(2)
+    db.close()
+  })
+
+  it('所有项目都失败时仍把 Run 判定为失败', async () => {
+    const second = {
+      ...evidence[0],
+      projectSlug: 'second',
+    }
+
+    await expect(runRulesGenerate(
+      { homeDir: home },
+      {
+        extract: async () => [evidence[0], second],
+        generate: async () => {
+          throw new Error('provider failed')
+        },
+      },
+    )).rejects.toThrow('所有项目生成失败（2/2）')
+
+    const db = initDatabase(home)
+    expect((db.prepare('SELECT COUNT(*) AS count FROM rule_candidates').get() as { count: number }).count).toBe(0)
     db.close()
   })
 })

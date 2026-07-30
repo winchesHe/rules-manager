@@ -13,7 +13,7 @@ import {
   type CandidateRule,
   type LlmRequestOptions,
 } from '../llm.js'
-import { throwIfAborted } from '../abort.js'
+import { isRunCancelledError, throwIfAborted } from '../abort.js'
 import type { LlmStreamEvent } from '../llm.js'
 import {
   cleanupStaleEvidenceContexts,
@@ -27,6 +27,7 @@ export interface GenerateProgress {
   total?: number
   projectSlug?: string
   candidateCount?: number
+  failedProjectCount?: number
 }
 
 export interface ProjectGenerationCandidate {
@@ -41,6 +42,8 @@ export interface ProjectGenerationResponse {
   projectSlug: string
   summary: string
   candidates: ProjectGenerationCandidate[]
+  status?: 'completed' | 'failed'
+  error?: string
 }
 
 export interface RulesGenerateOptions {
@@ -205,6 +208,7 @@ export async function runRulesGenerate(
       candidates: CandidateRule[]
     }> = []
     let candidateCount = 0
+    const projectFailures: Array<{ projectSlug: string; error: string }> = []
     for (let i = 0; i < bundles.length; i++) {
       throwIfAborted(opts.signal)
       const bundle = bundles[i]
@@ -218,16 +222,40 @@ export async function runRulesGenerate(
         candidateCount,
       })
       const generate: GenerateFn = deps.generate ?? getDefaultGenerate
-      const candidates = await generateFromEvidenceContext(
-        projectContext,
-        generate,
-        provider,
-        model,
-        effort,
-        fastMode,
-        opts.signal,
-        opts.onLlmEvent,
-      )
+      let candidates: CandidateRule[]
+      try {
+        candidates = await generateFromEvidenceContext(
+          projectContext,
+          generate,
+          provider,
+          model,
+          effort,
+          fastMode,
+          opts.signal,
+          opts.onLlmEvent,
+        )
+      } catch (error) {
+        if (isRunCancelledError(error) || opts.signal?.aborted) throw error
+        const message = error instanceof Error ? error.message : String(error)
+        projectFailures.push({ projectSlug: bundle.projectSlug, error: message })
+        process.stderr.write(`✗ 生成 ${i + 1}/${bundles.length} 失败（${bundle.projectSlug}）：${message}\n`)
+        opts.onProgress?.({
+          phase: 'generating',
+          current: i + 1,
+          total: bundles.length,
+          projectSlug: bundle.projectSlug,
+          candidateCount,
+          failedProjectCount: projectFailures.length,
+        })
+        opts.onProjectResponse?.({
+          projectSlug: bundle.projectSlug,
+          summary: `Failed to generate rule candidates for ${bundle.projectSlug}: ${message}`,
+          candidates: [],
+          status: 'failed',
+          error: message,
+        })
+        continue
+      }
       candidateCount += candidates.length
       process.stderr.write(`✓ 生成 ${i + 1}/${bundles.length} 完成，${candidates.length} 条候选\n`)
       opts.onProgress?.({
@@ -236,6 +264,7 @@ export async function runRulesGenerate(
         total: bundles.length,
         projectSlug: bundle.projectSlug,
         candidateCount,
+        failedProjectCount: projectFailures.length,
       })
       generated.push({
         bundle,
@@ -254,7 +283,14 @@ export async function runRulesGenerate(
           reasoning: candidate.reasoning,
           evidenceRefs: [...candidate.evidence_refs],
         })),
+        status: 'completed',
       })
+    }
+
+    if (generated.length === 0 && projectFailures.length > 0) {
+      throw new Error(
+        `所有项目生成失败（${projectFailures.length}/${bundles.length}）：${projectFailures[0].error}`,
+      )
     }
 
     if (!opts.dryRun) {
@@ -317,8 +353,13 @@ export async function runRulesGenerate(
       provider,
       model: model ?? null,
       candidates: generated.flatMap((item) => item.candidates),
+      projectFailures,
     }, null, 2))
-    opts.onProgress?.({ phase: 'done', candidateCount })
+    opts.onProgress?.({
+      phase: 'done',
+      candidateCount,
+      failedProjectCount: projectFailures.length,
+    })
   } finally {
     evidenceContext.cleanup()
   }

@@ -2395,8 +2395,10 @@ function ProcessTimeline({
         />
         {generation.projectResponses.map((response) => (
           <ProcessEvent
-            detail={tr('counts.candidatesValidated', { count: response.candidates.length })}
-            done
+            detail={response.status === 'failed'
+              ? response.error ?? response.summary
+              : tr('counts.candidatesValidated', { count: response.candidates.length })}
+            done={response.status !== 'failed'}
             key={response.projectSlug}
             title={response.projectSlug}
           />
@@ -2477,7 +2479,9 @@ function ProjectResponseConversation({
               A
             </span>
             <strong className="text-foreground">{response.projectSlug}</strong>
-            <span>· {tr('evidence.responseComplete')}</span>
+            <span>· {response.status === 'failed'
+              ? tr('evidence.responseFailed')
+              : tr('evidence.responseComplete')}</span>
           </div>
           <div className="rounded-bl-md rounded-br-xl rounded-tr-xl border border-border bg-surface p-4">
             <p className="text-sm leading-6 text-foreground">{response.summary}</p>
