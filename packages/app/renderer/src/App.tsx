@@ -158,10 +158,10 @@ export function App() {
           </aside>
 
           <main
-            className={`min-w-0 max-w-full overflow-x-hidden overflow-y-auto bg-background ${
+            className={`min-w-0 max-w-full overflow-x-hidden bg-background ${
               activeView === 'chat'
-                ? 'px-[clamp(1rem,2vw,2rem)] py-8'
-                : 'px-[clamp(1.75rem,5vw,4.5rem)] py-12'
+                ? 'overflow-y-hidden px-[clamp(1rem,2vw,2rem)] py-8'
+                : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
             }`}
             key={activeView}
           >

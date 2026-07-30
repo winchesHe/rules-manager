@@ -149,6 +149,13 @@ void (async () => {
           return
         }
         flushAssistantText()
+        if (event.type === 'activity') {
+          port.postMessage({
+            type: 'event',
+            event: { kind: 'activity', activity: event.activity },
+          })
+          return
+        }
         port.postMessage({
           type: 'event',
           event: { kind: 'retry', message: event.message },

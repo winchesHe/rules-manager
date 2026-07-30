@@ -29,6 +29,7 @@
   "stopGeneration": "Stop generation",
   "cancelling": "Cancelling",
   "noResponse": "The Agent has not produced a visible response yet.",
+  "working": "The Agent is analyzing context…",
   "generationCompleted": "Rule generation completed.",
   "generationCancelled": "Rule generation was cancelled.",
   "generationFailed": "Rule generation failed.",

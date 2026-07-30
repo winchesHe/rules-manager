@@ -21,9 +21,142 @@ export interface LlmRequestOptions {
   onEvent?: (event: LlmStreamEvent) => void
 }
 
+export type AgentActivityKind = 'thinking' | 'read' | 'search' | 'shell' | 'tool'
+
+export interface AgentActivity {
+  id: string
+  kind: AgentActivityKind
+  label: string
+  detail?: string
+}
+
 export type LlmStreamEvent =
   | { type: 'assistant_delta'; text: string }
+  | { type: 'activity'; activity: AgentActivity }
   | { type: 'retry'; message: string; attempt: number }
+
+const MAX_ACTIVITY_DETAIL_LENGTH = 1_000
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function stringField(
+  value: unknown,
+  keys: string[],
+): string | undefined {
+  if (!isRecord(value)) return undefined
+  for (const key of keys) {
+    const candidate = value[key]
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return activityDetail(candidate)
+    }
+  }
+  return undefined
+}
+
+function activityDetail(value: string): string | undefined {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (!normalized) return undefined
+  return normalized.slice(0, MAX_ACTIVITY_DETAIL_LENGTH)
+}
+
+function humanizeToolName(value: string): string {
+  const leaf = value.split(/[:./]|__/).filter(Boolean).at(-1) ?? value
+  return leaf
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function agentActivity(
+  id: string,
+  kind: AgentActivityKind,
+  label: string,
+  detail?: string,
+): AgentActivity {
+  return {
+    id,
+    kind,
+    label,
+    ...(detail ? { detail } : {}),
+  }
+}
+
+function normalizeToolActivity(
+  id: string,
+  name: string,
+  input: unknown,
+): AgentActivity {
+  const lowerName = name.trim().toLowerCase()
+  if (['read', 'read_file', 'view_file'].includes(lowerName)) {
+    return agentActivity(
+      id,
+      'read',
+      'Read',
+      stringField(input, ['file_path', 'filePath', 'path']),
+    )
+  }
+  if (['grep', 'glob', 'search', 'websearch', 'web_search'].includes(lowerName)) {
+    return agentActivity(
+      id,
+      'search',
+      'Search',
+      stringField(input, ['pattern', 'query', 'path']),
+    )
+  }
+  if (['bash', 'shell', 'exec', 'exec_command', 'command'].includes(lowerName)) {
+    return agentActivity(
+      id,
+      'shell',
+      'Shell',
+      stringField(input, ['command', 'cmd']),
+    )
+  }
+  return agentActivity(id, 'tool', humanizeToolName(name) || 'Tool')
+}
+
+function normalizeClaudeToolActivity(block: unknown): AgentActivity | undefined {
+  if (!isRecord(block) || block.type !== 'tool_use') return undefined
+  if (typeof block.id !== 'string' || typeof block.name !== 'string') return undefined
+  return normalizeToolActivity(block.id, block.name, block.input)
+}
+
+function normalizeCodexActivity(event: Record<string, unknown>): AgentActivity | undefined {
+  if (event.type !== 'item.started' && event.type !== 'item.completed') return undefined
+  if (!isRecord(event.item)) return undefined
+  const item = event.item
+  const itemType = typeof item.type === 'string' ? item.type : ''
+  const id = typeof item.id === 'string' ? item.id : undefined
+  if (!id) return undefined
+
+  if (itemType === 'reasoning') {
+    return agentActivity(id, 'thinking', 'Thinking')
+  }
+  if (itemType === 'web_search' || itemType === 'webSearch') {
+    return agentActivity(id, 'search', 'Search', stringField(item, ['query']))
+  }
+  if (itemType === 'command_execution' || itemType === 'commandExecution') {
+    const rawCommand = Array.isArray(item.command)
+      ? item.command.filter((part): part is string => typeof part === 'string').join(' ')
+      : typeof item.command === 'string' ? item.command : ''
+    const detail = activityDetail(rawCommand)
+    if (/(?:^|\s)(?:rtk\s+)?(?:rg|grep|find|fd)\b/.test(rawCommand)) {
+      return agentActivity(id, 'search', 'Search', detail)
+    }
+    if (/(?:^|\s)(?:rtk\s+)?(?:cat|sed|head|tail|bat)\b/.test(rawCommand)) {
+      return agentActivity(id, 'read', 'Read', detail)
+    }
+    return agentActivity(id, 'shell', 'Shell', detail)
+  }
+  if (itemType === 'mcp_tool_call' || itemType === 'mcpToolCall') {
+    const name = stringField(item, ['tool', 'name']) ?? 'Tool'
+    return normalizeToolActivity(id, name, item.arguments ?? item.input)
+  }
+  if (itemType === 'file_change' || itemType === 'fileChange') {
+    return agentActivity(id, 'tool', 'File change')
+  }
+  return undefined
+}
 
 async function callClaude(
   prompt: string,
@@ -48,13 +181,44 @@ async function callClaude(
   let result: string | undefined
   let streamedText = false
   let errors: string[] = []
+  const seenActivityIds = new Set<string>()
   try {
     for await (const message of query({ prompt, options })) {
       throwIfAborted(requestOptions.signal)
       if (message.type === 'stream_event') {
         const event = message.event as {
           type?: string
+          index?: number
+          content_block?: {
+            type?: string
+            id?: string
+            name?: string
+            input?: unknown
+          }
           delta?: { type?: string; text?: string }
+        }
+        if (
+          event.type === 'content_block_start'
+          && event.content_block?.type === 'thinking'
+        ) {
+          const id = `claude-thinking-${event.index ?? seenActivityIds.size}`
+          if (!seenActivityIds.has(id)) {
+            seenActivityIds.add(id)
+            requestOptions.onEvent?.({
+              type: 'activity',
+              activity: { id, kind: 'thinking', label: 'Thinking' },
+            })
+          }
+        }
+        if (
+          event.type === 'content_block_start'
+          && event.content_block?.type === 'tool_use'
+        ) {
+          const activity = normalizeClaudeToolActivity(event.content_block)
+          if (activity && !seenActivityIds.has(activity.id)) {
+            seenActivityIds.add(activity.id)
+            requestOptions.onEvent?.({ type: 'activity', activity })
+          }
         }
         if (
           event.type === 'content_block_delta'
@@ -66,6 +230,18 @@ async function callClaude(
             type: 'assistant_delta',
             text: event.delta.text,
           })
+        }
+        continue
+      }
+      if (message.type === 'assistant') {
+        const assistant = message as unknown as {
+          message?: { content?: unknown[] }
+        }
+        for (const block of assistant.message?.content ?? []) {
+          const activity = normalizeClaudeToolActivity(block)
+          if (!activity || seenActivityIds.has(activity.id)) continue
+          seenActivityIds.add(activity.id)
+          requestOptions.onEvent?.({ type: 'activity', activity })
         }
         continue
       }
@@ -124,6 +300,7 @@ function callCodex(
     let stderr = ''
     let settled = false
     let killTimer: ReturnType<typeof setTimeout> | undefined
+    const seenActivityIds = new Set<string>()
 
     const finish = (error?: Error) => {
       if (settled) return
@@ -145,6 +322,11 @@ function callCodex(
       const item = event.item && typeof event.item === 'object'
         ? event.item as Record<string, unknown>
         : undefined
+      const activity = normalizeCodexActivity(event)
+      if (activity && !seenActivityIds.has(activity.id)) {
+        seenActivityIds.add(activity.id)
+        requestOptions.onEvent?.({ type: 'activity', activity })
+      }
       if (item?.type !== 'agent_message') return
       if (event.type === 'item.updated') {
         const delta = item.delta && typeof item.delta === 'object'

@@ -2,15 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Card, Chip, Spinner } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
-  Activity,
   Bot,
-  Check,
+  Brain,
   ChevronRight,
   Clock3,
+  Eye,
   MessageSquareText,
-  Sparkles,
+  Search,
   Square,
+  SquareTerminal,
+  Wrench,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { currentLocale } from '../i18n'
 import { formatDateTime } from '../i18n/format'
 import type {
@@ -19,6 +22,11 @@ import type {
   GenerationHistoryEntry,
   RunCancelResult,
 } from '../types'
+import {
+  formatElapsed,
+  shouldFollowStream,
+  visibleProjectResponses,
+} from './chat-view-model'
 
 export function ChatView({
   initialThreadId,
@@ -36,6 +44,8 @@ export function ChatView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const selectedIdRef = useRef<string | null>(selectedId)
+  const conversationRef = useRef<HTMLElement | null>(null)
+  const followStreamRef = useRef(true)
 
   useEffect(() => {
     selectedIdRef.current = selectedId
@@ -93,6 +103,20 @@ export function ChatView({
   useEffect(() => {
     void refresh(initialThreadId)
   }, [initialThreadId, refresh])
+
+  useEffect(() => {
+    followStreamRef.current = true
+  }, [selectedId])
+
+  useEffect(() => {
+    if (!followStreamRef.current || !conversationRef.current) return
+    const frame = requestAnimationFrame(() => {
+      const element = conversationRef.current
+      if (!element) return
+      element.scrollTo({ top: element.scrollHeight })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [thread?.activities.length, thread?.messages.length, thread?.status])
 
   useEffect(() => {
     const onGenerationChange = (value: unknown) => {
@@ -160,32 +184,44 @@ export function ChatView({
     void refresh(id)
   }
 
-  return (
-    <section aria-label={t('title')} className="grid min-h-[calc(100vh-4rem)] grid-rows-[auto_minmax(0,1fr)]">
-      <header className="mb-4 flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t('title')}</h1>
-          <p className="mt-1 text-sm text-muted">{t('description')}</p>
-        </div>
-        {thread?.status === 'completed' && thread.candidateCount > 0 && (
-          <Button className="gap-2 bg-primary text-primary-foreground" onPress={onOpenGeneratedRules}>
-            {t('openGeneratedRules')}
-            <ChevronRight aria-hidden="true" size={17} />
-          </Button>
-        )}
-      </header>
+  function updateFollowState(): void {
+    const element = conversationRef.current
+    if (!element) return
+    followStreamRef.current = shouldFollowStream({
+      scrollTop: element.scrollTop,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    })
+  }
 
-      {error && (
-        <Alert className="mb-4" status="danger">
-          <Alert.Content>
-            <Alert.Title>{t('loadError')}</Alert.Title>
-            <Alert.Description>{error}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      )}
+  return (
+    <section aria-label={t('title')} className="grid h-[calc(100vh-4rem)] min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+      <div>
+        <header className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">{t('title')}</h1>
+            <p className="mt-1 text-sm text-muted">{t('description')}</p>
+          </div>
+          {thread?.status === 'completed' && thread.candidateCount > 0 && (
+            <Button className="gap-2 bg-primary text-primary-foreground" onPress={onOpenGeneratedRules}>
+              {t('openGeneratedRules')}
+              <ChevronRight aria-hidden="true" size={17} />
+            </Button>
+          )}
+        </header>
+
+        {error && (
+          <Alert className="mb-4" status="danger">
+            <Alert.Content>
+              <Alert.Title>{t('loadError')}</Alert.Title>
+              <Alert.Description>{error}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+        )}
+      </div>
 
       <Card className="min-h-0 overflow-hidden border border-border bg-surface shadow-none">
-        <Card.Content className="grid h-full min-h-[34rem] grid-cols-[14rem_minmax(0,1fr)_17rem] p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)]">
+        <Card.Content className="grid h-full min-h-0 grid-cols-[14rem_minmax(0,1fr)_17rem] p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)] max-[1180px]:grid-rows-[minmax(0,1fr)_auto]">
           <aside aria-label={t('threadRail')} className="min-h-0 overflow-y-auto border-r border-border bg-sidebar/40">
             <div className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
               <strong className="text-xs font-medium uppercase tracking-wide text-muted">
@@ -232,7 +268,12 @@ export function ChatView({
             )}
           </aside>
 
-          <main aria-label={t('conversation')} className="min-h-0 overflow-y-auto bg-background px-6 py-6">
+          <main
+            aria-label={t('conversation')}
+            className="min-h-0 overflow-y-auto bg-background px-6 py-6"
+            onScroll={updateFollowState}
+            ref={conversationRef}
+          >
             {!thread && !legacy ? (
               <div className="grid h-full place-items-center text-sm text-muted">
                 {loading ? t('loading') : t('emptySelection')}
@@ -244,7 +285,7 @@ export function ChatView({
             )}
           </main>
 
-          <aside aria-label={t('context')} className="min-h-0 overflow-y-auto border-l border-border p-5 max-[1180px]:col-start-2 max-[1180px]:border-l-0 max-[1180px]:border-t">
+          <aside aria-label={t('context')} className="min-h-0 overflow-y-auto border-l border-border p-5 max-[1180px]:col-start-2 max-[1180px]:max-h-52 max-[1180px]:border-l-0 max-[1180px]:border-t">
             <h2 className="text-sm font-medium text-foreground">{t('context')}</h2>
             {thread ? (
               <div className="mt-4 grid gap-4">
@@ -295,9 +336,14 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
   const assistantMessage = [...thread.messages].reverse().find(
     (message) => message.role === 'assistant',
   )
-  const assistantContent = thread.projectResponses.length > 0
-    ? assistantMessage?.content
+  const projectResponses = visibleProjectResponses(
+    thread.status,
+    thread.projectResponses,
+  )
+  const assistantContent = thread.status === 'completed'
+    ? assistantMessage?.content ?? terminalMessage(thread.status, t)
     : terminalMessage(thread.status, t)
+  const active = thread.status === 'running' || thread.status === 'cancelling'
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6">
       <div className="flex justify-end">
@@ -322,30 +368,14 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
             <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">
               {assistantContent}
             </p>
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-muted">
-              {thread.status === 'running' && <Spinner color="accent" size="sm" />}
-              {t('noResponse')}
-            </div>
+          ) : active && thread.activities.length > 0 ? null : (
+            <p className="text-sm text-muted">
+              {active ? t('working') : t('noResponse')}
+            </p>
           )}
-          {thread.activities.length > 0 && (
-            <details className="mt-4 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
-              <summary className="flex cursor-pointer items-center gap-2 font-medium text-foreground">
-                <Activity aria-hidden="true" size={14} />
-                {t('activity')} · {thread.activities.length}
-              </summary>
-              <div className="mt-3 grid gap-2 border-t border-border pt-3">
-                {thread.activities.map((activity) => (
-                  <div className="flex items-center gap-2" key={activity.seq}>
-                    <Check aria-hidden="true" className="text-primary" size={12} />
-                    <span>{activity.detail ?? activity.kind}</span>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
+          <ActivityTimeline thread={thread} />
           <div className="mt-5 grid gap-3">
-            {thread.projectResponses.flatMap((response) =>
+            {projectResponses.flatMap((response) =>
               response.candidates.map((candidate, index) => (
                 <Card className="border border-border bg-surface shadow-none" key={`${response.projectSlug}-${index}`}>
                   <Card.Content className="p-4">
@@ -374,7 +404,7 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
                 </Card>
               )),
             )}
-            {thread.status === 'completed' && thread.projectResponses.every(
+            {thread.status === 'completed' && projectResponses.every(
               (response) => response.candidates.length === 0,
             ) && (
               <p className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
@@ -386,6 +416,80 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
       </article>
     </div>
   )
+}
+
+function ActivityTimeline({ thread }: { thread: ChatThread }) {
+  const activities = thread.activities.filter((activity) =>
+    isAgentActivityKind(activity.kind),
+  )
+  const active = thread.status === 'running' || thread.status === 'cancelling'
+  if (activities.length === 0 && !active) return null
+
+  return (
+    <div className="mt-5">
+      {activities.length > 0 && (
+        <div className="grid gap-3" role="list">
+          {activities.map((activity) => {
+            const Icon = activityIcon(activity.kind)
+            return (
+              <div
+                className="grid grid-cols-[1.1rem_auto_minmax(0,1fr)] items-center gap-2 text-sm text-muted"
+                key={`${activity.id ?? activity.kind}-${activity.seq}`}
+                role="listitem"
+              >
+                <Icon aria-hidden="true" className="text-muted" size={15} />
+                <strong className="font-medium text-foreground">
+                  {activity.label ?? activityLabel(activity.kind)}
+                </strong>
+                {activity.detail && (
+                  <span className="min-w-0 truncate" title={activity.detail}>
+                    {activity.detail}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {active && <RunningElapsed startedAt={thread.createdAt} />}
+    </div>
+  )
+}
+
+function RunningElapsed({ startedAt }: { startedAt: string }) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  return (
+    <div className="mt-5 flex items-center gap-2 text-sm text-muted">
+      <Spinner color="accent" size="sm" />
+      <span>{formatElapsed(startedAt, now)}</span>
+    </div>
+  )
+}
+
+function isAgentActivityKind(kind: string): boolean {
+  return ['thinking', 'read', 'search', 'shell', 'tool'].includes(kind)
+}
+
+function activityIcon(kind: string): LucideIcon {
+  if (kind === 'thinking') return Brain
+  if (kind === 'read') return Eye
+  if (kind === 'search') return Search
+  if (kind === 'shell') return SquareTerminal
+  return Wrench
+}
+
+function activityLabel(kind: string): string {
+  if (kind === 'thinking') return 'Thinking'
+  if (kind === 'read') return 'Read'
+  if (kind === 'search') return 'Search'
+  if (kind === 'shell') return 'Shell'
+  return kind.replace(/_/g, ' ')
 }
 
 function LegacyConversation({ entry }: { entry: GenerationHistoryEntry }) {

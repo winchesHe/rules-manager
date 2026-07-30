@@ -42,6 +42,8 @@ export interface ChatThread extends ChatThreadSummary {
     seq: number
     at: string
     kind: string
+    id?: string
+    label?: string
     detail?: string
   }>
   messages: ChatMessage[]
@@ -126,7 +128,9 @@ export class ChatStore {
       activities: status.events.map((envelope) => ({
         seq: envelope.seq,
         at: envelope.at,
-        kind: envelope.event.kind,
+        kind: envelope.event.kind === 'activity'
+          ? envelope.event.activity.kind
+          : envelope.event.kind,
         ...activityDetail(envelope.event),
       })),
       ...(status.error ? { error: status.error } : {}),
@@ -393,7 +397,14 @@ function cloneProjectResponse(
 
 function activityDetail(
   event: GenerationStatus['events'][number]['event'],
-): { detail?: string } {
+): { id?: string; label?: string; detail?: string } {
+  if (event.kind === 'activity') {
+    return {
+      id: event.activity.id,
+      label: event.activity.label,
+      ...(event.activity.detail ? { detail: event.activity.detail } : {}),
+    }
+  }
   if (event.kind === 'retry') return { detail: event.message }
   if (event.kind === 'phase') return { detail: event.progress.phase }
   if (event.kind === 'candidate_count') return { detail: String(event.count) }

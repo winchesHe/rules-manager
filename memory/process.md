@@ -1299,3 +1299,30 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 隔离 workspace 实测两条链路：预置完整 Thread → Electron 重启 → Chat 正文、Activity、Evidence 与 Candidate 恢复；Rules → Recent activity → 空 Evidence completed → 自动切换 Chat，全程没有调用 Provider。Chat → Generated rules 出口和窄窗口无页面级横向溢出。
 - 红测先确认缺少 ChatStore、Controller transcript 依赖、Chat 导航/页面/IPC 和 Rules 跳转；最终 Core 24 suites / 238 tests、App 11 suites / 69 tests、扩大 rootDir 的 App TypeScript、Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define` 配置警告。
 - 后续 debt：通用 Composer、连续追问和 Session Summary 仍按产品约定留到下一阶段；Session Context 到时只保存 `sessionId`，每次调用读取最新 Session 内容，不做版本快照。
+
+## APP Chat Paseo P1 流式 Activity 与完成态 Rules（2026-07-30）
+
+- Chat 工作区改为固定 viewport 可用高度；App 页面级容器在 Chat 模式关闭纵向滚动，
+  Thread Rail、Conversation、Run context 各自使用内部滚动区，消息增长不再撑高页面。
+- 参考 Paseo P1 的 `ToolCallDetail → displayName / summary` 做法，在 Core 新增统一
+  `AgentActivity`：Claude 的 thinking / tool_use 与 Codex JSONL 的 reasoning /
+  command_execution / web_search / mcp_tool_call 映射为 Thinking / Read / Search /
+  Shell / Tool。
+- Activity 只保存单行、最多 1000 字符的可见摘要；文件路径、搜索词和命令摘要可随
+  Thread 恢复，reasoning 正文、原始 tool input、tool output、Provider JSON、隐藏
+  Prompt 和 Session 原文继续不进入 Chat 文件。
+- Worker、GenerationController 与 ChatStore 打通结构化 activity 事件；Controller
+  对 id / label / detail 再次限长并做 defensive copy，Chat 只渲染真正的 Agent
+  Activity，不把 phase、Evidence 或 project response 混入执行时间线。
+- Conversation 在用户仍接近底部时自动跟随新 Activity，主动上滚后保留阅读位置；
+  运行中显示从 Thread `createdAt` 计算的秒级 elapsed time。
+- Project response 仍逐项目 checkpoint，保证取消或崩溃时数据可恢复；Renderer
+  通过 `visibleProjectResponses` 把显示时机统一门控到 `completed`，running /
+  cancelling / cancelled / failed / interrupted 均不展示半成品 Rules。
+- 隔离 workspace 的真实 Electron 回放验证：running 态显示 5 条 Activity 与实时
+  `6m 12s`，2 条 Candidate 完全不可见；completed 态同一页面一次性展示全部 2 条
+  Candidate。两态外层高度不变，滚动条只出现在 Conversation 内。
+- 最终验收：Core 24 suites / 240 tests、App 12 suites / 80 tests、Core/App
+  production build 与 `git diff --check` 全通过。App composite typecheck 仍只有既有
+  跨 workspace / JSON include 的 TS6307，production build 和 Jest TypeScript
+  编译没有新增错误。

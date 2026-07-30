@@ -2,6 +2,7 @@ import type {
   GenerateProgress,
   ProjectGenerationResponse,
 } from '../../core/src/commands/rules-generate.js'
+import type { AgentActivity } from '../../core/src/llm.js'
 import {
   createRunId,
   isActiveRun,
@@ -31,6 +32,7 @@ export interface EvidenceSnapshot {
 
 export type GenerationWorkerEvent =
   | { kind: 'assistant_delta'; text: string }
+  | { kind: 'activity'; activity: AgentActivity }
   | { kind: 'retry'; message: string }
   | { kind: 'phase'; progress: GenerateProgress }
   | { kind: 'candidate_count'; count: number }
@@ -283,6 +285,18 @@ export class GenerationController {
         }
       } else if (event.kind === 'evidence_ready') {
         this.state = { ...this.state, evidence: event.snapshot }
+      } else if (event.kind === 'activity') {
+        event = {
+          kind: 'activity',
+          activity: {
+            id: event.activity.id.slice(0, 256),
+            kind: event.activity.kind,
+            label: event.activity.label.slice(0, 128),
+            ...(event.activity.detail
+              ? { detail: event.activity.detail.slice(0, 1_000) }
+              : {}),
+          },
+        }
       } else if (event.kind === 'project_response') {
         const response = boundedProjectResponse(event.response)
         this.state = {
@@ -397,6 +411,9 @@ function cloneWorkerEvent(
   }
   if (event.kind === 'phase') {
     return { kind: event.kind, progress: { ...event.progress } }
+  }
+  if (event.kind === 'activity') {
+    return { kind: event.kind, activity: { ...event.activity } }
   }
   return { ...event }
 }

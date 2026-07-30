@@ -211,8 +211,16 @@ export interface ProjectGenerationResponse {
   candidates: ProjectGenerationCandidate[]
 }
 
+export interface AgentActivity {
+  id: string
+  kind: 'thinking' | 'read' | 'search' | 'shell' | 'tool'
+  label: string
+  detail?: string
+}
+
 export type GenerationWorkerEvent =
   | { kind: 'assistant_delta'; text: string }
+  | { kind: 'activity'; activity: AgentActivity }
   | { kind: 'retry'; message: string }
   | { kind: 'phase'; progress: GenerateProgress }
   | { kind: 'candidate_count'; count: number }
@@ -306,6 +314,8 @@ export interface ChatThread extends ChatThreadSummary {
     seq: number
     at: string
     kind: string
+    id?: string
+    label?: string
     detail?: string
   }>
   messages: ChatMessage[]

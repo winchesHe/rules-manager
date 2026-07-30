@@ -43,6 +43,28 @@ describe('home workflow layout', () => {
     expect(ipcSource).toContain("ipcMain.handle('chat.read'")
   })
 
+  it('Chat 固定 viewport 高度并把滚动限制在三段内容区', () => {
+    const appSource = read('App.tsx')
+    const chatSource = read('views/ChatView.tsx')
+
+    expect(appSource).toContain("activeView === 'chat'")
+    expect(appSource).toContain("'overflow-y-hidden")
+    expect(chatSource).toContain('h-[calc(100vh-4rem)]')
+    expect(chatSource).toContain('overflow-hidden')
+    expect(chatSource.match(/overflow-y-auto/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
+  })
+
+  it('Chat 直接展示 Activity timeline、elapsed，并只在 completed 后展示 Rules', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).not.toContain('<details')
+    expect(source).toContain('ActivityTimeline')
+    expect(source).toContain('formatElapsed')
+    expect(source).toContain('shouldFollowStream')
+    expect(source).toContain("thread.status === 'completed'")
+    expect(source).toContain('visibleProjectResponses')
+  })
+
   it('Scan 拆分最近结果与新建扫描配置', () => {
     const source = read('views/OverviewView.tsx')
     expect(source).toContain("'latest'")

@@ -83,6 +83,21 @@
 - 第一版不提供 Composer、通用 New chat、连续追问或 Session Summary。
 - Chat 可见正文使用 FS-first 本地持久化；隐藏 Prompt、Session 原文、tool 参数和 tool output 不进入 Chat 文件。
 
+### Chat Agent Stream
+
+- Chat 页面固定为 viewport 内可用高度，页面级容器不滚动；Thread Rail、
+  Conversation 和 Context 分别拥有内部滚动区。
+- Agent 执行过程参照 Paseo P1，使用无卡片的紧凑 Activity timeline。
+  Provider 事件统一映射为 Thinking / Read / Search / Shell / Tool，不直接渲染
+  Provider 原始 payload。
+- Activity 摘要只允许单行、定长的可见上下文：文件路径、搜索词、命令摘要或
+  tool 名称。tool output、原始 input 对象、隐藏 Prompt 和 Session 原文禁止进入
+  Renderer 或 Chat 文件。
+- 运行中显示 elapsed time；Conversation 仅在用户仍接近底部时自动跟随新事件，
+  用户主动上滚后不得抢夺阅读位置。
+- Project response 可以在 Main 中逐项目 checkpoint，但 Candidate Artifact 只有在
+  Thread `completed` 后才一次性全部展示。取消、失败或中断不展示半成品 Rules。
+
 ## 组件映射
 
 | 场景 | HeroUI 组件 | 说明 |

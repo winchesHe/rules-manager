@@ -213,6 +213,44 @@ describe('GenerationController', () => {
     }))
   })
 
+  it('保留结构化 Agent Activity 供 Chat 流式恢复', () => {
+    const worker = new FakeWorker()
+    const controller = new GenerationController(() => worker, () => undefined)
+    controller.start({ mode: 'recent', projects: [] })
+
+    worker.emit('message', {
+      type: 'event',
+      event: {
+        kind: 'activity',
+        activity: {
+          id: 'tool-1',
+          kind: 'read',
+          label: 'Read',
+          detail: 'packages/app/renderer/src/views/ChatView.tsx',
+        },
+      },
+    })
+
+    const first = controller.status()
+    expect(first.events).toHaveLength(1)
+    expect(first.events[0].event).toEqual({
+      kind: 'activity',
+      activity: {
+        id: 'tool-1',
+        kind: 'read',
+        label: 'Read',
+        detail: 'packages/app/renderer/src/views/ChatView.tsx',
+      },
+    })
+    if (first.events[0].event.kind === 'activity') {
+      first.events[0].event.activity.detail = 'mutated'
+    }
+    expect(controller.status().events[0].event).toMatchObject({
+      kind: 'activity',
+      activity: { detail: 'packages/app/renderer/src/views/ChatView.tsx' },
+    })
+  })
+
   it('取消时保持互斥，Worker 确认后进入 cancelled 且不报告失败', () => {
     const worker = new FakeWorker()
     const events: unknown[] = []

@@ -154,3 +154,92 @@ Rules 点击 Start Generate
 → 重启 App，完整可见正文仍可阅读
 → 点击 Open generated rules，进入 Rules 审核
 ```
+
+## Follow-up：Paseo P1 流式 Activity 与完成态 Rules（2026-07-30）
+
+本轮以 Paseo P1 的 Agent Stream 为交互参考，但只复用适合 Rules Generation
+的最小语义：Provider 事件先归一化为 Activity，再由 Chat 增量展示。不会把
+Provider 原始 event、tool input 对象或 tool output 直接交给 Renderer。
+
+### 1. 固定 Chat 工作区高度
+
+只调整 Chat 页容器与三个内部滚动区，不改变其他一级页面。
+
+观察点：
+
+- Chat 页面高度固定为当前 viewport 扣除页面 padding 后的可用高度。
+- Thread Rail、Conversation、Run context 各自滚动，页面本身不随消息增长。
+- 窄窗口不出现页面级横向滚动。
+
+验证方式：
+
+- Renderer 布局契约测试锁定 `h-[calc(100vh-4rem)]`、`overflow-hidden` 和
+  三个 `min-h-0 / overflow-y-auto` 内部滚动区。
+- 真实 Electron 窗口分别验证桌面宽度和窄窗口。
+
+### 2. 打通 Provider → Worker → Controller → Chat Activity 最小链路
+
+只新增结构化 `activity` 流事件，类型限定为 `thinking / read / search /
+shell / tool`。Claude 从 reasoning/tool-use 消息归一化，Codex 从 JSONL
+item 事件归一化；未知结构安全忽略。
+
+观察点：
+
+- Agent 运行时逐行出现 Thinking、Read、Search、Shell 等上下文。
+- 每行只展示动作名称和经过截断的单行摘要。
+- tool output、原始 input 对象、隐藏 Prompt 和 raw assistant JSON 不进入
+  Chat 文件。
+
+验证方式：
+
+- Core 单元测试覆盖 Claude 与 Codex 典型事件、未知事件和摘要截断。
+- Worker / Controller 测试覆盖 activity 转发、retain 和 defensive copy。
+- ChatStore 测试覆盖可见摘要恢复，并断言 tool output / raw output 不落盘。
+
+### 3. Paseo 风格 Timeline、计时与自动跟随
+
+只重做 Assistant Turn 内的 Activity 展示，不增加 Composer 或通用聊天能力。
+
+观察点：
+
+- Activity 默认展开为无卡片的紧凑时间线，不再藏在 `<details>`。
+- 运行中底部显示同步 loading 标记和从 `startedAt` 计算的 elapsed time。
+- 用户位于底部附近时新 Activity 自动跟随；主动上滚后保持阅读位置。
+
+验证方式：
+
+- 纯函数测试覆盖 elapsed 格式与“接近底部才跟随”的判定。
+- Renderer 契约测试锁定 Activity 行和滚动锚点。
+- 真实运行或隔离事件回放验证增量追加与滚动行为。
+
+### 4. Rules 只在 Run 完成后一次性展示
+
+Controller 仍可逐项目接收并 checkpoint 结构化响应，但 Renderer 在
+`thread.status !== completed` 时不渲染任何 Candidate Artifact。
+
+观察点：
+
+- running / cancelling / failed / cancelled / interrupted 均不显示半成品 Rules。
+- completed 后同一帧显示该 Run 的全部 Candidate。
+- completed 且无 Candidate 时显示明确空状态。
+
+验证方式：
+
+- 视图模型单元测试覆盖所有 Thread 状态的可见 Candidate 集合。
+- ChatStore / Controller 既有增量 checkpoint 测试保持通过，证明只改变展示
+  时机，没有破坏完成数据。
+
+### 5. 全量回归与上下文同步
+
+观察点：
+
+- Chat 切换、重启恢复、Rules 审核出口和 Generation History 不回归。
+- 新旧 Thread 均可读取；旧 Activity 缺少结构化字段时安全降级。
+
+验证方式：
+
+- `npm test`
+- `npm run build`
+- Renderer TypeScript 检查
+- `git diff --check`
+- Electron 真实窗口验收后追加 `memory/process.md`

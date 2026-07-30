@@ -199,6 +199,63 @@ describe('getStructuredResponse', () => {
     expect(events).toEqual([{ type: 'assistant_delta', text: '[]' }])
   })
 
+  it('Claude 把 thinking 与 tool use 归一化为可见 Activity 摘要', async () => {
+    queryMock.mockReturnValue((async function* () {
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'thinking', thinking: '' },
+        },
+      }
+      yield {
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tool-read-1',
+            name: 'Read',
+            input: {
+              file_path: '/repo/AGENTS.md',
+              content: 'must never be exposed',
+            },
+          }],
+        },
+      }
+      yield { type: 'result', subtype: 'success', result: '[]' }
+    })())
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toContainEqual({
+      type: 'activity',
+      activity: {
+        id: 'claude-thinking-0',
+        kind: 'thinking',
+        label: 'Thinking',
+      },
+    })
+    expect(events).toContainEqual({
+      type: 'activity',
+      activity: {
+        id: 'tool-read-1',
+        kind: 'read',
+        label: 'Read',
+        detail: '/repo/AGENTS.md',
+      },
+    })
+    expect(JSON.stringify(events)).not.toContain('must never be exposed')
+  })
+
   it('Codex 逐行解析 JSONL delta，并用 completed message 作为最终输出', async () => {
     const child = codexProcess([
       {
@@ -256,5 +313,78 @@ describe('getStructuredResponse', () => {
     )
 
     expect(events).toEqual([{ type: 'assistant_delta', text: '[]' }])
+  })
+
+  it('Codex 把 reasoning、搜索命令和 web search 逐行归一化为 Activity', async () => {
+    const child = codexProcess([
+      {
+        type: 'item.started',
+        item: { id: 'reason-1', type: 'reasoning', text: 'private chain of thought' },
+      },
+      {
+        type: 'item.started',
+        item: {
+          id: 'command-1',
+          type: 'command_execution',
+          command: 'rtk rg -n "ChatView" packages/app',
+          aggregated_output: 'private tool output',
+        },
+      },
+      {
+        type: 'item.started',
+        item: {
+          id: 'search-1',
+          type: 'web_search',
+          query: 'Codex JSONL events',
+          result: 'private search result',
+        },
+      },
+      {
+        type: 'item.completed',
+        item: { type: 'agent_message', text: '[]' },
+      },
+    ])
+    spawnMock.mockReturnValue(child)
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([
+      {
+        type: 'activity',
+        activity: {
+          id: 'reason-1',
+          kind: 'thinking',
+          label: 'Thinking',
+        },
+      },
+      {
+        type: 'activity',
+        activity: {
+          id: 'command-1',
+          kind: 'search',
+          label: 'Search',
+          detail: 'rtk rg -n "ChatView" packages/app',
+        },
+      },
+      {
+        type: 'activity',
+        activity: {
+          id: 'search-1',
+          kind: 'search',
+          label: 'Search',
+          detail: 'Codex JSONL events',
+        },
+      },
+      { type: 'assistant_delta', text: '[]' },
+    ])
+    expect(JSON.stringify(events)).not.toContain('private')
   })
 })

@@ -44,7 +44,20 @@ function runningStatus(runId: string): GenerationStatus {
         evidenceRefs: ['session-1:0'],
       }],
     }],
-    events: [],
+    events: [{
+      runId,
+      seq: 1,
+      at: '2026-07-30T00:00:01.500Z',
+      event: {
+        kind: 'activity',
+        activity: {
+          id: 'read-1',
+          kind: 'read',
+          label: 'Read',
+          detail: 'packages/app/renderer/src/views/ChatView.tsx',
+        },
+      },
+    }],
     output: 'raw provider output must not be persisted',
     outputTruncated: false,
     startedAt: '2026-07-30T00:00:00.000Z',
@@ -93,6 +106,12 @@ describe('ChatStore', () => {
       status: 'running',
       evidence: { totalSessions: 1 },
       projectResponses: [{ projectSlug: 'rules-manager' }],
+      activities: [{
+        id: 'read-1',
+        kind: 'read',
+        label: 'Read',
+        detail: 'packages/app/renderer/src/views/ChatView.tsx',
+      }],
       messages: [{
         role: 'user',
       }, {
