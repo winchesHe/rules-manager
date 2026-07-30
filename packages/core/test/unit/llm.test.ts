@@ -218,6 +218,20 @@ describe('getStructuredResponse', () => {
     )).resolves.toEqual(rules)
   })
 
+  it('Claude 在空数组前附带说明文字时仍返回零条候选', async () => {
+    queryMock.mockReturnValue(response([
+      'Evidence 中没有明确要求、偏好、纠正或规则信号。',
+      '',
+      '[]',
+    ].join('\n')))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual([])
+  })
+
   it('Claude YAML block scalar 可包含未转义的双引号', async () => {
     queryMock.mockReturnValue(response([
       '- scope: project',

@@ -584,10 +584,10 @@ export async function getStructuredResponse<T>(
               options.fastMode,
               { ...options, outputSchemaPath },
             )
-        const structuredOutput = provider === 'claude'
-          ? extractClaudeStructuredOutput(rawOutput)
-          : extractJson(rawOutput)
-        return schema.parse(structuredOutput)
+        if (provider === 'claude') {
+          return extractClaudeStructuredOutput(rawOutput, schema)
+        }
+        return schema.parse(extractJson(rawOutput))
       } catch (error) {
         if (isRunCancelledError(error) || options.signal?.aborted) {
           throw new RunCancelledError()
@@ -619,28 +619,38 @@ function promptWithYamlSchema(
   ].join('\n')
 }
 
-function extractClaudeStructuredOutput(output: string): unknown {
+function extractClaudeStructuredOutput<T>(
+  output: string,
+  schema: z.ZodType<T>,
+): T {
   const trimmed = output.trim()
   const fenced = trimmed.match(/```(?:yaml|yml)?\s*([\s\S]*?)```/i)?.[1]?.trim()
-  const candidates = [fenced, trimmed].filter(
-    (value): value is string => Boolean(value),
-  )
-  let lastError: unknown
+  const candidates = [
+    fenced,
+    trimmed,
+    ...balancedJsonSlices(trimmed, '[', ']'),
+    ...balancedJsonSlices(trimmed, '{', '}'),
+  ].filter((value, index, values): value is string => (
+    Boolean(value) && values.indexOf(value) === index
+  ))
+  let lastParseError: unknown
+  let lastValidationError: z.ZodError | undefined
   for (const candidate of candidates) {
     try {
       const parsed = parseYaml(candidate)
-      if (parsed !== undefined) return parsed
+      if (parsed === undefined) continue
+      const validated = schema.safeParse(parsed)
+      if (validated.success) return validated.data
+      lastValidationError = validated.error
     } catch (error) {
-      lastError = error
+      lastParseError = error
     }
   }
-  try {
-    return extractJson(trimmed)
-  } catch (jsonError) {
-    const yamlMessage = lastError instanceof Error ? lastError.message : '未找到 YAML'
-    const jsonMessage = jsonError instanceof Error ? jsonError.message : String(jsonError)
-    throw new Error(`结构化输出解析失败：YAML ${yamlMessage}；${jsonMessage}`)
-  }
+  if (lastValidationError) throw lastValidationError
+  const message = lastParseError instanceof Error
+    ? lastParseError.message
+    : '未找到可解析的 YAML 或 JSON'
+  throw new Error(`结构化输出解析失败：${message}`)
 }
 
 function isDeterministicLlmFailure(error: unknown): boolean {

@@ -1411,3 +1411,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 251 tests、App 12 suites / 83 tests、Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Claude 空候选混合输出解析修复（2026-07-30）
+
+- 真实 Recent activity Run `ee0ae394-5fdc-4a37-a9b3-4b662992fa91` 的首个
+  Project 正常完成 manifest / Grep / Read，但 Claude 在空候选数组 `[]` 前附加了
+  一段结论说明。YAML parser 会把整段混合文本解析成合法字符串，旧实现只判断
+  `parsed !== undefined`，因此字符串提前返回并触发 Zod `expected array`。
+- Claude 结构化解析改为 Schema-aware candidate selection：对 fenced 内容、完整
+  回复及平衡括号提取的内嵌 JSON 数组 / 对象逐一做 YAML parse + Zod safeParse，
+  只返回真正符合调用方 Schema 的候选。说明文字会被跳过，内嵌 `[]` 可正常表示
+  零条规则；纯 YAML 候选和多 JSON 片段兼容行为保持不变。
+- 新增真实失败形态回归测试：“说明文字 + 空行 + `[]`”必须解析为零条候选；
+  非结构化字符串仍按确定性 Schema 错误失败，不触发无意义重试。
+- 使用真实 `agent-rules-manager` 再次执行 Claude dry-run：28 个索引 Session
+  过滤后形成 10 excerpts / 1 batch，Provider 正常完成并返回 0 条候选，没有写库，
+  不再出现 `expected array`。
+- 最终验收：Core 25 suites / 252 tests、App 12 suites / 83 tests、Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。
