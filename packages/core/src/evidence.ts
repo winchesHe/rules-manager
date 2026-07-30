@@ -144,6 +144,20 @@ function priority(text: string): number {
   return PRIORITY_KEYWORDS.reduce((score, keyword) => score + (lower.includes(keyword) ? 1 : 0), 0)
 }
 
+function isInternalRulesGenerationSession(session: RawEvidenceSession): boolean {
+  return session.messages.some((message) => {
+    if (roleOf(message) !== 'user') return false
+    const { text } = extractContent(message.content)
+    const normalized = text.trimStart()
+    return normalized.startsWith('根据 evidence 提取可复用的 agent 规则候选。')
+      || (
+        normalized.startsWith('为项目 ')
+        && normalized.includes('提取可复用的 agent 规则候选。')
+        && normalized.includes('Evidence 不在本 Prompt 中')
+      )
+  })
+}
+
 export function buildEvidenceBundle(
   projectSlug: string,
   sessions: RawEvidenceSession[],
@@ -158,7 +172,10 @@ export function buildEvidenceBundle(
 
   const excerpts: EvidenceExcerpt[] = []
   let roundCount = 0
-  for (const session of sessions) {
+  const sourceSessions = sessions.filter(
+    (session) => !isInternalRulesGenerationSession(session),
+  )
+  for (const session of sourceSessions) {
     const normalized = session.messages
       .map((message, messageIndex) => ({ message, messageIndex, role: roleOf(message) }))
       .filter((item): item is typeof item & { role: 'user' | 'assistant' } => item.role !== undefined)
@@ -205,7 +222,7 @@ export function buildEvidenceBundle(
 
   return {
     projectSlug,
-    sourceSessions: sessions.map((session) => session.sessionId),
+    sourceSessions: sourceSessions.map((session) => session.sessionId),
     roundCount,
     excerpts,
   }

@@ -49,7 +49,7 @@ describe('getStructuredResponse', () => {
     spawnMock.mockReset()
   })
 
-  it('Claude 使用只读多回合与原生 JSON Schema，并校验 structured_output', async () => {
+  it('Claude 使用只读多回合与短 Schema 指令，并校验 structured_output', async () => {
     const structured = [{
       scope: 'project',
       project_slug: 'demo',
@@ -87,17 +87,17 @@ describe('getStructuredResponse', () => {
         tools: ['Read', 'Grep', 'Glob'],
         allowedTools: ['Read', 'Grep', 'Glob'],
         permissionMode: 'dontAsk',
-        outputFormat: {
-          type: 'json_schema',
-          schema: expect.any(Object),
-        },
       },
     })
-    expect((queryMock.mock.calls[0][0] as { prompt: string }).prompt).toBe('evidence')
-    const options = (queryMock.mock.calls[0][0] as {
-      options: { outputFormat: { schema: Record<string, unknown> } }
-    }).options
-    expect(options.outputFormat.schema).not.toHaveProperty('$schema')
+    const request = queryMock.mock.calls[0][0] as {
+      prompt: string
+      options: Record<string, unknown>
+    }
+    expect(request.options).not.toHaveProperty('outputFormat')
+    expect(request.prompt).toContain('evidence')
+    expect(request.prompt).toContain('只输出语义符合以下 JSON Schema 的 YAML')
+    expect(request.prompt).toContain('"confidence_level"')
+    expect(request.prompt).not.toContain('"$schema"')
   })
 
   it('Fast Mode 关闭时仍显式覆盖 Claude session settings', async () => {
@@ -174,8 +174,70 @@ describe('getStructuredResponse', () => {
 
     await expect(
       getStructuredResponse('private evidence body', candidateRulesSchema, 'claude'),
-    ).rejects.toThrow('JSON 解析失败')
+    ).rejects.toThrow('expected array')
     expect(queryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('Claude 回复包含多个 JSON 片段时提取第一个独立合法数组', async () => {
+    const first = [{
+      scope: 'project',
+      project_slug: 'demo',
+      rule_text: 'Always run tests',
+      confidence_level: 'high',
+      reasoning: 'Explicit requirement',
+      evidence_refs: ['s1:0'],
+    }]
+    queryMock.mockReturnValue(response(
+      `${JSON.stringify(first)}\nAdditional diagnostic: []`,
+    ))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual(first)
+  })
+
+  it('Claude 回复先包含诊断对象时继续寻找符合 Zod Schema 的数组', async () => {
+    const rules = [{
+      scope: 'project',
+      project_slug: 'demo',
+      rule_text: 'Always run tests',
+      confidence_level: 'high',
+      reasoning: 'Explicit requirement',
+      evidence_refs: ['s1:0'],
+    }]
+    queryMock.mockReturnValue(response(
+      `${JSON.stringify({ status: 'analyzed' })}\n${JSON.stringify(rules)}`,
+    ))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual(rules)
+  })
+
+  it('Claude YAML block scalar 可包含未转义的双引号', async () => {
+    queryMock.mockReturnValue(response([
+      '- scope: project',
+      '  project_slug: demo',
+      '  rule_text: |-',
+      '    重点股票必须写"名称 + 6位代码"',
+      '  confidence_level: high',
+      '  reasoning: |-',
+      '    用户明确要求该格式。',
+      '  evidence_refs:',
+      '    - s1:0',
+    ].join('\n')))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual([expect.objectContaining({
+      rule_text: '重点股票必须写"名称 + 6位代码"',
+    })])
   })
 
   it('Prompt too long 属于确定性失败，不原样重试', async () => {
@@ -211,12 +273,12 @@ describe('getStructuredResponse', () => {
     )).resolves.toEqual([])
 
     expect(queryMock).toHaveBeenCalledTimes(2)
-    expect(queryMock.mock.calls.map(
+    const prompts = queryMock.mock.calls.map(
       (call) => (call[0] as { prompt: string }).prompt,
-    )).toEqual([
-      'read manifest.json',
-      'read manifest.json',
-    ])
+    )
+    expect(prompts[0]).toBe(prompts[1])
+    expect(prompts[0]).toContain('read manifest.json')
+    expect(prompts[0]).toContain('只输出语义符合以下 JSON Schema 的 YAML')
     expect(events).toContainEqual({
       type: 'retry',
       message: 'temporary provider unavailable',

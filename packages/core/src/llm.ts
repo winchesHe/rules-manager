@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 import type { LlmEffort, LlmProvider } from './config.js'
 import { isRunCancelledError, RunCancelledError, throwIfAborted } from './abort.js'
@@ -208,7 +209,6 @@ async function callClaude(
     LlmRequestOptions,
     'signal' | 'onEvent' | 'cwd' | 'maxTurns' | 'tools'
   > = {},
-  outputSchema?: Record<string, unknown>,
 ): Promise<string> {
   throwIfAborted(requestOptions.signal)
   const { query } = await import('@anthropic-ai/claude-agent-sdk')
@@ -225,14 +225,6 @@ async function callClaude(
           tools: requestOptions.tools,
           allowedTools: requestOptions.tools,
           permissionMode: 'dontAsk' as const,
-        }
-      : {}),
-    ...(outputSchema
-      ? {
-          outputFormat: {
-            type: 'json_schema' as const,
-            schema: outputSchema,
-          },
         }
       : {}),
     ...(model ? { model } : {}),
@@ -483,13 +475,12 @@ function callCodex(
 function extractJson(output: string): unknown {
   const trimmed = output.trim()
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim()
-  const candidates = [trimmed, fenced].filter((value): value is string => Boolean(value))
-  const arrayStart = trimmed.indexOf('[')
-  const arrayEnd = trimmed.lastIndexOf(']')
-  if (arrayStart >= 0 && arrayEnd > arrayStart) candidates.push(trimmed.slice(arrayStart, arrayEnd + 1))
-  const objectStart = trimmed.indexOf('{')
-  const objectEnd = trimmed.lastIndexOf('}')
-  if (objectStart >= 0 && objectEnd > objectStart) candidates.push(trimmed.slice(objectStart, objectEnd + 1))
+  const candidates = [
+    trimmed,
+    fenced,
+    ...balancedJsonSlices(trimmed, '[', ']'),
+    ...balancedJsonSlices(trimmed, '{', '}'),
+  ].filter((value): value is string => Boolean(value))
 
   let lastError: unknown
   for (const candidate of candidates) {
@@ -503,6 +494,46 @@ function extractJson(output: string): unknown {
   throw new Error(`JSON 解析失败：${message}`)
 }
 
+function balancedJsonSlices(
+  value: string,
+  open: '[' | '{',
+  close: ']' | '}',
+): string[] {
+  const slices: string[] = []
+  let start = -1
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\') {
+        escaped = true
+      } else if (character === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (character === '"') {
+      inString = true
+      continue
+    }
+    if (character === open) {
+      if (depth === 0) start = index
+      depth++
+    } else if (character === close && depth > 0) {
+      depth--
+      if (depth === 0 && start >= 0) {
+        slices.push(value.slice(start, index + 1))
+        start = -1
+      }
+    }
+  }
+  return slices
+}
+
 export async function getStructuredResponse<T>(
   prompt: string,
   schema: z.ZodType<T>,
@@ -514,6 +545,9 @@ export async function getStructuredResponse<T>(
   const maxRetries = options.maxRetries ?? 0
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error('maxRetries 必须是非负整数')
   const outputSchema = providerJsonSchema(schema)
+  const providerPrompt = provider === 'claude'
+    ? promptWithYamlSchema(prompt, outputSchema)
+    : prompt
   let temporarySchemaDirectory: string | undefined
   let outputSchemaPath = options.outputSchemaPath
   if (provider === 'codex') {
@@ -537,12 +571,11 @@ export async function getStructuredResponse<T>(
       try {
         const rawOutput = provider === 'claude'
           ? await callClaude(
-              prompt,
+              providerPrompt,
               model,
               effort,
               options.fastMode,
               options,
-              outputSchema,
             )
           : await callCodex(
               prompt,
@@ -551,7 +584,10 @@ export async function getStructuredResponse<T>(
               options.fastMode,
               { ...options, outputSchemaPath },
             )
-        return schema.parse(extractJson(rawOutput))
+        const structuredOutput = provider === 'claude'
+          ? extractClaudeStructuredOutput(rawOutput)
+          : extractJson(rawOutput)
+        return schema.parse(structuredOutput)
       } catch (error) {
         if (isRunCancelledError(error) || options.signal?.aborted) {
           throw new RunCancelledError()
@@ -569,6 +605,42 @@ export async function getStructuredResponse<T>(
   }
   const message = lastError instanceof Error ? lastError.message : String(lastError)
   throw new Error(`结构化输出在 ${maxRetries} 次重试后仍无效：${message}`)
+}
+
+function promptWithYamlSchema(
+  prompt: string,
+  outputSchema: Record<string, unknown>,
+): string {
+  return [
+    prompt,
+    '最终只输出语义符合以下 JSON Schema 的 YAML，根节点必须是数组，不要添加 Markdown fence 或其他说明。',
+    'rule_text 和 reasoning 必须使用 YAML block scalar（|-），避免正文中的双引号破坏结构：',
+    JSON.stringify(outputSchema),
+  ].join('\n')
+}
+
+function extractClaudeStructuredOutput(output: string): unknown {
+  const trimmed = output.trim()
+  const fenced = trimmed.match(/```(?:yaml|yml)?\s*([\s\S]*?)```/i)?.[1]?.trim()
+  const candidates = [fenced, trimmed].filter(
+    (value): value is string => Boolean(value),
+  )
+  let lastError: unknown
+  for (const candidate of candidates) {
+    try {
+      const parsed = parseYaml(candidate)
+      if (parsed !== undefined) return parsed
+    } catch (error) {
+      lastError = error
+    }
+  }
+  try {
+    return extractJson(trimmed)
+  } catch (jsonError) {
+    const yamlMessage = lastError instanceof Error ? lastError.message : '未找到 YAML'
+    const jsonMessage = jsonError instanceof Error ? jsonError.message : String(jsonError)
+    throw new Error(`结构化输出解析失败：YAML ${yamlMessage}；${jsonMessage}`)
+  }
 }
 
 function isDeterministicLlmFailure(error: unknown): boolean {

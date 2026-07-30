@@ -1382,3 +1382,32 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 247 tests、App 12 suites / 83 tests、Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Rules Evidence 选择性读取与 Claude 网关兼容修正（2026-07-30）
+
+- “完整收集 Evidence”与“模型全量加载 Evidence”解耦：Agent 先读取绝对路径
+  manifest，再用 Glob / Grep 搜索明确要求、纠正、偏好和重复信号，只对命中位置
+  局部 Read；Prompt 明确禁止依次读取全部 batch。
+- 单项目 turns 预算从随 batch 数增长改为固定上限。真实验证表明 16 turns 会在多组
+  选择性搜索后无法完成输出，最终定为 32 turns；读取范围仍由选择性检索约束。
+- 定位到 14.4 MB `agent-rules-manager` Evidence 的来源不是用户对话，而是 Rules
+  Generation 自己创建的 Claude Provider Session：旧 Prompt 内嵌完整 Evidence，
+  扫描后又被下一轮收集，形成自我回灌。Evidence 构建现在识别内部生成 Prompt
+  签名并排除整个 Session，包括其 Assistant 输出。
+- 污染过滤后，问题项目由 28 个索引 Session 中的约 14.4 MB / 52 excerpts 降为
+  3 个真实 Session、约 2 KB / 10 excerpts；Recent cutoff 下仅 2 个 Session、
+  58 bytes。全部原始 Session 文件仍保留，只是不作为 Rules Evidence。
+- 同一 Claude Agent SDK / inference gateway 的最小对照确认：带
+  `outputFormat: json_schema` 的短 Prompt 约 3 分钟后返回 502；不带原生 Schema
+  时 3.2 秒成功返回。因此 Codex 继续使用 `--output-schema`，Claude 改用短 YAML
+  输出契约，`rule_text` / `reasoning` 使用 block scalar，本地再做 YAML 解析和 Zod
+  校验。
+- JSON fallback 仍支持平衡括号扫描，可从多段输出中提取独立 JSON；Claude YAML
+  路径解决了正文包含未转义 ASCII 双引号导致的非法 JSON。
+- 真实 dry-run：`agent-rules-manager` 65 秒完成、0 候选；Recent 最大项目
+  `agent-workspace` 约 1.27 MB Evidence 产出 8 条候选；`ai-guanglinglu`
+  产出 10 条候选。均在 3–5 秒内出现 Thinking / Search / Read，未再出现 502、
+  Prompt too long、max-turns 或结构化解析失败。
+- 最终验收：Core 25 suites / 251 tests、App 12 suites / 83 tests、Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。

@@ -65,6 +65,36 @@ describe('buildEvidenceBundle', () => {
     expect(bundle.excerpts).toHaveLength(2)
     expect(bundle.excerpts.every((excerpt) => excerpt.frequency === 2)).toBe(true)
   })
+
+  it('排除 Rules Generation 自己创建的 Provider Session，避免 Evidence 自我回灌', () => {
+    const bundle = buildEvidenceBundle('demo', [
+      {
+        sessionId: 'internal-generation',
+        agent: 'claude',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              '根据 evidence 提取可复用的 agent 规则候选。',
+              JSON.stringify({ excerpts: [{ text: 'huge nested evidence' }] }),
+            ].join('\n'),
+          },
+          { role: 'assistant', content: 'generated rule output' },
+        ],
+      },
+      {
+        sessionId: 'real-conversation',
+        agent: 'claude',
+        messages: [{ role: 'user', content: '必须先运行测试' }],
+      },
+    ])
+
+    expect(bundle.sourceSessions).toEqual(['real-conversation'])
+    expect(bundle.excerpts).toHaveLength(1)
+    expect(bundle.excerpts[0].text).toBe('必须先运行测试')
+    expect(JSON.stringify(bundle)).not.toContain('huge nested evidence')
+    expect(JSON.stringify(bundle)).not.toContain('generated rule output')
+  })
 })
 
 describe('extractEvidence session 路由', () => {

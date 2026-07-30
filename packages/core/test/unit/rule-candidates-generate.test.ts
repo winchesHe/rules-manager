@@ -116,7 +116,16 @@ describe('runRulesGenerate', () => {
     )
     const prompt = generate.mock.calls[0][0]
     expect(prompt).toContain('manifest.json')
+    expect(prompt).toContain('优先使用 Glob 和 Grep')
+    expect(prompt).toContain('禁止依次或完整读取全部 batch')
+    expect(prompt).toContain('只对命中的相关位置使用 Read')
+    expect(prompt).not.toContain('读取 manifest.batches 列出的全部文件')
+    expect(prompt).not.toContain('完成全部 batch 阅读')
     expect(prompt).not.toContain('Always run tests')
+    expect(generate.mock.calls[0][5]).toEqual(expect.objectContaining({
+      maxTurns: 32,
+      tools: ['Read', 'Grep', 'Glob'],
+    }))
   })
 
   it('把指定 session 范围传给 evidence 提取', async () => {
