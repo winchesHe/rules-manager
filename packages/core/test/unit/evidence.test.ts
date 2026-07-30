@@ -28,7 +28,7 @@ describe('buildEvidenceBundle', () => {
     expect(JSON.stringify(bundle)).not.toContain('password=secret')
   })
 
-  it('默认只取最新 30 条用户或 assistant 消息', () => {
+  it('默认读取全部用户与 assistant 消息', () => {
     const messages = Array.from({ length: 35 }, (_, index) => ({
       role: index % 2 === 0 ? 'user' : 'assistant',
       content: `message-${index}`,
@@ -36,8 +36,8 @@ describe('buildEvidenceBundle', () => {
     })).reverse()
     const bundle = buildEvidenceBundle('demo', [{ sessionId: 's1', agent: 'codex', messages }])
 
-    expect(bundle.roundCount).toBe(30)
-    expect(bundle.excerpts.some((excerpt) => excerpt.text.includes('message-0'))).toBe(false)
+    expect(bundle.roundCount).toBe(35)
+    expect(bundle.excerpts.some((excerpt) => excerpt.text.includes('message-0'))).toBe(true)
     expect(bundle.excerpts.some((excerpt) => excerpt.text.includes('message-34'))).toBe(true)
     expect(bundle.excerpts.length).toBeGreaterThan(0)
   })
@@ -152,6 +152,46 @@ describe('extractEvidence session 路由', () => {
       expect(bundles[0].sourceSessions).toEqual(['s2'])
       expect(JSON.stringify(bundles)).toContain('second rule')
       expect(JSON.stringify(bundles)).not.toContain('first rule')
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('updatedSince 按 session 自身 updated_at 选择最近对话且排除 missing', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-evidence-updated-since-'))
+    const workspace = resolveWorkspace(home)
+    fs.mkdirSync(workspace.workspaceDir, { recursive: true })
+    const db = initDatabase(home)
+    const insert = db.prepare(`
+      INSERT INTO sessions (
+        id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+        status, first_seen_at, last_seen_at
+      ) VALUES (?, 'claude', ?, ?, 'demo', ?, ?, ?, '2026-07-01', '2026-07-30')
+    `)
+    for (const [id, updatedAt, status] of [
+      ['old', '2026-07-22T23:59:59.999Z', 'unchanged'],
+      ['boundary', '2026-07-23T00:00:00.000Z', 'unchanged'],
+      ['recent', '2026-07-29T12:00:00.000Z', 'updated'],
+      ['missing', '2026-07-30T00:00:00.000Z', 'missing'],
+    ]) {
+      const sourcePath = path.join(home, `${id}.jsonl`)
+      fs.writeFileSync(sourcePath, `${JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: `rule-${id}` },
+      })}\n`)
+      insert.run(id, sourcePath, `/tmp/${id}`, `hash-${id}`, updatedAt, status)
+    }
+    db.close()
+
+    try {
+      const bundles = await extractEvidence({
+        homeDir: home,
+        updatedSince: '2026-07-23T00:00:00.000Z',
+      })
+      expect(bundles).toHaveLength(1)
+      expect(bundles[0].sourceSessions).toEqual(['boundary', 'recent'])
+      expect(JSON.stringify(bundles)).not.toContain('rule-old')
+      expect(JSON.stringify(bundles)).not.toContain('rule-missing')
     } finally {
       fs.rmSync(home, { recursive: true, force: true })
     }

@@ -94,6 +94,24 @@ describe('agent session 获取逻辑重构', () => {
     expect(sessions[0].id).toBe('duplicate-provider-session')
   })
 
+  it('Claude 多文件 session 的 updatedAt 取最后一次文件活动时间', async () => {
+    const source = path.join(home, '.claude')
+    const sessionId = '019f8882-a360-7033-9b02-08100c51ca96'
+    const sessionDir = path.join(source, 'projects', '-tmp-project', sessionId)
+    const firstFile = path.join(sessionDir, 'first.jsonl')
+    const latestFile = path.join(sessionDir, 'latest.jsonl')
+    writeJsonl(firstFile, [{ type: 'user', message: { content: 'first' } }])
+    writeJsonl(latestFile, [{ type: 'assistant', message: { content: 'latest' } }])
+    const firstActivity = new Date('2026-07-20T00:00:00.000Z')
+    const latestActivity = new Date('2026-07-29T12:34:56.000Z')
+    fs.utimesSync(firstFile, firstActivity, firstActivity)
+    fs.utimesSync(latestFile, latestActivity, latestActivity)
+
+    const [session] = await claudeAdapter.discover(source)
+
+    expect(session.updatedAt).toBe(latestActivity.toISOString())
+  })
+
   it('Codex 同时递归扫描 active 与 archived rollout', async () => {
     const source = path.join(home, '.codex')
     const activeId = '019f8882-a360-7033-9b02-08100c51ca96'

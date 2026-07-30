@@ -2641,11 +2641,7 @@ function EvidenceExplorer({
     }
   }, [selectedSession])
 
-  const includedMessages = preview
-    ? snapshot.mode === 'full'
-      ? preview.messages
-      : preview.messages.slice(-(snapshot.rounds ?? 30))
-    : []
+  const includedMessages = preview?.messages ?? []
 
   return (
     <div className="grid grid-cols-[minmax(14rem,0.38fr)_minmax(0,1fr)] gap-5 max-md:grid-cols-1">
@@ -2753,11 +2749,7 @@ function EvidenceExplorer({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-foreground">{preview.sessionId}</span>
               <Chip size="sm" variant="soft">
-                {snapshot.mode === 'full'
-                  ? tr('counts.messages', { count: includedMessages.length })
-                  : tr('counts.latestIncluded', {
-                      count: Math.min(snapshot.rounds ?? 30, includedMessages.length),
-                    })}
+                {tr('counts.messages', { count: includedMessages.length })}
               </Chip>
             </div>
             <div className="max-h-[19rem] overflow-y-auto rounded-xl bg-background p-4">

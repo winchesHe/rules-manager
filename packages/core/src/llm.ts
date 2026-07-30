@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { z } from 'zod'
 import type { LlmEffort, LlmProvider } from './config.js'
 import { isRunCancelledError, RunCancelledError, throwIfAborted } from './abort.js'
@@ -19,6 +22,10 @@ export interface LlmRequestOptions {
   maxRetries?: number
   signal?: AbortSignal
   onEvent?: (event: LlmStreamEvent) => void
+  cwd?: string
+  maxTurns?: number
+  tools?: string[]
+  outputSchemaPath?: string
 }
 
 export type AgentActivityKind = 'thinking' | 'read' | 'search' | 'shell' | 'tool'
@@ -197,7 +204,11 @@ async function callClaude(
   model?: string,
   effort?: LlmEffort,
   fastMode?: boolean,
-  requestOptions: Pick<LlmRequestOptions, 'signal' | 'onEvent'> = {},
+  requestOptions: Pick<
+    LlmRequestOptions,
+    'signal' | 'onEvent' | 'cwd' | 'maxTurns' | 'tools'
+  > = {},
+  outputSchema?: Record<string, unknown>,
 ): Promise<string> {
   throwIfAborted(requestOptions.signal)
   const { query } = await import('@anthropic-ai/claude-agent-sdk')
@@ -205,9 +216,25 @@ async function callClaude(
   const forwardAbort = () => abortController.abort(requestOptions.signal?.reason)
   requestOptions.signal?.addEventListener('abort', forwardAbort, { once: true })
   const options = {
-    maxTurns: 1,
+    maxTurns: requestOptions.maxTurns ?? 1,
     includePartialMessages: true,
     abortController,
+    ...(requestOptions.cwd ? { cwd: requestOptions.cwd } : {}),
+    ...(requestOptions.tools
+      ? {
+          tools: requestOptions.tools,
+          allowedTools: requestOptions.tools,
+          permissionMode: 'dontAsk' as const,
+        }
+      : {}),
+    ...(outputSchema
+      ? {
+          outputFormat: {
+            type: 'json_schema' as const,
+            schema: outputSchema,
+          },
+        }
+      : {}),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode !== undefined ? { settings: { fastMode } } : {}),
@@ -303,7 +330,11 @@ async function callClaude(
         continue
       }
       if (message.type !== 'result') continue
-      if (message.subtype === 'success') result = message.result
+      if (message.subtype === 'success') {
+        result = message.structured_output === undefined
+          ? message.result
+          : JSON.stringify(message.structured_output)
+      }
       else errors = message.errors
     }
   } catch (error) {
@@ -326,7 +357,10 @@ function callCodex(
   model?: string,
   effort?: LlmEffort,
   fastMode?: boolean,
-  requestOptions: Pick<LlmRequestOptions, 'signal' | 'onEvent'> = {},
+  requestOptions: Pick<
+    LlmRequestOptions,
+    'signal' | 'onEvent' | 'cwd' | 'outputSchemaPath'
+  > = {},
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
@@ -343,6 +377,10 @@ function callCodex(
       '--skip-git-repo-check',
       '--sandbox',
       'read-only',
+      ...(requestOptions.cwd ? ['-C', requestOptions.cwd] : []),
+      ...(requestOptions.outputSchemaPath
+        ? ['--output-schema', requestOptions.outputSchemaPath]
+        : []),
       ...(model ? ['-m', model] : []),
       ...(effort ? ['-c', `model_reasoning_effort=${JSON.stringify(effort)}`] : []),
       ...(fastMode !== undefined
@@ -473,37 +511,84 @@ export async function getStructuredResponse<T>(
   effort?: LlmEffort,
   options: LlmRequestOptions = {},
 ): Promise<T> {
-  const maxRetries = options.maxRetries ?? 3
+  const maxRetries = options.maxRetries ?? 0
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error('maxRetries 必须是非负整数')
-  const schemaPrompt = `${prompt}\n\n只输出符合以下 JSON Schema 的 JSON，不要输出解释或 markdown：\nJSON Schema:\n${JSON.stringify(z.toJSONSchema(schema))}`
-  let retryContext = ''
+  const outputSchema = providerJsonSchema(schema)
+  let temporarySchemaDirectory: string | undefined
+  let outputSchemaPath = options.outputSchemaPath
+  if (provider === 'codex') {
+    if (!outputSchemaPath) {
+      temporarySchemaDirectory = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'memory-manager-schema-'),
+      )
+      outputSchemaPath = path.join(temporarySchemaDirectory, 'output.schema.json')
+    } else {
+      fs.mkdirSync(path.dirname(outputSchemaPath), { recursive: true })
+    }
+    fs.writeFileSync(outputSchemaPath, `${JSON.stringify(outputSchema, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
+  }
   let lastError: unknown
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    throwIfAborted(options.signal)
-    const request = `${schemaPrompt}${retryContext}`
-    let rawOutput = ''
-    try {
-      rawOutput = provider === 'claude'
-        ? await callClaude(request, model, effort, options.fastMode, options)
-        : await callCodex(request, model, effort, options.fastMode, options)
-      return schema.parse(extractJson(rawOutput))
-    } catch (error) {
-      if (isRunCancelledError(error) || options.signal?.aborted) {
-        throw new RunCancelledError()
-      }
-      lastError = error
-      const message = error instanceof z.ZodError
-        ? JSON.stringify(error.issues)
-        : error instanceof Error ? error.message : String(error)
-      const outputSnippet = rawOutput.length > 0
-        ? `\n你上次的原始输出前 300 字符：\n${rawOutput.slice(0, 300)}`
-        : ''
-      retryContext = `\n\n上次输出无效：${message}${outputSnippet}\n请只输出合法 JSON 数组，不要有任何其他文字。`
-      if (attempt < maxRetries) {
+  try {
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      throwIfAborted(options.signal)
+      try {
+        const rawOutput = provider === 'claude'
+          ? await callClaude(
+              prompt,
+              model,
+              effort,
+              options.fastMode,
+              options,
+              outputSchema,
+            )
+          : await callCodex(
+              prompt,
+              model,
+              effort,
+              options.fastMode,
+              { ...options, outputSchemaPath },
+            )
+        return schema.parse(extractJson(rawOutput))
+      } catch (error) {
+        if (isRunCancelledError(error) || options.signal?.aborted) {
+          throw new RunCancelledError()
+        }
+        lastError = error
+        if (isDeterministicLlmFailure(error) || attempt >= maxRetries) throw error
+        const message = error instanceof Error ? error.message : String(error)
         options.onEvent?.({ type: 'retry', message, attempt: attempt + 1 })
       }
+    }
+  } finally {
+    if (temporarySchemaDirectory) {
+      fs.rmSync(temporarySchemaDirectory, { recursive: true, force: true })
     }
   }
   const message = lastError instanceof Error ? lastError.message : String(lastError)
   throw new Error(`结构化输出在 ${maxRetries} 次重试后仍无效：${message}`)
+}
+
+function isDeterministicLlmFailure(error: unknown): boolean {
+  if (error instanceof z.ZodError) return true
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return [
+    'json 解析失败',
+    'prompt is too long',
+    'prompt too long',
+    'context length',
+    'max turns',
+    'error_max_turns',
+    'structured output',
+    'error_max_structured_output_retries',
+  ].some((pattern) => message.includes(pattern))
+}
+
+function providerJsonSchema<T>(schema: z.ZodType<T>): Record<string, unknown> {
+  const generated = z.toJSONSchema(schema) as Record<string, unknown>
+  const { $schema: _metaSchema, ...portable } = generated
+  return portable
 }

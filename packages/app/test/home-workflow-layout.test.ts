@@ -171,6 +171,20 @@ describe('home workflow layout', () => {
     expect(source).toContain("section === 'history'")
   })
 
+  it('Recent activity 直接按 Session updated_at 收集，不依赖 Scan History', () => {
+    const workerSource = fs.readFileSync(
+      path.join(appRoot, 'main/generation-worker.ts'),
+      'utf8',
+    )
+    expect(workerSource).toContain('updatedSince')
+    expect(workerSource).not.toContain('listChangedSessionIds')
+    expect(workerSource).not.toContain('rounds: 30')
+    const rulesSource = read('views/RulesView.tsx')
+    expect(rulesSource).not.toContain('snapshot.rounds ?? 30')
+    const mainSource = fs.readFileSync(path.join(appRoot, 'main/index.ts'), 'utf8')
+    expect(mainSource).toContain('cleanupStaleEvidenceContexts()')
+  })
+
   it('Rules 子页面不重复 PageHeader 与 Start Generate', () => {
     const source = read('views/RulesView.tsx')
     const agentPage = source.slice(

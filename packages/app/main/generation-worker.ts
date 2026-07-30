@@ -9,7 +9,6 @@ import type {
   EvidenceSnapshot,
   GenerationWorkerRequest,
 } from './generation-controller.js'
-import { listChangedSessionIds } from './scan-history.js'
 import { isRunCancelledError } from '../../core/src/abort.js'
 
 if (!parentPort) throw new Error('Generation worker requires a parent port')
@@ -114,7 +113,11 @@ void (async () => {
         : request.mode === 'full'
           ? { full: true }
           : request.mode === 'changed7d'
-            ? { sessionIds: listChangedSessionIds(getDbPath(), { days: 7 }) }
+            ? {
+                updatedSince: new Date(
+                  Date.now() - 7 * 24 * 60 * 60 * 1_000,
+                ).toISOString(),
+              }
             : {}
     let result: GenerateProgress = { phase: 'done', candidateCount: 0 }
 
@@ -125,7 +128,6 @@ void (async () => {
       onEvidence: (bundles) => {
         const snapshot: EvidenceSnapshot = {
           mode: request.mode,
-          ...(request.mode === 'full' ? {} : { rounds: 30 }),
           projects: bundles.map((bundle) => ({
             slug: bundle.projectSlug,
             sessionIds: [...bundle.sourceSessions],

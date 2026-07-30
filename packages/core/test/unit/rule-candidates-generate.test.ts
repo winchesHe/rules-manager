@@ -29,6 +29,12 @@ const generated = [{
   evidence_refs: ['s1:0'],
 }]
 
+function evidenceContextDirectories(): string[] {
+  return fs.readdirSync(os.tmpdir())
+    .filter((entry) => entry.startsWith('memory-manager-evidence-'))
+    .sort()
+}
+
 describe('runRulesGenerate', () => {
   let home: string
   let output: string[]
@@ -62,7 +68,7 @@ describe('runRulesGenerate', () => {
     expect(output.join('\n')).toContain('Always run tests')
   })
 
-  it('正常运行写入 candidate、完整 evidence 和 llm_run hash', async () => {
+  it('正常运行只写 evidence 引用和 llm_run hash，不把原文写入 DB', async () => {
     await runRulesGenerate({ homeDir: home, provider: 'claude', model: 'test-model' }, {
       extract: async () => evidence,
       generate: async () => generated,
@@ -74,7 +80,11 @@ describe('runRulesGenerate', () => {
     db.close()
     expect(candidate.rule_text).toBe('Always run tests')
     expect(candidate.status).toBe('draft')
-    expect(JSON.parse(candidate.evidence_json as string).bundle.excerpts).toHaveLength(1)
+    expect(JSON.parse(candidate.evidence_json as string)).toEqual({
+      reasoning: 'Explicit requirement',
+      evidence_refs: ['s1:0'],
+    })
+    expect(candidate.evidence_json).not.toContain('Always run tests')
     expect(run.model).toBe('test-model')
     expect(run.input_hash).toMatch(/^[a-f0-9]{64}$/)
     expect(run.output_hash).toMatch(/^[a-f0-9]{64}$/)
@@ -86,7 +96,7 @@ describe('runRulesGenerate', () => {
       path.join(resolveWorkspace(home).workspaceDir, 'config.json'),
       JSON.stringify({ provider: 'claude', effort: 'xhigh', fastMode: true }),
     )
-    const generate = jest.fn(async () => generated)
+    const generate = jest.fn(async (..._args: unknown[]) => generated)
 
     await runRulesGenerate({ homeDir: home, dryRun: true }, {
       extract: async () => evidence,
@@ -99,7 +109,14 @@ describe('runRulesGenerate', () => {
       undefined,
       'xhigh',
       true,
+      expect.objectContaining({
+        cwd: expect.any(String),
+        outputSchemaPath: expect.any(String),
+      }),
     )
+    const prompt = generate.mock.calls[0][0]
+    expect(prompt).toContain('manifest.json')
+    expect(prompt).not.toContain('Always run tests')
   })
 
   it('把指定 session 范围传给 evidence 提取', async () => {
@@ -212,6 +229,7 @@ describe('runRulesGenerate', () => {
   it('项目预览发布后取消仍不产生任何 Draft', async () => {
     const abortController = new AbortController()
     const projectResponses: unknown[] = []
+    const contextsBefore = evidenceContextDirectories()
 
     await expect(runRulesGenerate(
       {
@@ -229,6 +247,7 @@ describe('runRulesGenerate', () => {
     )).rejects.toThrow('cancelled')
 
     expect(projectResponses).toHaveLength(1)
+    expect(evidenceContextDirectories()).toEqual(contextsBefore)
     const db = initDatabase(home)
     expect((db.prepare('SELECT COUNT(*) AS count FROM rule_candidates').get() as { count: number }).count).toBe(0)
     expect((db.prepare('SELECT COUNT(*) AS count FROM llm_runs').get() as { count: number }).count).toBe(0)

@@ -203,23 +203,15 @@ export const claudeAdapter: AgentAdapter = {
           const files = collectJsonlFiles(sessionDir)
           if (files.length === 0) continue
 
-          let updatedAt = fileMtime(files[0])
-          try {
-            const firstLine = readFirstLine(files[0])
-            const obj = JSON.parse(firstLine) as Record<string, unknown>
-            if (typeof obj.timestamp === 'string') {
-              updatedAt = obj.timestamp
-            }
-          } catch {
-            // use mtime
-          }
-
           sessions.set(sessionEntry.name, {
             id: sessionEntry.name,
             agent: 'claude',
             sourcePath: sessionDir,
             sourceKind: 'jsonl',
-            updatedAt,
+            // 多文件 session 的最近活动由最后被追加的 JSONL 决定。
+            updatedAt: files
+              .map(fileMtime)
+              .sort((left, right) => Date.parse(right) - Date.parse(left))[0],
             contentHash: hashFiles(files),
           })
         }

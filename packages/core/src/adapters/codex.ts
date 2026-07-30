@@ -110,27 +110,14 @@ export const codexAdapter: AgentAdapter = {
       if (!match) return
       const sessionId = match[1]
 
-      let updatedAt = fileMtime(filePath)
-      try {
-        const firstLine = readFirstLine(filePath)
-        const event = JSON.parse(firstLine) as Record<string, unknown>
-        const payload = event.payload as Record<string, unknown> | undefined
-        if (event.type === 'session_meta' && typeof payload?.timestamp === 'string') {
-          updatedAt = payload.timestamp
-        } else if (typeof event.timestamp === 'string') {
-          updatedAt = event.timestamp
-        }
-      } catch {
-        // use mtime
-      }
-
       if (sessions.has(sessionId)) return
       sessions.set(sessionId, {
         id: sessionId,
         agent: 'codex',
         sourcePath: filePath,
         sourceKind: 'jsonl',
-        updatedAt,
+        // session_meta 是会话开始时间；文件 mtime 才能反映后续追加的对话活动。
+        updatedAt: fileMtime(filePath),
         contentHash: fileHash(filePath),
       })
     }

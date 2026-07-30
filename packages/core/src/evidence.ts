@@ -1,5 +1,8 @@
 import Database from 'better-sqlite3'
+import fs from 'node:fs'
+import readline from 'node:readline'
 import { runSessionsShow } from './commands/sessions.js'
+import { collectFilesRecursive } from './adapters/shared.js'
 import { redactSecrets } from './redaction.js'
 import { resolveWorkspace } from './workspace.js'
 import { throwIfAborted } from './abort.js'
@@ -60,6 +63,7 @@ export interface EvidenceOptions {
   projectSlug?: string
   projectSlugs?: string[]
   sessionIds?: string[]
+  updatedSince?: string
   rounds?: number
   full?: boolean
   signal?: AbortSignal
@@ -70,6 +74,7 @@ interface StoredSession {
   agent: string
   slug: string
   source_path: string
+  updated_at: string
 }
 
 const PRIORITY_KEYWORDS = [
@@ -144,7 +149,9 @@ export function buildEvidenceBundle(
   sessions: RawEvidenceSession[],
   opts: Pick<EvidenceOptions, 'rounds' | 'full'> = {},
 ): EvidenceBundle {
-  const rounds = opts.full ? Number.POSITIVE_INFINITY : (opts.rounds ?? 30)
+  const rounds = opts.full || opts.rounds === undefined
+    ? Number.POSITIVE_INFINITY
+    : opts.rounds
   if (!Number.isInteger(rounds) && rounds !== Number.POSITIVE_INFINITY || rounds <= 0) {
     throw new Error('rounds 必须是正整数')
   }
@@ -244,7 +251,55 @@ function messagesFromShown(value: unknown): RawEvidenceMessage[] {
   return values.map(normalizeMessage).filter((message): message is RawEvidenceMessage => message !== undefined)
 }
 
-async function readSessionMessages(sessionId: string, homeDir?: string): Promise<RawEvidenceMessage[]> {
+const JSONL_AGENTS = new Set(['claude', 'codex', 'cursor', 'pi'])
+
+async function readJsonlSessionDirect(
+  sourcePath: string,
+  agent: string,
+): Promise<RawEvidenceMessage[]> {
+  if (!fs.existsSync(sourcePath)) throw new Error(`${agent} session 源不存在：${sourcePath}`)
+  const stat = fs.statSync(sourcePath)
+  const files = stat.isDirectory()
+    ? collectFilesRecursive(sourcePath, (filePath) => filePath.endsWith('.jsonl'))
+    : [sourcePath]
+  if (files.length === 0) throw new Error(`${agent} session 没有 JSONL 文件：${sourcePath}`)
+
+  const messages: RawEvidenceMessage[] = []
+  for (const filePath of files) {
+    const lines = readline.createInterface({
+      input: fs.createReadStream(filePath, { encoding: 'utf8' }),
+      crlfDelay: Number.POSITIVE_INFINITY,
+    })
+    let lineNumber = 0
+    for await (const rawLine of lines) {
+      lineNumber++
+      const line = lineNumber === 1 ? rawLine.replace(/^\uFEFF/, '') : rawLine
+      if (!line.trim()) continue
+      let record: unknown
+      try {
+        record = JSON.parse(line)
+      } catch {
+        throw new Error(`${agent} JSONL 解析失败：${filePath}:${lineNumber}`)
+      }
+      const message = normalizeMessage(record)
+      if (message) messages.push(message)
+    }
+  }
+  if (messages.length === 0) {
+    throw new Error(`${agent} session 没有用户或 assistant 消息：${sourcePath}`)
+  }
+  return messages
+}
+
+async function readSessionMessages(
+  sessionId: string,
+  agent: string,
+  sourcePath: string,
+  homeDir?: string,
+): Promise<RawEvidenceMessage[]> {
+  if (JSONL_AGENTS.has(agent)) {
+    return readJsonlSessionDirect(sourcePath, agent)
+  }
   const output: string[] = []
   const originalLog = console.log
   console.log = (...args: unknown[]) => output.push(args.map(String).join(' '))
@@ -320,7 +375,7 @@ export async function readSessionPreview(
 
   const rawMessages = session.agent === 'opencode'
     ? readOpenCodeSessionDirect(session.source_path, session.id)
-    : await readSessionMessages(session.id, homeDir)
+    : await readSessionMessages(session.id, session.agent, session.source_path, homeDir)
   const messages = rawMessages
     .map((message, sourceIndex) => ({
       message,
@@ -382,8 +437,8 @@ export async function extractEvidence(opts: EvidenceOptions = {}): Promise<Evide
   let rows: StoredSession[]
   try {
     rows = (opts.projectSlug
-      ? db.prepare("SELECT id, agent, slug, source_path FROM sessions WHERE slug = ? AND status != 'missing' ORDER BY id").all(opts.projectSlug)
-      : db.prepare("SELECT id, agent, slug, source_path FROM sessions WHERE status != 'missing' ORDER BY slug, id").all()) as StoredSession[]
+      ? db.prepare("SELECT id, agent, slug, source_path, updated_at FROM sessions WHERE slug = ? AND status != 'missing' ORDER BY id").all(opts.projectSlug)
+      : db.prepare("SELECT id, agent, slug, source_path, updated_at FROM sessions WHERE status != 'missing' ORDER BY slug, id").all()) as StoredSession[]
     if (opts.projectSlugs !== undefined) {
       const selectedSlugs = new Set(opts.projectSlugs)
       rows = rows.filter((row) => selectedSlugs.has(row.slug))
@@ -391,6 +446,14 @@ export async function extractEvidence(opts: EvidenceOptions = {}): Promise<Evide
     if (opts.sessionIds !== undefined) {
       const selectedIds = new Set(opts.sessionIds)
       rows = rows.filter((row) => selectedIds.has(row.id))
+    }
+    if (opts.updatedSince !== undefined) {
+      const cutoff = Date.parse(opts.updatedSince)
+      if (!Number.isFinite(cutoff)) throw new Error('updatedSince 必须是有效时间')
+      rows = rows.filter((row) => {
+        const updatedAt = Date.parse(row.updated_at)
+        return Number.isFinite(updatedAt) && updatedAt >= cutoff
+      })
     }
   } finally {
     db.close()
@@ -407,7 +470,12 @@ export async function extractEvidence(opts: EvidenceOptions = {}): Promise<Evide
       if (row.agent === 'opencode') {
         messages = readOpenCodeSessionDirect(row.source_path, row.id)
       } else {
-        messages = await readSessionMessages(row.id, opts.homeDir)
+        messages = await readSessionMessages(
+          row.id,
+          row.agent,
+          row.source_path,
+          opts.homeDir,
+        )
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)

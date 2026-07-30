@@ -50,6 +50,29 @@ describe('codexAdapter.discover 跨目录布局', () => {
     }
   })
 
+  it('updatedAt 使用文件最后修改时间而不是 session_meta 的会话开始时间', async () => {
+    const tmp = makeTempDir()
+    try {
+      const uuid = '019de3cf-bc35-7922-9eb7-3eee9610b8d3'
+      const filePath = path.join(
+        tmp,
+        'sessions',
+        '2026',
+        '05',
+        '01',
+        `rollout-${uuid}.jsonl`,
+      )
+      writeJsonl(filePath, uuid, '/some/path')
+      const lastActivity = new Date('2026-07-29T12:34:56.000Z')
+      fs.utimesSync(filePath, lastActivity, lastActivity)
+
+      const [session] = await codexAdapter.discover(tmp)
+      expect(session.updatedAt).toBe(lastActivity.toISOString())
+    } finally {
+      clean(tmp)
+    }
+  })
+
   it('YYYY/MM/<file>.jsonl 3 层旧布局兼容（fixture 现状）', async () => {
     const tmp = makeTempDir()
     try {

@@ -13,9 +13,15 @@ jest.unstable_mockModule('node:child_process', () => ({
 
 const { candidateRulesSchema, getStructuredResponse } = await import('../../src/llm')
 
-function response(result: string): AsyncIterable<unknown> {
+function response(result: string, structuredOutput?: unknown): AsyncIterable<unknown> {
   return (async function* () {
-    yield { type: 'result', subtype: 'success', result, usage: { input_tokens: 1, output_tokens: 1 } }
+    yield {
+      type: 'result',
+      subtype: 'success',
+      result,
+      ...(structuredOutput === undefined ? {} : { structured_output: structuredOutput }),
+      usage: { input_tokens: 1, output_tokens: 1 },
+    }
   })()
 }
 
@@ -43,15 +49,16 @@ describe('getStructuredResponse', () => {
     spawnMock.mockReset()
   })
 
-  it('Claude 使用 query({ prompt, options: { maxTurns: 1 } }) 并校验结构', async () => {
-    queryMock.mockReturnValue(response(JSON.stringify([{
+  it('Claude 使用只读多回合与原生 JSON Schema，并校验 structured_output', async () => {
+    const structured = [{
       scope: 'project',
       project_slug: 'demo',
       rule_text: 'Always run tests',
       confidence_level: 'high',
       reasoning: 'Repeated requirement',
       evidence_refs: ['s1:0'],
-    }])))
+    }]
+    queryMock.mockReturnValue(response('structured response', structured))
 
     const value = await getStructuredResponse(
       'evidence',
@@ -59,21 +66,38 @@ describe('getStructuredResponse', () => {
       'claude',
       'sonnet-test',
       'max',
-      { fastMode: true },
+      {
+        fastMode: true,
+        cwd: '/tmp/evidence-project',
+        maxTurns: 12,
+        tools: ['Read', 'Grep', 'Glob'],
+      },
     )
 
     expect(value).toHaveLength(1)
     expect(queryMock).toHaveBeenCalledTimes(1)
     expect(queryMock.mock.calls[0][0]).toMatchObject({
       options: {
-        maxTurns: 1,
+        maxTurns: 12,
         includePartialMessages: true,
         model: 'sonnet-test',
         effort: 'max',
         settings: { fastMode: true },
+        cwd: '/tmp/evidence-project',
+        tools: ['Read', 'Grep', 'Glob'],
+        allowedTools: ['Read', 'Grep', 'Glob'],
+        permissionMode: 'dontAsk',
+        outputFormat: {
+          type: 'json_schema',
+          schema: expect.any(Object),
+        },
       },
     })
-    expect((queryMock.mock.calls[0][0] as { prompt: string }).prompt).toContain('JSON Schema')
+    expect((queryMock.mock.calls[0][0] as { prompt: string }).prompt).toBe('evidence')
+    const options = (queryMock.mock.calls[0][0] as {
+      options: { outputFormat: { schema: Record<string, unknown> } }
+    }).options
+    expect(options.outputFormat.schema).not.toHaveProperty('$schema')
   })
 
   it('Fast Mode 关闭时仍显式覆盖 Claude session settings', async () => {
@@ -114,7 +138,11 @@ describe('getStructuredResponse', () => {
       'codex',
       'gpt-test',
       'high',
-      { fastMode },
+      {
+        fastMode,
+        cwd: '/tmp/evidence-project',
+        outputSchemaPath: '/tmp/evidence-project/schema.json',
+      },
     )
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -126,6 +154,10 @@ describe('getStructuredResponse', () => {
       '--skip-git-repo-check',
       '--sandbox',
       'read-only',
+      '-C',
+      '/tmp/evidence-project',
+      '--output-schema',
+      '/tmp/evidence-project/schema.json',
       '-m',
       'gpt-test',
       '-c',
@@ -134,18 +166,62 @@ describe('getStructuredResponse', () => {
       `service_tier=${JSON.stringify(serviceTier)}`,
       '-',
     ])
-    expect(child.stdin.end).toHaveBeenCalledWith(expect.stringContaining('JSON Schema'))
+    expect(child.stdin.end).toHaveBeenCalledWith('evidence')
   })
 
-  it('无效 JSON 最多重试 2 次，并把校验错误带入重试 prompt', async () => {
-    queryMock
-      .mockReturnValueOnce(response('not json'))
-      .mockReturnValueOnce(response('{"wrong":true}'))
-      .mockReturnValueOnce(response('[]'))
+  it('结构化输出损坏时立即失败，不携带完整 Evidence 原样重试', async () => {
+    queryMock.mockReturnValue(response('not json'))
 
-    await expect(getStructuredResponse('evidence', candidateRulesSchema, 'claude')).resolves.toEqual([])
-    expect(queryMock).toHaveBeenCalledTimes(3)
-    expect((queryMock.mock.calls[1][0] as { prompt: string }).prompt).toContain('上次输出无效')
+    await expect(
+      getStructuredResponse('private evidence body', candidateRulesSchema, 'claude'),
+    ).rejects.toThrow('JSON 解析失败')
+    expect(queryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('Prompt too long 属于确定性失败，不原样重试', async () => {
+    queryMock.mockReturnValue((async function* () {
+      yield {
+        type: 'result',
+        subtype: 'error_during_execution',
+        errors: ['Prompt is too long'],
+      }
+    })())
+
+    await expect(
+      getStructuredResponse('read manifest.json', candidateRulesSchema, 'claude'),
+    ).rejects.toThrow('Prompt is too long')
+    expect(queryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('瞬时 Provider 错误有限重试并保留原始短 Prompt', async () => {
+    queryMock
+      .mockImplementationOnce(() => {
+        throw new Error('temporary provider unavailable')
+      })
+      .mockReturnValueOnce(response('[]', []))
+    const events: unknown[] = []
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { maxRetries: 1, onEvent: (event) => events.push(event) },
+    )).resolves.toEqual([])
+
+    expect(queryMock).toHaveBeenCalledTimes(2)
+    expect(queryMock.mock.calls.map(
+      (call) => (call[0] as { prompt: string }).prompt,
+    )).toEqual([
+      'read manifest.json',
+      'read manifest.json',
+    ])
+    expect(events).toContainEqual({
+      type: 'retry',
+      message: 'temporary provider unavailable',
+      attempt: 1,
+    })
   })
 
   it('Claude 把 partial text delta 归一化为 assistant_delta', async () => {

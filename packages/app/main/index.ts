@@ -5,6 +5,7 @@ import {
   loadWindowPosition,
   saveWindowPosition,
 } from './window-position'
+import { cleanupStaleEvidenceContexts } from '../../core/src/evidence-context'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -72,6 +73,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(() => {
+    cleanupStaleEvidenceContexts()
     registerIpcHandlers()
     createWindow()
     app.on('activate', () => {

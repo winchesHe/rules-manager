@@ -1348,3 +1348,37 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   production build 与 `git diff --check` 全通过。App composite typecheck 仍被既有
   跨 workspace `rootDir` / JSON include TS6307 阻断，Electron production build 与
   Jest TypeScript 编译没有新增错误。
+
+## Rules Evidence Context 与 Recent activity 语义修正（2026-07-30）
+
+- Recent activity 不再读取最近 Scan 报告的 new / updated 历史，而是直接筛选
+  `sessions.updated_at >= now - 7 days` 且非 missing 的 Session。Codex JSONL 的
+  `updatedAt` 从首条 session metadata 创建时间改为文件 mtime；Claude 多文件
+  Session 取全部 JSONL 的最大 mtime，确保旧会话最近继续对话时仍能入选。
+- Evidence 默认读取选中 Session 的全部 user / assistant 消息；APP 不再隐式传入
+  30 rounds，Evidence Explorer 也不再只预览末尾 30 条。CLI 的显式 `rounds`
+  兼容入口继续保留。
+- JSONL Evidence 改为逐行流式解析，绕开 `sessions show` 的 50 MiB 一次性输出
+  限制。真实最大 Project 验证从 239 个可读 Session / 20,447 条消息提升到
+  245 个可读 Session / 36,074 条消息；源端仅有 metadata 而没有正文的 Copilot
+  Session 仍明确报告并跳过。
+- 每次 Generation 创建权限为 0700 的 Run 临时目录，每个 Project 写 manifest
+  和约 512 KiB Markdown batches；保存完整脱敏 Evidence、locator、role、
+  frequency 与工具摘要。Prompt 只要求 Agent 读取 manifest 和全部 batch，不再
+  内联 Evidence 或 JSON Schema。
+- Claude 使用 Evidence Project 目录作为 cwd，仅开放 Read / Grep / Glob，并通过
+  SDK `outputFormat: json_schema` 获取结构化结果；Codex 使用 read-only sandbox、
+  `-C` 与 `--output-schema`。Provider 输出仍经过本地 Zod 二次校验。
+- 确定性 JSON / Schema / Prompt 长度 / max turns 错误不再重试；默认 Provider
+  请求不自动重试，调用方只有显式设置 `maxRetries` 才会对瞬时错误有限重试。
+  completed / failed / cancelled 均在 finally 清理 Context，进程退出和 APP 启动
+  也会清理遗留 PID / 超龄目录。
+- Candidate 数据库只保存 reasoning、evidence refs 与 source session ids，不再把
+  完整 Evidence bundle 写入 `evidence_json`；input hash 仍基于完整脱敏 bundle，
+  保持可审计而不落原文。
+- 真实 `agent-workspace` 压力验证读取 36,074 条消息，形成 35,453 个 excerpt、
+  35 个 batch，约 11 秒完成并清理。真实 Claude 单次调用因上游 inference gateway
+  返回 502 结束，确认没有隐藏 retry 且失败清理正常。
+- 最终验收：Core 25 suites / 247 tests、App 12 suites / 83 tests、Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。
