@@ -293,8 +293,9 @@ export class GenerationController {
             kind: event.activity.kind,
             label: event.activity.label.slice(0, 128),
             ...(event.activity.detail
-              ? { detail: event.activity.detail.slice(0, 1_000) }
+              ? { detail: event.activity.detail.slice(0, MAX_DETAIL_LENGTH) }
               : {}),
+            ...(event.activity.status ? { status: event.activity.status } : {}),
           },
         }
       } else if (event.kind === 'project_response') {
@@ -337,6 +338,20 @@ export class GenerationController {
           at: envelope.at,
           event: cloneWorkerEvent(envelope.event),
         },
+      ].slice(-MAX_EVENTS)
+    } else if (envelope.type === 'progress') {
+      const progressRecord: GenerationEventRecord = {
+        runId,
+        seq,
+        at: envelope.at,
+        event: {
+          kind: 'phase',
+          progress: { ...envelope.progress },
+        },
+      }
+      events = [
+        ...events,
+        progressRecord,
       ].slice(-MAX_EVENTS)
     }
     this.state = { ...this.state, lastSeq: seq, events }

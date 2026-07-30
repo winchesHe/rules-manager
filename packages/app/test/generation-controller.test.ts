@@ -98,6 +98,12 @@ describe('GenerationController', () => {
     expect(controller.status()).toMatchObject({
       running: true,
       progress: { phase: 'generating', current: 1, total: 2 },
+      events: [{
+        event: {
+          kind: 'phase',
+          progress: { phase: 'generating', current: 1, total: 2 },
+        },
+      }],
     })
 
     worker.emit('message', {
@@ -226,6 +232,7 @@ describe('GenerationController', () => {
           id: 'tool-1',
           kind: 'read',
           label: 'Read',
+          status: 'completed',
           detail: 'packages/app/renderer/src/views/ChatView.tsx',
         },
       },
@@ -239,6 +246,7 @@ describe('GenerationController', () => {
         id: 'tool-1',
         kind: 'read',
         label: 'Read',
+        status: 'completed',
         detail: 'packages/app/renderer/src/views/ChatView.tsx',
       },
     })

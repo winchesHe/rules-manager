@@ -216,6 +216,7 @@ export interface AgentActivity {
   kind: 'thinking' | 'read' | 'search' | 'shell' | 'tool'
   label: string
   detail?: string
+  status?: 'running' | 'completed'
 }
 
 export type GenerationWorkerEvent =
@@ -317,6 +318,7 @@ export interface ChatThread extends ChatThreadSummary {
     id?: string
     label?: string
     detail?: string
+    status?: 'running' | 'completed'
   }>
   messages: ChatMessage[]
   error?: string

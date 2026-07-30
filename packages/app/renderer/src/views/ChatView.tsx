@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Card, Chip, Spinner } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
-  Bot,
   Brain,
+  CheckCircle2,
   ChevronRight,
   Clock3,
   Eye,
+  FilePenLine,
   MessageSquareText,
+  RotateCcw,
   Search,
   Square,
   SquareTerminal,
@@ -24,6 +26,7 @@ import type {
 } from '../types'
 import {
   formatElapsed,
+  mergeTimelineActivities,
   shouldFollowStream,
   visibleProjectResponses,
 } from './chat-view-model'
@@ -343,7 +346,6 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
   const assistantContent = thread.status === 'completed'
     ? assistantMessage?.content ?? terminalMessage(thread.status, t)
     : terminalMessage(thread.status, t)
-  const active = thread.status === 'running' || thread.status === 'cancelling'
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6">
       <div className="flex justify-end">
@@ -353,26 +355,13 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
             : userMessage?.content ?? scopeLabel(thread.request, t)}
         </div>
       </div>
-      <article className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
-        <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-          <Bot aria-hidden="true" size={16} />
-        </span>
+      <article className="min-w-0">
         <div className="min-w-0">
-          <div className="mb-3 flex items-center gap-2">
-            <strong className="text-sm font-medium text-foreground">{t('assistant')}</strong>
-            <Chip color={statusColor(thread.status)} size="sm" variant="soft">
-              {t(`status.${thread.status}`, { defaultValue: thread.status })}
-            </Chip>
-          </div>
           {assistantContent ? (
             <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">
               {assistantContent}
             </p>
-          ) : active && thread.activities.length > 0 ? null : (
-            <p className="text-sm text-muted">
-              {active ? t('working') : t('noResponse')}
-            </p>
-          )}
+          ) : null}
           <ActivityTimeline thread={thread} />
           <div className="mt-5 grid gap-3">
             {projectResponses.flatMap((response) =>
@@ -419,9 +408,10 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
 }
 
 function ActivityTimeline({ thread }: { thread: ChatThread }) {
-  const activities = thread.activities.filter((activity) =>
-    isAgentActivityKind(activity.kind),
+  const [expandedActivityIds, setExpandedActivityIds] = useState<Set<string>>(
+    () => new Set(),
   )
+  const activities = mergeTimelineActivities(thread.activities)
   const active = thread.status === 'running' || thread.status === 'cancelling'
   if (activities.length === 0 && !active) return null
 
@@ -430,28 +420,74 @@ function ActivityTimeline({ thread }: { thread: ChatThread }) {
       {activities.length > 0 && (
         <div className="grid gap-3" role="list">
           {activities.map((activity) => {
-            const Icon = activityIcon(activity.kind)
+            const activityId = activity.id ?? `${activity.kind}-${activity.seq}`
             return (
-              <div
-                className="grid grid-cols-[1.1rem_auto_minmax(0,1fr)] items-center gap-2 text-sm text-muted"
-                key={`${activity.id ?? activity.kind}-${activity.seq}`}
-                role="listitem"
-              >
-                <Icon aria-hidden="true" className="text-muted" size={15} />
-                <strong className="font-medium text-foreground">
-                  {activity.label ?? activityLabel(activity.kind)}
-                </strong>
-                {activity.detail && (
-                  <span className="min-w-0 truncate" title={activity.detail}>
-                    {activity.detail}
-                  </span>
-                )}
-              </div>
+              <ActivityRow
+                activity={activity}
+                expanded={expandedActivityIds.has(activityId)}
+                key={activityId}
+                onToggle={() => {
+                  setExpandedActivityIds((current) => {
+                    const next = new Set(current)
+                    if (next.has(activityId)) next.delete(activityId)
+                    else next.add(activityId)
+                    return next
+                  })
+                }}
+              />
             )
           })}
         </div>
       )}
       {active && <RunningElapsed startedAt={thread.createdAt} />}
+    </div>
+  )
+}
+
+function ActivityRow({
+  activity,
+  expanded,
+  onToggle,
+}: {
+  activity: ChatThread['activities'][number]
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const Icon = activityIcon(activity.kind)
+  const expandable = activity.kind === 'thinking' && Boolean(activity.detail)
+  return (
+    <div className="text-sm text-muted" role="listitem">
+      <button
+        aria-expanded={expandable ? expanded : undefined}
+        className={`grid w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 text-left ${
+          expandable ? 'cursor-pointer' : 'cursor-default'
+        }`}
+        disabled={!expandable}
+        onClick={onToggle}
+        type="button"
+      >
+        <Icon aria-hidden="true" className="text-muted" size={15} />
+        <strong className="font-medium text-foreground">
+          {activity.label ?? activityLabel(activity.kind)}
+        </strong>
+        {activity.detail && !expandable && (
+          <span className="min-w-0 truncate" title={activity.detail}>
+            {activity.detail}
+          </span>
+        )}
+        {expandable && (
+          <ChevronRight
+            aria-hidden="true"
+            className={`transition-transform ${expanded ? 'rotate-90' : ''}`}
+            size={14}
+          />
+        )}
+      </button>
+      {expandable && expanded && (
+        <p className="ml-[1.6rem] mt-2 whitespace-pre-wrap border-l border-border pl-3 text-xs leading-5 text-muted">
+          {activity.detail}
+        </p>
+      )}
     </div>
   )
 }
@@ -472,15 +508,16 @@ function RunningElapsed({ startedAt }: { startedAt: string }) {
   )
 }
 
-function isAgentActivityKind(kind: string): boolean {
-  return ['thinking', 'read', 'search', 'shell', 'tool'].includes(kind)
-}
-
 function activityIcon(kind: string): LucideIcon {
   if (kind === 'thinking') return Brain
   if (kind === 'read') return Eye
   if (kind === 'search') return Search
   if (kind === 'shell') return SquareTerminal
+  if (kind === 'collect' || kind === 'evidence_ready') return Search
+  if (kind === 'analyze' || kind === 'phase') return Brain
+  if (kind === 'draft' || kind === 'project_response') return FilePenLine
+  if (kind === 'validate' || kind === 'candidate_count') return CheckCircle2
+  if (kind === 'retry') return RotateCcw
   return Wrench
 }
 
@@ -489,6 +526,11 @@ function activityLabel(kind: string): string {
   if (kind === 'read') return 'Read'
   if (kind === 'search') return 'Search'
   if (kind === 'shell') return 'Shell'
+  if (kind === 'collect' || kind === 'evidence_ready') return 'Collect'
+  if (kind === 'analyze' || kind === 'phase') return 'Analyze'
+  if (kind === 'draft' || kind === 'project_response') return 'Draft'
+  if (kind === 'validate' || kind === 'candidate_count') return 'Validate'
+  if (kind === 'retry') return 'Retry'
   return kind.replace(/_/g, ' ')
 }
 
@@ -582,17 +624,6 @@ function terminalMessage(
   if (status === 'failed') return t('generationFailed')
   if (status === 'interrupted') return t('generationInterrupted')
   return undefined
-}
-
-function statusColor(
-  status: ChatThread['status'],
-): 'default' | 'success' | 'warning' | 'danger' {
-  if (status === 'completed') return 'success'
-  if (status === 'failed') return 'danger'
-  if (status === 'cancelled' || status === 'interrupted' || status === 'cancelling') {
-    return 'warning'
-  }
-  return 'default'
 }
 
 function confidenceColor(

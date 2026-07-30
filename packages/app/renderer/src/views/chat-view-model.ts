@@ -10,6 +10,25 @@ export function visibleProjectResponses(
   return status === 'completed' ? responses : []
 }
 
+export function mergeTimelineActivities(
+  activities: ChatThread['activities'],
+): ChatThread['activities'] {
+  const merged = new Map<string, ChatThread['activities'][number]>()
+  for (const activity of activities) {
+    const key = activity.id ?? `${activity.kind}-${activity.seq}`
+    const existing = merged.get(key)
+    merged.set(key, existing
+      ? {
+          ...existing,
+          ...activity,
+          seq: existing.seq,
+          at: existing.at,
+        }
+      : activity)
+  }
+  return [...merged.values()]
+}
+
 export function formatElapsed(startedAt: string, now = Date.now()): string {
   const started = Date.parse(startedAt)
   const totalSeconds = Number.isFinite(started)

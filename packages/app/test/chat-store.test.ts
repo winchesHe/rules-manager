@@ -44,20 +44,51 @@ function runningStatus(runId: string): GenerationStatus {
         evidenceRefs: ['session-1:0'],
       }],
     }],
-    events: [{
-      runId,
-      seq: 1,
-      at: '2026-07-30T00:00:01.500Z',
-      event: {
-        kind: 'activity',
-        activity: {
-          id: 'read-1',
-          kind: 'read',
-          label: 'Read',
-          detail: 'packages/app/renderer/src/views/ChatView.tsx',
+    events: [
+      {
+        runId,
+        seq: 1,
+        at: '2026-07-30T00:00:01.500Z',
+        event: {
+          kind: 'activity',
+          activity: {
+            id: 'read-1',
+            kind: 'read',
+            label: 'Read',
+            status: 'running',
+          },
         },
       },
-    }],
+      {
+        runId,
+        seq: 2,
+        at: '2026-07-30T00:00:01.800Z',
+        event: {
+          kind: 'activity',
+          activity: {
+            id: 'read-1',
+            kind: 'read',
+            label: 'Read',
+            status: 'completed',
+            detail: 'packages/app/renderer/src/views/ChatView.tsx',
+          },
+        },
+      },
+      {
+        runId,
+        seq: 3,
+        at: '2026-07-30T00:00:01.900Z',
+        event: {
+          kind: 'phase',
+          progress: {
+            phase: 'generating',
+            current: 1,
+            total: 2,
+            projectSlug: 'rules-manager',
+          },
+        },
+      },
+    ],
     output: 'raw provider output must not be persisted',
     outputTruncated: false,
     startedAt: '2026-07-30T00:00:00.000Z',
@@ -110,7 +141,12 @@ describe('ChatStore', () => {
         id: 'read-1',
         kind: 'read',
         label: 'Read',
+        status: 'completed',
         detail: 'packages/app/renderer/src/views/ChatView.tsx',
+      }, {
+        kind: 'analyze',
+        label: 'Analyze',
+        detail: 'rules-manager · 1/2',
       }],
       messages: [{
         role: 'user',

@@ -65,6 +65,22 @@ describe('home workflow layout', () => {
     expect(source).toContain('visibleProjectResponses')
   })
 
+  it('Chat 移除 Assistant 外壳并支持展开 Activity 正文', () => {
+    const source = read('views/ChatView.tsx')
+    const conversation = source.slice(
+      source.indexOf('function PersistedConversation'),
+      source.indexOf('function LegacyConversation'),
+    )
+
+    expect(conversation).not.toContain('<Bot')
+    expect(conversation).not.toContain("t('assistant')")
+    expect(conversation).not.toContain('statusColor')
+    expect(conversation).toContain('ActivityRow')
+    expect(conversation).toContain('expandedActivityIds')
+    expect(conversation).toContain('whitespace-pre-wrap')
+    expect(conversation).toContain('mergeTimelineActivities')
+  })
+
   it('Scan 拆分最近结果与新建扫描配置', () => {
     const source = read('views/OverviewView.tsx')
     expect(source).toContain("'latest'")

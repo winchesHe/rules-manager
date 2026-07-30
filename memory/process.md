@@ -1326,3 +1326,25 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   production build 与 `git diff --check` 全通过。App composite typecheck 仍只有既有
   跨 workspace / JSON include 的 TS6307，production build 和 Jest TypeScript
   编译没有新增错误。
+
+## APP Chat Activity 可读性修正（2026-07-30）
+
+- 真实 Generation Thread 对账确认：Rules Generation 已把 Evidence 注入 Provider，
+  因此没有 Read / Search / Shell 属于合法行为；此前界面只剩重复 Thinking，是因为
+  Claude 只保存了 thinking start，页面又过滤了真实 Generation pipeline。
+- Persisted Conversation 移除 Assistant 头像、标题和状态 Chip；Request 后直接展示
+  Assistant 正文、Activity timeline 与完成态 Candidate，减少重复层级。
+- Claude 现在按每次 LLM 调用生成唯一 thinking id，收集 `thinking_delta`，在 block
+  stop 时发出带正文的 completed Activity；Codex completed reasoning 同样保留可见
+  summary/text。同一 id 的 running/completed 更新在 ChatStore 和 Renderer 两层合并。
+- Thinking 正文最多保留 8000 字符并保留换行，点击 Activity header 可展开/收起；
+  tool output、原始 tool input、隐藏 Prompt 和 Session 原文仍不进入 Chat。
+- GenerationController 将 progress 作为 phase event checkpoint；ChatStore 如实映射
+  Collect / Analyze / Draft / Validate / Retry，并使用稳定 id 合并同一阶段。真实
+  tool use 仍展示 Read / Search / Shell，不为丰富界面伪造工具调用。
+- Candidate Artifact 的显示门控没有改变：只有 Thread `completed` 后才一次性展示
+  全部 Rules；running、cancelling、cancelled、failed、interrupted 均不显示半成品。
+- 最终验收：Core 24 suites / 240 tests、App 12 suites / 82 tests、Core/App
+  production build 与 `git diff --check` 全通过。App composite typecheck 仍被既有
+  跨 workspace `rootDir` / JSON include TS6307 阻断，Electron production build 与
+  Jest TypeScript 编译没有新增错误。

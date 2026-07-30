@@ -97,6 +97,14 @@
   用户主动上滚后不得抢夺阅读位置。
 - Project response 可以在 Main 中逐项目 checkpoint，但 Candidate Artifact 只有在
   Thread `completed` 后才一次性全部展示。取消、失败或中断不展示半成品 Rules。
+- Conversation 不显示 Assistant 头像、Assistant 标题或重复状态 Chip；Request 之后
+  直接进入 Activity timeline，减少无信息量的层级。
+- Thinking 使用单行 Activity header；Provider 明确输出 thinking / reasoning 正文时，
+  header 可点击展开，正文保留换行并限制长度。同一 Activity 的 running / completed
+  更新必须合并，不能重复堆积 Thinking。
+- Provider 不一定发生 tool call。Activity timeline 同时如实展示 Rules Generation
+  pipeline 的 Collect / Analyze / Draft / Validate / Retry；不得为了丰富界面伪造
+  Read / Search / Shell。
 
 ## 组件映射
 

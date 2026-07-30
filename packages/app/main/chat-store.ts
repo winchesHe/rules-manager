@@ -45,6 +45,7 @@ export interface ChatThread extends ChatThreadSummary {
     id?: string
     label?: string
     detail?: string
+    status?: 'running' | 'completed'
   }>
   messages: ChatMessage[]
   error?: string
@@ -125,14 +126,9 @@ export class ChatStore {
       ...(status.endedAt ? { endedAt: status.endedAt } : {}),
       ...(status.evidence ? { evidence: cloneEvidence(status.evidence) } : {}),
       projectResponses,
-      activities: status.events.map((envelope) => ({
-        seq: envelope.seq,
-        at: envelope.at,
-        kind: envelope.event.kind === 'activity'
-          ? envelope.event.activity.kind
-          : envelope.event.kind,
-        ...activityDetail(envelope.event),
-      })),
+      activities: status.events.length > 0
+        ? buildActivities(status.events)
+        : existing.activities,
       ...(status.error ? { error: status.error } : {}),
     }
     atomicWriteJson(
@@ -395,22 +391,106 @@ function cloneProjectResponse(
   }
 }
 
-function activityDetail(
-  event: GenerationStatus['events'][number]['event'],
-): { id?: string; label?: string; detail?: string } {
-  if (event.kind === 'activity') {
-    return {
-      id: event.activity.id,
-      label: event.activity.label,
-      ...(event.activity.detail ? { detail: event.activity.detail } : {}),
+function buildActivities(
+  events: GenerationStatus['events'],
+): ChatThread['activities'] {
+  const activities = new Map<string, ChatThread['activities'][number]>()
+  for (const envelope of events) {
+    const event = envelope.event
+    let activity: ChatThread['activities'][number]
+    if (event.kind === 'activity') {
+      activity = {
+        seq: envelope.seq,
+        at: envelope.at,
+        id: event.activity.id,
+        kind: event.activity.kind,
+        label: event.activity.label,
+        ...(event.activity.detail ? { detail: event.activity.detail } : {}),
+        ...(event.activity.status ? { status: event.activity.status } : {}),
+      }
+    } else if (event.kind === 'evidence_ready') {
+      activity = {
+        seq: envelope.seq,
+        at: envelope.at,
+        id: 'collect',
+        kind: 'collect',
+        label: 'Collect',
+        detail: `${event.snapshot.totalSessions} sessions · ${event.snapshot.projects.length} projects`,
+        status: 'completed',
+      }
+    } else if (event.kind === 'phase') {
+      const { current, total, projectSlug, phase } = event.progress
+      if (phase === 'extracting') {
+        activity = {
+          seq: envelope.seq,
+          at: envelope.at,
+          id: 'collect',
+          kind: 'collect',
+          label: 'Collect',
+          detail: current !== undefined && total !== undefined
+            ? `${current}/${total} evidence bundles`
+            : 'Evidence',
+          ...(current !== undefined ? { status: 'completed' } : {}),
+        }
+      } else if (phase === 'done') {
+        activity = {
+          seq: envelope.seq,
+          at: envelope.at,
+          id: 'validate',
+          kind: 'validate',
+          label: 'Validate',
+          detail: `${event.progress.candidateCount ?? 0} candidates`,
+          status: 'completed',
+        }
+      } else {
+        activity = {
+          seq: envelope.seq,
+          at: envelope.at,
+          id: `analyze-${projectSlug ?? phase}`,
+          kind: 'analyze',
+          label: 'Analyze',
+          detail: projectSlug
+            ? `${projectSlug}${current !== undefined && total !== undefined
+              ? ` · ${current}/${total}`
+              : ''}`
+            : phase,
+        }
+      }
+    } else if (event.kind === 'project_response') {
+      activity = {
+        seq: envelope.seq,
+        at: envelope.at,
+        id: `draft-${event.response.projectSlug}`,
+        kind: 'draft',
+        label: 'Draft',
+        detail: event.response.projectSlug,
+        status: 'completed',
+      }
+    } else if (event.kind === 'candidate_count') {
+      activity = {
+        seq: envelope.seq,
+        at: envelope.at,
+        id: 'validate',
+        kind: 'validate',
+        label: 'Validate',
+        detail: `${event.count} candidates`,
+        status: 'completed',
+      }
+    } else {
+      activity = {
+        seq: envelope.seq,
+        at: envelope.at,
+        id: `retry-${envelope.seq}`,
+        kind: 'retry',
+        label: 'Retry',
+        detail: event.message,
+      }
     }
+    const key = activity.id ?? `${activity.kind}-${activity.seq}`
+    const existing = activities.get(key)
+    activities.set(key, existing
+      ? { ...existing, ...activity, seq: existing.seq, at: existing.at }
+      : activity)
   }
-  if (event.kind === 'retry') return { detail: event.message }
-  if (event.kind === 'phase') return { detail: event.progress.phase }
-  if (event.kind === 'candidate_count') return { detail: String(event.count) }
-  if (event.kind === 'project_response') return { detail: event.response.projectSlug }
-  if (event.kind === 'evidence_ready') {
-    return { detail: `${event.snapshot.totalSessions} sessions` }
-  }
-  return {}
+  return [...activities.values()]
 }

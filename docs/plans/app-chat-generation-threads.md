@@ -243,3 +243,61 @@ Controller 仍可逐项目接收并 checkpoint 结构化响应，但 Renderer �
 - Renderer TypeScript 检查
 - `git diff --check`
 - Electron 真实窗口验收后追加 `memory/process.md`
+
+## Follow-up：Activity 可读性修正（2026-07-30）
+
+用户真实运行反馈暴露两个问题：Assistant 头像、标题和状态重复占位；Claude
+stream 只把 thinking start 保存为无正文行，且页面过滤掉 Generation pipeline
+事件，因此没有 tool call 的 Run 看起来永远只有不可展开的 Thinking。
+
+### 1. 精简 Assistant Turn 外壳
+
+观察点：
+
+- 移除 Assistant 头像、`Assistant` 标题和重复状态 Chip。
+- Request、Activity timeline、完成态摘要和 Candidate 继续保持原有顺序。
+
+验证方式：
+
+- Renderer 契约测试禁止 `Bot`、`t('assistant')` 和 `statusColor` 出现在
+  `PersistedConversation`。
+- Electron 真实窗口确认 Activity 与 Request 使用同一内容轴。
+
+### 2. Thinking 生命周期与可展开正文
+
+观察点：
+
+- Claude `thinking_delta` 在 content block stop 时形成 completed Activity，
+  保留 provider 明确输出的 thinking 正文。
+- Codex completed reasoning item 同样形成带正文的 completed Activity。
+- 同一 Activity 的 running / completed 更新合并为一行；点击带正文的行可以展开
+  或收起，不再重复堆积同名 Thinking。
+
+验证方式：
+
+- Core 单元测试覆盖 thinking start → delta → stop 与 Codex reasoning completed。
+- ChatStore / View model 测试覆盖按 Activity id 合并和旧 Thread 重复行降级。
+- Renderer 契约测试锁定可点击 Activity row、展开状态和 `whitespace-pre-wrap`。
+
+### 3. 无 tool call 时展示真实 Generation pipeline
+
+Rules Generation 的模型输入已经包含 Evidence，Provider 不一定需要调用 Read /
+Search / Shell。不能伪造 tool use；改为同时展示真实 pipeline：
+
+- `evidence_ready` → Collect
+- `progress` → Analyze
+- `project_response` → Draft
+- `candidate_count` → Validate
+- `retry` → Retry
+
+观察点：
+
+- 有真实 tool use 时继续显示 Read / Search / Shell。
+- 无 tool use 时仍可看到 Collect / Analyze / Draft / Validate 的实际进度。
+- Candidate 正文仍严格在 Run completed 后一次性出现。
+
+验证方式：
+
+- Controller 测试确认 progress 被保留为 phase event。
+- ChatStore 测试确认 pipeline event 映射和可恢复。
+- running / completed 真实回放继续对账 Candidate 门控。

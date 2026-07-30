@@ -210,6 +210,29 @@ describe('getStructuredResponse', () => {
         },
       }
       yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: '先检查项目约束，' },
+        },
+      }
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: '再分析会话证据。' },
+        },
+      }
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_stop',
+          index: 0,
+        },
+      }
+      yield {
         type: 'assistant',
         message: {
           content: [{
@@ -239,9 +262,20 @@ describe('getStructuredResponse', () => {
     expect(events).toContainEqual({
       type: 'activity',
       activity: {
-        id: 'claude-thinking-0',
+        id: expect.stringMatching(/^claude-\d+-thinking-0$/),
         kind: 'thinking',
         label: 'Thinking',
+        status: 'running',
+      },
+    })
+    expect(events).toContainEqual({
+      type: 'activity',
+      activity: {
+        id: expect.stringMatching(/^claude-\d+-thinking-0$/),
+        kind: 'thinking',
+        label: 'Thinking',
+        status: 'completed',
+        detail: '先检查项目约束，再分析会话证据。',
       },
     })
     expect(events).toContainEqual({
@@ -322,6 +356,14 @@ describe('getStructuredResponse', () => {
         item: { id: 'reason-1', type: 'reasoning', text: 'private chain of thought' },
       },
       {
+        type: 'item.completed',
+        item: {
+          id: 'reason-1',
+          type: 'reasoning',
+          text: 'Checked the project constraints.',
+        },
+      },
+      {
         type: 'item.started',
         item: {
           id: 'command-1',
@@ -363,6 +405,17 @@ describe('getStructuredResponse', () => {
           id: 'reason-1',
           kind: 'thinking',
           label: 'Thinking',
+          status: 'running',
+        },
+      },
+      {
+        type: 'activity',
+        activity: {
+          id: 'reason-1',
+          kind: 'thinking',
+          label: 'Thinking',
+          status: 'completed',
+          detail: 'Checked the project constraints.',
         },
       },
       {
@@ -372,6 +425,7 @@ describe('getStructuredResponse', () => {
           kind: 'search',
           label: 'Search',
           detail: 'rtk rg -n "ChatView" packages/app',
+          status: 'running',
         },
       },
       {
@@ -381,10 +435,11 @@ describe('getStructuredResponse', () => {
           kind: 'search',
           label: 'Search',
           detail: 'Codex JSONL events',
+          status: 'running',
         },
       },
       { type: 'assistant_delta', text: '[]' },
     ])
-    expect(JSON.stringify(events)).not.toContain('private')
+    expect(JSON.stringify(events)).not.toContain('private chain of thought')
   })
 })

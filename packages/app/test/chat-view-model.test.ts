@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 import {
   formatElapsed,
+  mergeTimelineActivities,
   shouldFollowStream,
   visibleProjectResponses,
 } from '../renderer/src/views/chat-view-model.js'
@@ -54,5 +55,35 @@ describe('chat view model', () => {
       clientHeight: 400,
       scrollHeight: 1_000,
     })).toBe(false)
+  })
+
+  it('同一 Activity 的 running / completed 更新合并为一行', () => {
+    expect(mergeTimelineActivities([
+      {
+        seq: 1,
+        at: '2026-07-30T00:00:00.000Z',
+        id: 'thinking-1',
+        kind: 'thinking',
+        label: 'Thinking',
+        status: 'running',
+      },
+      {
+        seq: 2,
+        at: '2026-07-30T00:00:02.000Z',
+        id: 'thinking-1',
+        kind: 'thinking',
+        label: 'Thinking',
+        status: 'completed',
+        detail: '分析完成。',
+      },
+    ])).toEqual([{
+      seq: 1,
+      at: '2026-07-30T00:00:00.000Z',
+      id: 'thinking-1',
+      kind: 'thinking',
+      label: 'Thinking',
+      status: 'completed',
+      detail: '分析完成。',
+    }])
   })
 })
