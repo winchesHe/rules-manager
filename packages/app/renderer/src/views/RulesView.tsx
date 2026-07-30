@@ -105,12 +105,14 @@ function tr(
 export function RulesView({
   initialProjectSlug,
   onInitialProjectHandled,
+  onOpenChat,
   onOpenProjectRules,
   onSectionChange,
   section,
 }: {
   initialProjectSlug?: string | null
   onInitialProjectHandled?: () => void
+  onOpenChat: (threadId: string) => void
   onOpenProjectRules?: (slug?: string) => void
   onSectionChange: (section: RulesSection) => void
   section: RulesSection
@@ -343,7 +345,8 @@ export function RulesView({
         onError={setActionError}
         onStarted={(status) => {
           setGeneration(status)
-          setPage('run')
+          if (status.runId) onOpenChat(status.runId)
+          else setActionError(tr('errors.generationFailed'))
         }}
       />
     )
@@ -419,7 +422,11 @@ export function RulesView({
       loading={loading}
       onGenerate={() => {
         setActionError(null)
-        setPage(isActiveGeneration(generation) ? 'run' : 'generate')
+        if (isActiveGeneration(generation) && generation?.runId) {
+          onOpenChat(generation.runId)
+        } else {
+          setPage('generate')
+        }
       }}
       onOpenAgent={(agent) => {
         setSelectedInstructionAgent(agent)
@@ -428,10 +435,11 @@ export function RulesView({
       onOpenOutput={() => setPage('output')}
       onOpenProjectRules={onOpenProjectRules}
       onOpenHistory={(entry) => {
-        setSelectedHistory(entry)
-        setPage('history')
+        onOpenChat(entry.id)
       }}
-      onOpenRun={() => setPage('run')}
+      onOpenRun={() => {
+        if (generation?.runId) onOpenChat(generation.runId)
+      }}
       onReview={openReview}
       onSectionChange={onSectionChange}
       onStatusChange={setStatus}

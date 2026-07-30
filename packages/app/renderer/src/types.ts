@@ -274,6 +274,44 @@ export interface GenerationHistoryEntry {
   failure?: string
 }
 
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  kind: 'rules-generation-request' | 'assistant-response'
+  content: string
+  status: 'completed' | 'streaming' | 'cancelled' | 'failed' | 'interrupted'
+  createdAt: string
+  completedAt?: string
+}
+
+export interface ChatThreadSummary {
+  id: string
+  runId: string
+  kind: 'rules-generation'
+  title: string
+  status: Exclude<RunState, 'idle'>
+  request: { mode: GenerationMode; projects: string[] }
+  projectCount: number
+  sessionCount: number
+  candidateCount: number
+  createdAt: string
+  updatedAt: string
+  endedAt?: string
+}
+
+export interface ChatThread extends ChatThreadSummary {
+  evidence?: EvidenceSnapshot
+  projectResponses: ProjectGenerationResponse[]
+  activities: Array<{
+    seq: number
+    at: string
+    kind: string
+    detail?: string
+  }>
+  messages: ChatMessage[]
+  error?: string
+}
+
 export type GenerationStartResult =
   | { started: true; runId: string }
   | { started: false; reason: 'already-running' }

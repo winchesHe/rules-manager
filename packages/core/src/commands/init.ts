@@ -11,7 +11,7 @@ export interface InitOptions {
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
-  const { workspaceDir, rulesDir, sourcesDir } = resolveWorkspace(opts.homeDir)
+  const { workspaceDir, rulesDir, chatsDir, sourcesDir } = resolveWorkspace(opts.homeDir)
 
   if (!opts.nonInteractive) {
     clack.intro(pc.cyan('memory-manager init'))
@@ -30,9 +30,10 @@ export async function runInit(opts: InitOptions): Promise<void> {
   try {
     spinner?.start('正在初始化工作区…')
 
-    // 目录（幂等）：workspaceDir / rules / sources / projects/default
+    // 目录（幂等）：workspaceDir / rules / chats / sources / projects/default
     fs.mkdirSync(workspaceDir, { recursive: true })
     fs.mkdirSync(rulesDir, { recursive: true })
+    fs.mkdirSync(chatsDir, { recursive: true })
     fs.mkdirSync(sourcesDir, { recursive: true })
     ensureDefaultSlugDir(opts.homeDir)
 

@@ -9,6 +9,7 @@ export function resolveWorkspace(homeDir?: string): {
   workspaceDir: string
   dbPath: string
   rulesDir: string
+  chatsDir: string
   projectsDir: string
   sourcesDir: string
 } {
@@ -23,6 +24,8 @@ export function resolveWorkspace(homeDir?: string): {
     dbPath: path.join(base, 'memory.db'),
     // rules/ 留给 Plan 07 输出 rule 文件用（保留 init 建好）
     rulesDir: path.join(base, 'rules'),
+    // chats/ 保存用户主动创建的 Chat 可见正文与结构化 Artifact。
+    chatsDir: path.join(base, 'chats'),
     // FS-first 分类视图根：<workspace>/projects/<slug>/<sid>.jsonl
     projectsDir: path.join(base, 'projects'),
     // adapter 数据源根（用户软链到 ~/.claude 等）

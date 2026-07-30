@@ -3,6 +3,7 @@ import { Button, Tooltip } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
   FolderKanban,
+  MessageSquareText,
   Moon,
   ScanSearch,
   ScrollText,
@@ -11,17 +12,19 @@ import {
 } from 'lucide-react'
 import { OverviewView } from './views/OverviewView'
 import { ProjectsView } from './views/ProjectsView'
+import { ChatView } from './views/ChatView'
 import { RulesView } from './views/RulesView'
 import type { RulesSection } from './views/RulesView'
 import { SettingsView } from './views/SettingsView'
 
 type ThemeMode = 'dark' | 'light'
-type ContentViewId = 'overview' | 'projects' | 'rules'
+type ContentViewId = 'overview' | 'projects' | 'chat' | 'rules'
 type ViewId = ContentViewId | 'settings'
 
 const navigation = [
   { id: 'overview', labelKey: 'scan', icon: ScanSearch },
   { id: 'projects', labelKey: 'projects', icon: FolderKanban },
+  { id: 'chat', labelKey: 'chat', icon: MessageSquareText },
   { id: 'rules', labelKey: 'rules', icon: ScrollText },
 ] satisfies Array<{ id: ContentViewId; labelKey: string; icon: typeof ScanSearch }>
 
@@ -39,6 +42,7 @@ export function App() {
   const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null)
   const [selectedProjectTab, setSelectedProjectTab] = useState<'sessions' | 'rules'>('sessions')
   const [selectedRulesProject, setSelectedRulesProject] = useState<string | null>(null)
+  const [selectedChatThreadId, setSelectedChatThreadId] = useState<string | null>(null)
   const [activeRulesSection, setActiveRulesSection] = useState<RulesSection>('overview')
   const [rulesViewKey, setRulesViewKey] = useState(0)
   const [theme, setTheme] = useState<ThemeMode>('dark')
@@ -154,7 +158,11 @@ export function App() {
           </aside>
 
           <main
-            className="min-w-0 max-w-full overflow-x-hidden overflow-y-auto bg-background px-[clamp(1.75rem,5vw,4.5rem)] py-12"
+            className={`min-w-0 max-w-full overflow-x-hidden overflow-y-auto bg-background ${
+              activeView === 'chat'
+                ? 'px-[clamp(1rem,2vw,2rem)] py-8'
+                : 'px-[clamp(1.75rem,5vw,4.5rem)] py-12'
+            }`}
             key={activeView}
           >
             {activeView === 'overview' && (
@@ -174,26 +182,40 @@ export function App() {
                   setSelectedProjectSlug(null)
                   setSelectedProjectTab('sessions')
                 }}
-                    onGenerateRules={(slug) => {
-                      setSelectedRulesProject(slug)
-                      setActiveRulesSection('overview')
-                      setActiveView('rules')
-                    }}
+                onGenerateRules={(slug) => {
+                  setSelectedRulesProject(slug)
+                  setActiveRulesSection('overview')
+                  setActiveView('rules')
+                }}
+              />
+            )}
+            {activeView === 'chat' && (
+              <ChatView
+                initialThreadId={selectedChatThreadId}
+                onOpenGeneratedRules={() => {
+                  setActiveRulesSection('generated')
+                  setSelectedChatThreadId(null)
+                  setActiveView('rules')
+                }}
               />
             )}
             {activeView === 'rules' && (
-                  <RulesView
-                    initialProjectSlug={selectedRulesProject}
-                    key={rulesViewKey}
-                    onInitialProjectHandled={() => setSelectedRulesProject(null)}
+              <RulesView
+                initialProjectSlug={selectedRulesProject}
+                key={rulesViewKey}
+                onInitialProjectHandled={() => setSelectedRulesProject(null)}
                 onOpenProjectRules={(slug) => {
                   setSelectedProjectSlug(slug ?? null)
-                      setSelectedProjectTab('rules')
-                      setActiveView('projects')
-                    }}
-                    onSectionChange={setActiveRulesSection}
-                    section={activeRulesSection}
-                  />
+                  setSelectedProjectTab('rules')
+                  setActiveView('projects')
+                }}
+                onOpenChat={(threadId) => {
+                  setSelectedChatThreadId(threadId)
+                  setActiveView('chat')
+                }}
+                onSectionChange={setActiveRulesSection}
+                section={activeRulesSection}
+              />
             )}
           </main>
         </div>

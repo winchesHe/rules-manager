@@ -68,10 +68,20 @@
 
 - **Scan**：默认只展示最近扫描结果；“新建扫描”进入独立 Agent 配置页。
 - **Projects**：默认只展示可搜索、可筛选的项目列表；选择项目后进入独立详情，详情内切换 Sessions / Rules。
+- **Chat**：统一承载 Agent Run 的流式过程与可恢复正文；Thread Rail 负责定位，中央对话负责 Request / Assistant / Artifact，右侧 Context 只展示当前 Run 的范围与 Evidence。
 - **Rules**：默认只展示候选规则队列；生成范围、单条审核、产物输出分别进入独立页面。
 - 返回按钮恢复上一层列表；主导航再次点击时回到该模块默认页。
 - 大数据列表采用“数据层限定查询 + renderer 虚拟窗口”，默认只渲染可视区域附近的行。
 - 同一页面只保留一个主操作按钮；次级操作使用 ghost，状态计数使用 Chip。
+
+### Chat 第一版
+
+- 主导航顺序为 Scan / Projects / Chat / Rules。
+- Rules 负责选择 Evidence scope、审核和发布；生成开始后创建 Chat Thread 并切换到 Chat。
+- Chat 使用 Thread Rail + Conversation + Context 三段布局；窄窗口时 Context 下沉，不产生页面级横向滚动。
+- 用户请求使用右侧轻量气泡，Assistant 使用无气泡正文，Candidate 使用结构化 Artifact。
+- 第一版不提供 Composer、通用 New chat、连续追问或 Session Summary。
+- Chat 可见正文使用 FS-first 本地持久化；隐藏 Prompt、Session 原文、tool 参数和 tool output 不进入 Chat 文件。
 
 ## 组件映射
 

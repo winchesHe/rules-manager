@@ -14,13 +14,33 @@ function read(relativePath: string): string {
 }
 
 describe('home workflow layout', () => {
-  it('主导航使用 Scan / Projects / Rules', () => {
+  it('主导航使用 Scan / Projects / Chat / Rules', () => {
     const source = read('App.tsx')
     expect(source).toContain("labelKey: 'scan'")
     expect(source).toContain("labelKey: 'projects'")
+    expect(source).toContain("labelKey: 'chat'")
     expect(source).toContain("labelKey: 'rules'")
+    expect(source.indexOf("labelKey: 'chat'"))
+      .toBeLessThan(source.indexOf("labelKey: 'rules'"))
+    expect(source).toContain('<ChatView')
     expect(source).toContain("useTranslation('navigation')")
     expect(source).toContain('overflow-x-hidden')
+  })
+
+  it('Chat 使用 Thread Rail、Conversation、Context 且第一版不提供 Composer', () => {
+    const source = read('views/ChatView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+
+    expect(source).toContain("'chat.list'")
+    expect(source).toContain("'chat.read'")
+    expect(source).toContain("t('threadRail')")
+    expect(source).toContain("t('conversation')")
+    expect(source).toContain("t('context')")
+    expect(source).toContain('projectResponses')
+    expect(source).toContain("t('openGeneratedRules')")
+    expect(source).not.toContain('Composer')
+    expect(ipcSource).toContain("ipcMain.handle('chat.list'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.read'")
   })
 
   it('Scan 拆分最近结果与新建扫描配置', () => {
@@ -250,6 +270,7 @@ describe('home workflow layout', () => {
     expect(source).toContain("tr('generate.prepareEvidence')")
     expect(source).toContain("tr('generate.reviewPublish')")
     expect(source).toContain("labelKey: 'generate.modes.recent.label'")
+    expect(source).toContain('onOpenChat(status.runId)')
   })
 
   it('Scan 运行可取消，取消后继续展示最近一次完成结果', () => {

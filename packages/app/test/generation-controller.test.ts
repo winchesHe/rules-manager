@@ -12,6 +12,51 @@ class FakeWorker extends EventEmitter implements GenerationWorkerLike {
 }
 
 describe('GenerationController', () => {
+  it('把 Generation 生命周期同步到持久化 Chat Thread', () => {
+    const worker = new FakeWorker()
+    const transcript = {
+      createGenerationThread: jest.fn(),
+      syncGeneration: jest.fn(),
+    }
+    const controller = new GenerationController(
+      () => worker,
+      () => undefined,
+      transcript,
+    )
+
+    const started = controller.start({ mode: 'projects', projects: ['demo'] })
+    if (!started.started) throw new Error('generation should start')
+    expect(transcript.createGenerationThread).toHaveBeenCalledWith({
+      runId: started.runId,
+      request: { mode: 'projects', projects: ['demo'] },
+      startedAt: expect.any(String),
+    })
+
+    worker.emit('message', {
+      type: 'event',
+      event: {
+        kind: 'project_response',
+        response: {
+          projectSlug: 'demo',
+          summary: 'Generated one candidate.',
+          candidates: [],
+        },
+      },
+    })
+    worker.emit('message', {
+      type: 'done',
+      result: { phase: 'done', candidateCount: 0 },
+    })
+
+    expect(transcript.syncGeneration).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        runId: started.runId,
+        state: 'completed',
+        projectResponses: [{ projectSlug: 'demo', summary: 'Generated one candidate.', candidates: [] }],
+      }),
+    )
+  })
+
   it('start 立即返回，并把生成范围交给 Worker', () => {
     const worker = new FakeWorker()
     const factory = jest.fn(() => worker)

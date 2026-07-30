@@ -4,6 +4,7 @@ import { BrowserWindow, ipcMain } from 'electron'
 import Database from 'better-sqlite3'
 import { listProjects, listProjectSessions } from '@memory-manager/core'
 import { getDbPath, isDatabaseReady } from '@memory-manager/core/db'
+import { resolveWorkspace } from '@memory-manager/core/workspace'
 import {
   listRuleCandidates,
   updateRuleCandidateText,
@@ -39,7 +40,9 @@ import {
   setProviderEnabled,
 } from '../../core/src/provider-settings.js'
 import type { AgentName } from '../../core/src/types.js'
+import { ChatStore } from './chat-store.js'
 
+const chatStore = new ChatStore(resolveWorkspace().chatsDir)
 const scanController = new ScanController(
   (request) =>
     new Worker(join(import.meta.dirname, 'scan-worker.js'), {
@@ -53,6 +56,7 @@ const generationController = new GenerationController(
       workerData: request,
     }),
   broadcastGenerationEvent,
+  chatStore,
 )
 const providerController = new ProviderController(
   (request) =>
@@ -78,6 +82,13 @@ export function registerIpcHandlers(): void {
     }
     if (!isDatabaseReady()) throw new Error('database is not ready')
     return runSessionPreviewWorker(sessionId)
+  })
+  ipcMain.handle('chat.list', () => chatStore.listThreads())
+  ipcMain.handle('chat.read', (_event, threadId: unknown) => {
+    if (typeof threadId !== 'string' || !threadId.trim()) {
+      throw new Error('chat thread id is required')
+    }
+    return chatStore.readThread(threadId)
   })
 
   ipcMain.handle('scan.run', (_event, value?: unknown) => {
@@ -253,6 +264,7 @@ export function registerIpcHandlers(): void {
 }
 
 function markInterruptedBackgroundRuns(): void {
+  chatStore.markInterruptedThreads()
   if (!isDatabaseReady()) return
   const db = new Database(getDbPath())
   try {

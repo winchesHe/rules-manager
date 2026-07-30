@@ -1,0 +1,500 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, Button, Card, Chip, Spinner } from '@heroui/react'
+import { useTranslation } from 'react-i18next'
+import {
+  Activity,
+  Bot,
+  Check,
+  ChevronRight,
+  Clock3,
+  MessageSquareText,
+  Sparkles,
+  Square,
+} from 'lucide-react'
+import { currentLocale } from '../i18n'
+import { formatDateTime } from '../i18n/format'
+import type {
+  ChatThread,
+  ChatThreadSummary,
+  GenerationHistoryEntry,
+  RunCancelResult,
+} from '../types'
+
+export function ChatView({
+  initialThreadId,
+  onOpenGeneratedRules,
+}: {
+  initialThreadId?: string | null
+  onOpenGeneratedRules: () => void
+}) {
+  const { t } = useTranslation('chat')
+  const [threads, setThreads] = useState<ChatThreadSummary[]>([])
+  const [history, setHistory] = useState<GenerationHistoryEntry[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(initialThreadId ?? null)
+  const [thread, setThread] = useState<ChatThread | null>(null)
+  const [legacy, setLegacy] = useState<GenerationHistoryEntry | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const selectedIdRef = useRef<string | null>(selectedId)
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId
+  }, [selectedId])
+
+  const loadIndex = useCallback(async (preferredId?: string | null) => {
+    const [threadRows, historyRows] = await Promise.all([
+      window.api.invoke<ChatThreadSummary[]>('chat.list'),
+      window.api.invoke<GenerationHistoryEntry[]>('rules.generate.history'),
+    ])
+    setThreads(threadRows)
+    setHistory(historyRows)
+    const current = preferredId ?? selectedIdRef.current
+    const next = current
+      ?? threadRows[0]?.id
+      ?? historyRows[0]?.id
+      ?? null
+    setSelectedId(next)
+    selectedIdRef.current = next
+    return { threadRows, historyRows, selectedId: next }
+  }, [])
+
+  const loadSelected = useCallback(async (
+    id: string | null,
+    threadRows: ChatThreadSummary[],
+    historyRows: GenerationHistoryEntry[],
+  ) => {
+    if (!id) {
+      setThread(null)
+      setLegacy(null)
+      return
+    }
+    if (threadRows.some((item) => item.id === id)) {
+      const restored = await window.api.invoke<ChatThread | null>('chat.read', id)
+      setThread(restored)
+      setLegacy(null)
+      return
+    }
+    setThread(null)
+    setLegacy(historyRows.find((item) => item.id === id) ?? null)
+  }, [])
+
+  const refresh = useCallback(async (preferredId?: string | null) => {
+    try {
+      const result = await loadIndex(preferredId)
+      await loadSelected(result.selectedId, result.threadRows, result.historyRows)
+      setError(null)
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLoading(false)
+    }
+  }, [loadIndex, loadSelected])
+
+  useEffect(() => {
+    void refresh(initialThreadId)
+  }, [initialThreadId, refresh])
+
+  useEffect(() => {
+    const onGenerationChange = (value: unknown) => {
+      if (
+        value
+        && typeof value === 'object'
+        && 'event' in value
+        && value.event
+        && typeof value.event === 'object'
+        && 'kind' in value.event
+        && value.event.kind === 'assistant_delta'
+      ) {
+        return
+      }
+      void refresh()
+    }
+    for (const channel of [
+      'generate.progress',
+      'generate.event',
+      'generate.done',
+      'generate.cancelled',
+      'generate.failed',
+    ]) {
+      window.api.onEvent(channel, onGenerationChange)
+    }
+    return () => {
+      for (const channel of [
+        'generate.progress',
+        'generate.event',
+        'generate.done',
+        'generate.cancelled',
+        'generate.failed',
+      ]) {
+        window.api.offEvent(channel, onGenerationChange)
+      }
+    }
+  }, [refresh])
+
+  const items = useMemo(() => {
+    const persistedIds = new Set(threads.map((item) => item.id))
+    return [
+      ...threads.map((item) => ({ id: item.id, thread: item, legacy: undefined })),
+      ...history
+        .filter((item) => !persistedIds.has(item.id))
+        .map((item) => ({ id: item.id, thread: undefined, legacy: item })),
+    ]
+  }, [history, threads])
+
+  async function stopGeneration(): Promise<void> {
+    if (!thread || (thread.status !== 'running' && thread.status !== 'cancelling')) return
+    try {
+      await window.api.invoke<RunCancelResult>(
+        'rules.generate.cancel',
+        { runId: thread.runId },
+      )
+      await refresh(thread.id)
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  function selectThread(id: string): void {
+    setSelectedId(id)
+    selectedIdRef.current = id
+    void refresh(id)
+  }
+
+  return (
+    <section aria-label={t('title')} className="grid min-h-[calc(100vh-4rem)] grid-rows-[auto_minmax(0,1fr)]">
+      <header className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">{t('title')}</h1>
+          <p className="mt-1 text-sm text-muted">{t('description')}</p>
+        </div>
+        {thread?.status === 'completed' && thread.candidateCount > 0 && (
+          <Button className="gap-2 bg-primary text-primary-foreground" onPress={onOpenGeneratedRules}>
+            {t('openGeneratedRules')}
+            <ChevronRight aria-hidden="true" size={17} />
+          </Button>
+        )}
+      </header>
+
+      {error && (
+        <Alert className="mb-4" status="danger">
+          <Alert.Content>
+            <Alert.Title>{t('loadError')}</Alert.Title>
+            <Alert.Description>{error}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      )}
+
+      <Card className="min-h-0 overflow-hidden border border-border bg-surface shadow-none">
+        <Card.Content className="grid h-full min-h-[34rem] grid-cols-[14rem_minmax(0,1fr)_17rem] p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)]">
+          <aside aria-label={t('threadRail')} className="min-h-0 overflow-y-auto border-r border-border bg-sidebar/40">
+            <div className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
+              <strong className="text-xs font-medium uppercase tracking-wide text-muted">
+                {t('threadRail')}
+              </strong>
+            </div>
+            {loading ? (
+              <div className="grid place-items-center py-12"><Spinner color="accent" /></div>
+            ) : items.length === 0 ? (
+              <p className="px-4 py-8 text-xs leading-5 text-muted">{t('empty')}</p>
+            ) : (
+              <div>
+                {items.map((item) => {
+                  const status = item.thread?.status ?? item.legacy?.status ?? 'completed'
+                  const active = item.id === selectedId
+                  return (
+                    <button
+                      aria-current={active ? 'page' : undefined}
+                      className={`grid w-full cursor-pointer gap-1 border-b border-border px-4 py-3 text-left transition-colors hover:bg-surface-hover ${
+                        active ? 'bg-primary-soft' : ''
+                      }`}
+                      key={item.id}
+                      onClick={() => selectThread(item.id)}
+                      type="button"
+                    >
+                      <span className="flex items-center gap-2">
+                        {status === 'running' || status === 'cancelling'
+                          ? <Spinner color="accent" size="sm" />
+                          : <MessageSquareText aria-hidden="true" className="text-muted" size={15} />}
+                        <strong className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                          {item.thread
+                            ? threadTitle(item.thread.request, t)
+                            : legacyTitle(item.legacy!, t)}
+                        </strong>
+                      </span>
+                      <span className="flex items-center justify-between gap-2 pl-6 text-xs text-muted">
+                        <span>{t(`status.${status}`, { defaultValue: status })}</span>
+                        {!item.thread && <span>{t('legacy')}</span>}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </aside>
+
+          <main aria-label={t('conversation')} className="min-h-0 overflow-y-auto bg-background px-6 py-6">
+            {!thread && !legacy ? (
+              <div className="grid h-full place-items-center text-sm text-muted">
+                {loading ? t('loading') : t('emptySelection')}
+              </div>
+            ) : thread ? (
+              <PersistedConversation thread={thread} />
+            ) : (
+              <LegacyConversation entry={legacy!} />
+            )}
+          </main>
+
+          <aside aria-label={t('context')} className="min-h-0 overflow-y-auto border-l border-border p-5 max-[1180px]:col-start-2 max-[1180px]:border-l-0 max-[1180px]:border-t">
+            <h2 className="text-sm font-medium text-foreground">{t('context')}</h2>
+            {thread ? (
+              <div className="mt-4 grid gap-4">
+                <ContextDetail label={t('run')} value={thread.runId.slice(0, 8)} />
+                <ContextDetail label={t('scope')} value={scopeLabel(thread.request, t)} />
+                <ContextDetail label={t('projects')} value={String(thread.projectCount)} />
+                <ContextDetail label={t('sessions')} value={String(thread.sessionCount)} />
+                <ContextDetail label={t('candidates')} value={String(thread.candidateCount)} />
+                <ContextDetail
+                  label={t('updated')}
+                  value={formatDateTime(thread.updatedAt, currentLocale())}
+                />
+                {(thread.status === 'running' || thread.status === 'cancelling') && (
+                  <Button
+                    className="mt-2 gap-2"
+                    isDisabled={thread.status === 'cancelling'}
+                    onPress={() => void stopGeneration()}
+                    variant="ghost"
+                  >
+                    {thread.status === 'cancelling'
+                      ? <Spinner color="current" size="sm" />
+                      : <Square aria-hidden="true" size={14} />}
+                    {thread.status === 'cancelling' ? t('cancelling') : t('stopGeneration')}
+                  </Button>
+                )}
+              </div>
+            ) : legacy ? (
+              <div className="mt-4 grid gap-4">
+                <Chip color="warning" size="sm" variant="soft">{t('legacy')}</Chip>
+                <ContextDetail label={t('run')} value={legacy.id.slice(0, 8)} />
+                <ContextDetail label={t('scope')} value={scopeLabel(legacy.request, t)} />
+                <ContextDetail label={t('candidates')} value={String(legacy.candidateCount)} />
+              </div>
+            ) : null}
+            <p className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted">
+              {t('privacy')}
+            </p>
+          </aside>
+        </Card.Content>
+      </Card>
+    </section>
+  )
+}
+
+function PersistedConversation({ thread }: { thread: ChatThread }) {
+  const { t } = useTranslation('chat')
+  const userMessage = thread.messages.find((message) => message.role === 'user')
+  const assistantMessage = [...thread.messages].reverse().find(
+    (message) => message.role === 'assistant',
+  )
+  const assistantContent = thread.projectResponses.length > 0
+    ? assistantMessage?.content
+    : terminalMessage(thread.status, t)
+  return (
+    <div className="mx-auto grid w-full max-w-3xl gap-6">
+      <div className="flex justify-end">
+        <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
+          {userMessage?.kind === 'rules-generation-request'
+            ? requestMessage(thread.request, t)
+            : userMessage?.content ?? scopeLabel(thread.request, t)}
+        </div>
+      </div>
+      <article className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
+        <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
+          <Bot aria-hidden="true" size={16} />
+        </span>
+        <div className="min-w-0">
+          <div className="mb-3 flex items-center gap-2">
+            <strong className="text-sm font-medium text-foreground">{t('assistant')}</strong>
+            <Chip color={statusColor(thread.status)} size="sm" variant="soft">
+              {t(`status.${thread.status}`, { defaultValue: thread.status })}
+            </Chip>
+          </div>
+          {assistantContent ? (
+            <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">
+              {assistantContent}
+            </p>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-muted">
+              {thread.status === 'running' && <Spinner color="accent" size="sm" />}
+              {t('noResponse')}
+            </div>
+          )}
+          {thread.activities.length > 0 && (
+            <details className="mt-4 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
+              <summary className="flex cursor-pointer items-center gap-2 font-medium text-foreground">
+                <Activity aria-hidden="true" size={14} />
+                {t('activity')} · {thread.activities.length}
+              </summary>
+              <div className="mt-3 grid gap-2 border-t border-border pt-3">
+                {thread.activities.map((activity) => (
+                  <div className="flex items-center gap-2" key={activity.seq}>
+                    <Check aria-hidden="true" className="text-primary" size={12} />
+                    <span>{activity.detail ?? activity.kind}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+          <div className="mt-5 grid gap-3">
+            {thread.projectResponses.flatMap((response) =>
+              response.candidates.map((candidate, index) => (
+                <Card className="border border-border bg-surface shadow-none" key={`${response.projectSlug}-${index}`}>
+                  <Card.Content className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-xs text-muted">{response.projectSlug}</span>
+                        <strong className="mt-1 block text-sm font-medium leading-6 text-foreground">
+                          {candidate.rule}
+                        </strong>
+                      </div>
+                      <Chip color={confidenceColor(candidate.confidence)} size="sm" variant="soft">
+                        {candidate.confidence}
+                      </Chip>
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-muted">
+                      <strong className="text-foreground">{t('candidateReasoning')}：</strong>
+                      {candidate.reasoning}
+                    </p>
+                    {candidate.evidenceRefs.length > 0 && (
+                      <p className="mt-2 break-words text-xs leading-5 text-muted">
+                        <strong className="text-foreground">{t('candidateEvidence')}：</strong>
+                        {candidate.evidenceRefs.join(' · ')}
+                      </p>
+                    )}
+                  </Card.Content>
+                </Card>
+              )),
+            )}
+            {thread.status === 'completed' && thread.projectResponses.every(
+              (response) => response.candidates.length === 0,
+            ) && (
+              <p className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
+                {t('noCandidates')}
+              </p>
+            )}
+          </div>
+        </div>
+      </article>
+    </div>
+  )
+}
+
+function LegacyConversation({ entry }: { entry: GenerationHistoryEntry }) {
+  const { t } = useTranslation('chat')
+  return (
+    <div className="mx-auto grid w-full max-w-3xl gap-6">
+      <div className="flex justify-end">
+        <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm text-foreground">
+          {scopeLabel(entry.request, t)}
+        </div>
+      </div>
+      <article className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
+        <span className="grid size-8 place-items-center rounded-lg bg-surface-hover text-muted">
+          <Clock3 aria-hidden="true" size={16} />
+        </span>
+        <div>
+          <div className="flex items-center gap-2">
+            <strong className="text-sm font-medium text-foreground">{t('assistant')}</strong>
+            <Chip color="warning" size="sm" variant="soft">{t('legacy')}</Chip>
+          </div>
+          <p className="mt-3 text-sm leading-7 text-muted">{t('legacyDescription')}</p>
+          <Card className="mt-4 border border-border bg-surface shadow-none">
+            <Card.Content className="grid grid-cols-3 gap-4 p-4 max-sm:grid-cols-1">
+              <ContextDetail label={t('projects')} value={String(entry.evidence?.projectCount ?? 0)} />
+              <ContextDetail label={t('sessions')} value={String(entry.evidence?.totalSessions ?? 0)} />
+              <ContextDetail label={t('candidates')} value={String(entry.candidateCount)} />
+            </Card.Content>
+          </Card>
+        </div>
+      </article>
+    </div>
+  )
+}
+
+function ContextDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted">{label}</span>
+      <span className="break-words text-sm text-foreground">{value}</span>
+    </div>
+  )
+}
+
+function scopeLabel(
+  request: { mode: string; projects: string[] },
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (request.mode === 'full') return t('scopeFull')
+  if (request.mode === 'projects') {
+    return t('scopeProjects', { count: request.projects.length })
+  }
+  return t('scopeRecent')
+}
+
+function legacyTitle(
+  entry: GenerationHistoryEntry,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return `${t('legacy')} · ${scopeLabel(entry.request, t)}`
+}
+
+function threadTitle(
+  request: { mode: string; projects: string[] },
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (request.mode === 'full') return t('threadFull')
+  if (request.mode === 'projects') {
+    return t('threadProjects', { projects: request.projects.join(' · ') })
+  }
+  return t('threadRecent')
+}
+
+function requestMessage(
+  request: { mode: string; projects: string[] },
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (request.mode === 'full') return t('requestFull')
+  if (request.mode === 'projects') {
+    return t('requestProjects', { projects: request.projects.join('、') })
+  }
+  return t('requestRecent')
+}
+
+function terminalMessage(
+  status: ChatThread['status'],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | undefined {
+  if (status === 'completed') return t('generationCompleted')
+  if (status === 'cancelled') return t('generationCancelled')
+  if (status === 'failed') return t('generationFailed')
+  if (status === 'interrupted') return t('generationInterrupted')
+  return undefined
+}
+
+function statusColor(
+  status: ChatThread['status'],
+): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'completed') return 'success'
+  if (status === 'failed') return 'danger'
+  if (status === 'cancelled' || status === 'interrupted' || status === 'cancelling') {
+    return 'warning'
+  }
+  return 'default'
+}
+
+function confidenceColor(
+  confidence: string,
+): 'default' | 'success' | 'warning' {
+  if (confidence === 'high') return 'success'
+  if (confidence === 'medium') return 'warning'
+  return 'default'
+}

@@ -1286,3 +1286,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 真实 Electron 窗口完成中文默认 → 英文即时切换 → 中文切回 → 重启保持中文的闭环验证，并检查 Scan、Rules、Settings 的日期、导航、状态与布局；未发现页面级溢出。
 - 最终验收：App 10 suites / 62 tests、Core 24 suites / 237 tests、Core/App production build、Renderer TypeScript 与 `git diff --check` 全通过。Core build 仍输出既有的 `tsdown define` 配置警告，但命令成功退出且与本次 i18n 无关。
 - 当前工作树仍处于既有 monorepo 迁移状态，包含大量用户已有删除、修改和未跟踪文件；本轮未代替用户暂存或提交整棵工作树。
+
+## APP Chat 一级导航与持久化 Generation Thread（2026-07-30）
+
+- 新增 Scan / Projects / Chat / Rules 一级导航；Chat 成为 Agent Run 过程的唯一工作台，Rules 继续负责 Evidence scope、Candidate 审核与发布。Rules 新生成、活跃 Run 和 Generation History 行统一进入 Chat，旧 Run 没有 Thread 正文时以摘要安全降级。
+- Workspace 新增 `<workspace>/chats/`。每个新 Generation 使用 `runId` 作为 Thread ID，保存 `thread.json`、只追加 `messages.jsonl` 与运行中 `assistant.partial.json`；SQLite 不新增表或正文列。
+- Chat 只持久化用户可见请求、Project response 摘要、Activity 摘要、Evidence 元数据和 Candidate Artifact；`assistant_delta` raw Diagnostic、隐藏 Prompt、Session 原文、tool 参数和 tool output 继续不落盘。
+- GenerationController 通过可选 transcript store 同步 start / progress / evidence / project response / cancelling / terminal 生命周期。完成、取消、失败时 partial 转为最终 Assistant message；App 启动时遗留 running/cancelling Thread 标为 interrupted 并保留已写正文。
+- Renderer Chat 使用 Thread Rail + Conversation + Run context 三段布局：Request 右侧气泡、Assistant 无气泡正文、Activity 折叠区和 Candidate Artifact；第一版明确不提供 Composer、通用 New chat、连续追问或 Session Summary。
+- Chat 系统请求、终态 fallback 和 Thread 标题按 `zh-CN / en-US` 本地化；真实 Agent 正文、slug 和 Evidence 引用保持原样。
+- Computer Use 真实验收发现 Chat refresh 回调曾反复重建 IPC 订阅，连续切换触发 `MaxListenersExceededWarning`；将索引/详情加载回调稳定化后复验终端无 listener warning。
+- 隔离 workspace 实测两条链路：预置完整 Thread → Electron 重启 → Chat 正文、Activity、Evidence 与 Candidate 恢复；Rules → Recent activity → 空 Evidence completed → 自动切换 Chat，全程没有调用 Provider。Chat → Generated rules 出口和窄窗口无页面级横向溢出。
+- 红测先确认缺少 ChatStore、Controller transcript 依赖、Chat 导航/页面/IPC 和 Rules 跳转；最终 Core 24 suites / 238 tests、App 11 suites / 69 tests、扩大 rootDir 的 App TypeScript、Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define` 配置警告。
+- 后续 debt：通用 Composer、连续追问和 Session Summary 仍按产品约定留到下一阶段；Session Context 到时只保存 `sessionId`，每次调用读取最新 Session 内容，不做版本快照。

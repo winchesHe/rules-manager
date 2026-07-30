@@ -88,6 +88,15 @@ export type GenerationStartResult =
 
 export type GenerationWorkerRequest = GenerationRequest & { runId: string }
 
+export interface GenerationTranscriptStore {
+  createGenerationThread(input: {
+    runId: string
+    request: GenerationRequest
+    startedAt: string
+  }): void
+  syncGeneration(status: GenerationStatus): void
+}
+
 const MAX_OUTPUT_LENGTH = 512 * 1024
 const MAX_EVENTS = 200
 const MAX_PROJECT_RESPONSES = 100
@@ -110,6 +119,7 @@ export class GenerationController {
   constructor(
     private readonly createWorker: (request: GenerationWorkerRequest) => GenerationWorkerLike,
     private readonly emit: (event: GenerationControllerEvent) => void,
+    private readonly transcript?: GenerationTranscriptStore,
   ) {}
 
   start(request: GenerationRequest): GenerationStartResult {
@@ -118,6 +128,7 @@ export class GenerationController {
     }
 
     const runId = createRunId()
+    const startedAt = new Date().toISOString()
     this.state = {
       running: true,
       state: 'running',
@@ -128,10 +139,15 @@ export class GenerationController {
       events: [],
       output: '',
       outputTruncated: false,
-      startedAt: new Date().toISOString(),
+      startedAt,
     }
     let worker: GenerationWorkerLike
     try {
+      this.transcript?.createGenerationThread({
+        runId,
+        request,
+        startedAt,
+      })
       worker = this.createWorker({ ...request, runId })
     } catch (error) {
       this.fail(error instanceof Error ? error.message : String(error))
@@ -228,6 +244,7 @@ export class GenerationController {
       running: true,
       state: 'cancelling',
     }
+    this.syncTranscript()
     this.worker.postMessage({ type: 'cancel' })
     return { accepted: true }
   }
@@ -310,6 +327,21 @@ export class GenerationController {
     }
     this.state = { ...this.state, lastSeq: seq, events }
     this.emit(envelope)
+    if (
+      envelope.type !== 'event'
+      || envelope.event.kind !== 'assistant_delta'
+    ) {
+      this.syncTranscript()
+    }
+  }
+
+  private syncTranscript(): void {
+    if (!this.transcript) return
+    try {
+      this.transcript.syncGeneration(this.status())
+    } catch (error) {
+      console.error('[chat] failed to persist generation thread', error)
+    }
   }
 }
 

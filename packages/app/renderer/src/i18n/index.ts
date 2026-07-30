@@ -1,12 +1,14 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import commonEn from './locales/en-US/common.json'
+import chatEn from './locales/en-US/chat.json'
 import navigationEn from './locales/en-US/navigation.json'
 import projectsEn from './locales/en-US/projects.json'
 import rulesEn from './locales/en-US/rules.json'
 import scanEn from './locales/en-US/scan.json'
 import settingsEn from './locales/en-US/settings.json'
 import commonZh from './locales/zh-CN/common.json'
+import chatZh from './locales/zh-CN/chat.json'
 import navigationZh from './locales/zh-CN/navigation.json'
 import projectsZh from './locales/zh-CN/projects.json'
 import rulesZh from './locales/zh-CN/rules.json'
@@ -22,6 +24,7 @@ import {
 
 const resources = {
   'zh-CN': {
+    chat: chatZh,
     common: commonZh,
     navigation: navigationZh,
     projects: projectsZh,
@@ -30,6 +33,7 @@ const resources = {
     settings: settingsZh,
   },
   'en-US': {
+    chat: chatEn,
     common: commonEn,
     navigation: navigationEn,
     projects: projectsEn,

@@ -26,6 +26,7 @@ describe('resolveWorkspace', () => {
     // FS-first 重构后：projects 不再嵌在 rules/ 下
     expect(ws.projectsDir).toBe(path.join(home, '.memory-manager', 'projects'))
     expect(ws.rulesDir).toBe(path.join(home, '.memory-manager', 'rules'))
+    expect(ws.chatsDir).toBe(path.join(home, '.memory-manager', 'chats'))
     cleanHome(home)
   })
 })
@@ -60,6 +61,12 @@ describe('runInit --non-interactive', () => {
     await runInit({ nonInteractive: true, homeDir: home })
     const ws = resolveWorkspace(home)
     expect(fs.existsSync(ws.rulesDir)).toBe(true)
+  })
+
+  it('应创建 ~/.memory-manager/chats/（Chat FS-first 正文）', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const ws = resolveWorkspace(home)
+    expect(fs.existsSync(ws.chatsDir)).toBe(true)
   })
 
   it('应创建 ~/.memory-manager/sources/（adapter 软链根）', async () => {

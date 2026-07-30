@@ -116,6 +116,7 @@ describe('APP i18n', () => {
     })
 
     expect(locales[0]?.files).toEqual([
+      'chat.json',
       'common.json',
       'navigation.json',
       'projects.json',
