@@ -1,0 +1,77 @@
+{
+  "title": "项目",
+  "description": "查找项目并查看它的会话和规则状态。",
+  "loading": {
+    "projects": "正在加载项目",
+    "project": "正在加载 {{project}}",
+    "session": "正在加载会话内容"
+  },
+  "errors": {
+    "loadProjects": "无法加载项目",
+    "loadDetails": "无法加载项目详情",
+    "openSession": "无法打开会话",
+    "previewVersion": "新版本已支持会话预览。请重启应用以完成更新。"
+  },
+  "filters": {
+    "label": "项目筛选",
+    "all": "全部",
+    "changed": "有变更",
+    "draft": "有草稿",
+    "unclassified": "未分类"
+  },
+  "list": {
+    "search": "搜索项目",
+    "emptyFilter": "没有符合搜索和筛选条件的项目。",
+    "tableLabel": "项目",
+    "openProject": "打开项目 {{project}}",
+    "changed_one": "{{count}} 项变更",
+    "changed_other": "{{count}} 项变更"
+  },
+  "columns": {
+    "project": "项目",
+    "agents": "Agents",
+    "sessions": "会话",
+    "latestChange": "最近变更",
+    "draftRules": "规则草稿"
+  },
+  "details": {
+    "description_one": "{{count}} 个会话 · {{agents}}",
+    "description_other": "{{count}} 个会话 · {{agents}}",
+    "noAgents": "没有 Agent",
+    "label": "项目详情",
+    "sessionsTab": "会话",
+    "rulesTab": "规则",
+    "generate": "为此项目生成规则",
+    "searchSessions": "搜索会话 ID 或来源路径",
+    "agent": "Agent",
+    "status": "状态",
+    "allAgents": "全部 Agent",
+    "allStatuses": "全部状态",
+    "filteredCount": "{{visible}} / {{total}}"
+  },
+  "sessions": {
+    "emptyFilter": "没有符合筛选条件的会话。",
+    "listLabel": "项目会话",
+    "messages_one": "{{count}} 条消息",
+    "messages_other": "{{count}} 条消息",
+    "latestMessages": "最近 {{visible}} / {{total}} 条消息",
+    "emptyPreview": "没有可展示的用户或 Assistant 消息。",
+    "messagesLabel": "会话消息",
+    "session": "会话"
+  },
+  "breadcrumbs": {
+    "label": "面包屑",
+    "projects": "项目"
+  },
+  "rules": {
+    "empty": "没有项目规则。",
+    "confidence": "{{level}} 置信度"
+  },
+  "empty": {
+    "projects": "还没有已分类的项目。",
+    "rules": "当前状态下没有候选规则。"
+  },
+  "sharedTable": {
+    "noAgents": "没有 Agent"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "actions": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "open": "Open",
+    "edit": "Edit",
+    "delete": "Delete",
+    "search": "Search",
+    "view": "View"
+  },
+  "status": {
+    "loading": "Loading",
+    "ready": "Ready",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "cancelling": "Cancelling",
+    "interrupted": "Interrupted",
+    "draft": "Draft",
+    "accepted": "Accepted",
+    "rejected": "Rejected",
+    "missing": "Missing",
+    "present": "Configured",
+    "disabled": "Disabled",
+    "updated": "Updated",
+    "new": "New",
+    "success": "Success",
+    "partial": "Partial",
+    "unchanged": "Unchanged",
+    "error": "Error",
+    "skipped": "Skipped",
+    "published": "Published"
+  },
+  "errors": {
+    "unknown": "An unknown error occurred",
+    "restart": "Restart the app to finish updating."
+  },
+  "counts": {
+    "sessions_one": "{{count}} session",
+    "sessions_other": "{{count}} sessions",
+    "projects_one": "{{count}} project",
+    "projects_other": "{{count}} projects",
+    "candidates_one": "{{count}} candidate",
+    "candidates_other": "{{count}} candidates",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents"
+  }
+}

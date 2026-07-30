@@ -1,0 +1,53 @@
+{
+  "actions": {
+    "back": "返回",
+    "cancel": "取消",
+    "close": "关闭",
+    "save": "保存",
+    "refresh": "刷新",
+    "retry": "重试",
+    "open": "打开",
+    "edit": "编辑",
+    "delete": "删除",
+    "search": "搜索",
+    "view": "查看"
+  },
+  "status": {
+    "loading": "正在加载",
+    "ready": "就绪",
+    "running": "运行中",
+    "completed": "已完成",
+    "failed": "失败",
+    "cancelled": "已取消",
+    "cancelling": "正在取消",
+    "interrupted": "已中断",
+    "draft": "草稿",
+    "accepted": "已接受",
+    "rejected": "已拒绝",
+    "missing": "缺失",
+    "present": "已配置",
+    "disabled": "已停用",
+    "updated": "已更新",
+    "new": "新增",
+    "success": "成功",
+    "partial": "部分完成",
+    "unchanged": "未变化",
+    "error": "错误",
+    "skipped": "已跳过",
+    "published": "已发布"
+  },
+  "errors": {
+    "unknown": "发生未知错误",
+    "restart": "请重启应用以完成更新。"
+  },
+  "counts": {
+    "sessions_one": "{{count}} 个会话",
+    "sessions_other": "{{count}} 个会话",
+    "projects_one": "{{count}} 个项目",
+    "projects_other": "{{count}} 个项目",
+    "candidates_one": "{{count}} 条候选规则",
+    "candidates_other": "{{count}} 条候选规则",
+    "agents_one": "{{count}} 个 Agent",
+    "agents_other": "{{count}} 个 Agent"
+  }
+}

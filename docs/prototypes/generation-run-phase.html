@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memory Manager · Generation Run Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: hsl(220 14% 10%);
+      --sidebar: hsl(220 14% 8%);
+      --surface: hsl(220 12% 13%);
+      --surface-hover: hsl(220 12% 16%);
+      --surface-raised: hsl(220 12% 18%);
+      --foreground: hsl(220 10% 94%);
+      --muted: hsl(220 10% 58%);
+      --primary: hsl(156 50% 45%);
+      --primary-soft: hsl(156 40% 20%);
+      --border: hsl(220 12% 21%);
+      --warning: hsl(40 75% 58%);
+      --danger: hsl(0 60% 58%);
+      --shadow: 0 18px 60px rgb(0 0 0 / 25%);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 216px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--sidebar);
+      padding: 28px 16px 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 38px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #07140f;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .brand strong { display: block; font-size: 15px; }
+    .brand span { color: var(--muted); font-size: 12px; }
+
+    .nav { display: grid; gap: 6px; }
+    .nav-item {
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      padding: 11px 14px;
+      color: var(--muted);
+      text-align: left;
+      cursor: pointer;
+    }
+    .nav-item.active {
+      background: var(--surface-hover);
+      color: var(--foreground);
+    }
+    .settings { margin-top: auto; }
+
+    main {
+      min-width: 0;
+      padding: 42px clamp(28px, 4vw, 68px) 56px;
+    }
+
+    .back {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin: 28px 0 26px;
+    }
+
+    h1 { margin: 0 0 8px; font-size: 34px; letter-spacing: -0.03em; }
+    .subtitle { margin: 0; color: var(--muted); }
+
+    .stop {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-block: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    .metric { padding: 17px 14px; }
+    .metric + .metric { border-left: 1px solid var(--border); }
+    .metric-label {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .metric-value { font-size: 15px; }
+
+    .run-shell {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 620px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .phases {
+      border-right: 1px solid var(--border);
+      padding: 24px 18px;
+    }
+
+    .phases-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 8px 16px;
+      font-size: 14px;
+    }
+
+    .status-pill, .chip {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border-radius: 999px;
+      background: var(--surface-raised);
+      padding: 4px 9px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .phase {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      width: 100%;
+      gap: 10px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: transparent;
+      padding: 14px 10px;
+      text-align: left;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+    .phase:hover { background: var(--surface-hover); }
+    .phase.active {
+      border-color: color-mix(in srgb, var(--primary), transparent 55%);
+      background: var(--primary-soft);
+    }
+
+    .phase-dot {
+      display: grid;
+      width: 22px;
+      height: 22px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--surface-raised);
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .phase.done .phase-dot { color: var(--primary); }
+    .phase.active .phase-dot {
+      background: var(--primary);
+      color: #07140f;
+    }
+    .phase-name { display: block; margin-bottom: 5px; font-size: 14px; font-weight: 700; }
+    .phase-detail { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .workspace { min-width: 0; padding: 24px; }
+
+    .generate-layout {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 1fr);
+      gap: 20px;
+      min-height: 510px;
+    }
+
+    .process {
+      border-right: 1px solid var(--border);
+      padding-right: 18px;
+    }
+    .section-kicker {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .timeline { position: relative; display: grid; gap: 6px; }
+    .timeline::before {
+      position: absolute;
+      top: 15px;
+      bottom: 15px;
+      left: 8px;
+      width: 1px;
+      background: var(--border);
+      content: "";
+    }
+    .event {
+      position: relative;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 10px;
+      padding: 8px 0;
+    }
+    .event-dot {
+      z-index: 1;
+      width: 17px;
+      height: 17px;
+      border: 4px solid var(--surface);
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .event.active .event-dot {
+      background: var(--primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary), transparent 75%);
+    }
+    .event.warning .event-dot { background: var(--warning); }
+    .event strong { display: block; font-size: 12px; }
+    .event span { color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+    .conversation {
+      min-width: 0;
+      height: 510px;
+      overflow: auto;
+      border-radius: 14px;
+      background: var(--background);
+      padding: 18px;
+      scroll-behavior: smooth;
+    }
+
+    .message { display: grid; gap: 8px; margin-bottom: 18px; }
+    .message-head {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .avatar {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 800;
+    }
+    .bubble {
+      border: 1px solid var(--border);
+      border-radius: 4px 14px 14px;
+      background: var(--surface);
+      padding: 14px 15px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .activity-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 10px;
+      background: var(--surface-hover);
+      padding: 11px 13px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .candidate-grid { display: grid; gap: 10px; margin-top: 10px; }
+    .candidate {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-hover);
+      padding: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+    .candidate:hover, .candidate:focus-visible {
+      border-color: var(--primary);
+      transform: translateY(-1px);
+      outline: none;
+    }
+    .candidate-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .candidate-title { font-size: 13px; font-weight: 750; }
+    .candidate p {
+      display: -webkit-box;
+      overflow: hidden;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .chip.high { background: var(--primary-soft); color: var(--primary); }
+    .raw {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .raw pre {
+      max-height: 120px;
+      overflow: auto;
+      border-radius: 8px;
+      background: #0b0d11;
+      padding: 12px;
+      white-space: pre-wrap;
+    }
+
+    .evidence-layout {
+      display: none;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 20px;
+      min-height: 510px;
+    }
+    .search {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--background);
+      padding: 11px 12px;
+      color: var(--foreground);
+      outline: none;
+    }
+    .project-list {
+      display: grid;
+      max-height: 454px;
+      overflow: auto;
+      margin-top: 10px;
+    }
+    .project-row {
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+      padding: 13px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .project-row:hover, .project-row.active { background: var(--surface-hover); }
+    .project-row strong { display: block; margin-bottom: 5px; font-size: 13px; }
+    .project-row span { color: var(--muted); font-size: 11px; }
+
+    .project-detail {
+      border-radius: 14px;
+      background: var(--background);
+      padding: 20px;
+    }
+    .project-detail h2 { margin: 0 0 5px; font-size: 22px; }
+    .project-meta { color: var(--muted); font-size: 12px; }
+    .sessions { display: grid; gap: 8px; margin-top: 20px; }
+    .session {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 12px 13px;
+    }
+    .session strong { display: block; font-size: 12px; }
+    .session code { color: var(--muted); font-size: 10px; }
+
+    dialog {
+      width: min(620px, calc(100vw - 32px));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+      color: var(--foreground);
+      box-shadow: var(--shadow);
+      padding: 0;
+    }
+    dialog::backdrop { background: rgb(0 0 0 / 60%); backdrop-filter: blur(4px); }
+    .dialog-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      border-bottom: 1px solid var(--border);
+      padding: 20px 22px;
+    }
+    .dialog-head h2 { margin: 0 0 7px; font-size: 20px; }
+    .close {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 22px;
+    }
+    .dialog-body { display: grid; gap: 18px; padding: 22px; }
+    .detail-block label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .detail-block p { margin: 0; font-size: 13px; line-height: 1.6; }
+
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 76px minmax(0, 1fr); }
+      .brand-copy, .nav-item span { display: none; }
+      .run-shell { grid-template-columns: 220px minmax(0, 1fr); }
+      .generate-layout { grid-template-columns: 1fr; }
+      .process { border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 16px; }
+      .timeline { grid-template-columns: repeat(3, 1fr); }
+      .timeline::before { display: none; }
+    }
+
+    @media (max-width: 720px) {
+      .app { display: block; }
+      .sidebar { display: none; }
+      main { padding: 24px 16px; }
+      .summary { grid-template-columns: 1fr; }
+      .metric + .metric { border-top: 1px solid var(--border); border-left: 0; }
+      .run-shell { display: block; }
+      .phases { border-right: 0; border-bottom: 1px solid var(--border); }
+      .evidence-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">M</div>
+        <div class="brand-copy">
+          <strong>Memory Manager</strong>
+          <span>Local workspace</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Primary navigation">
+        <button class="nav-item"><span>⌗　Scan</span></button>
+        <button class="nav-item"><span>▣　Projects</span></button>
+        <button class="nav-item active"><span>▤　Rules</span></button>
+      </nav>
+      <button class="nav-item settings"><span>⚙　Settings</span></button>
+    </aside>
+
+    <main>
+      <button class="back">← Back to queue</button>
+      <header class="page-header">
+        <div>
+          <h1>Generating rules</h1>
+          <p class="subtitle">Run b679f81e · Changed in last 7 days · started 2 minutes ago</p>
+        </div>
+        <button class="stop">■ Stop generation</button>
+      </header>
+
+      <section class="summary" aria-label="Generation summary">
+        <div class="metric">
+          <div class="metric-label">Evidence scope</div>
+          <div class="metric-value">Changed in last 7 days</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Source coverage</div>
+          <div class="metric-value">76 projects · 1,156 sessions</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Result</div>
+          <div class="metric-value"><strong id="candidate-count">3</strong> candidates · running</div>
+        </div>
+      </section>
+
+      <section class="run-shell">
+        <aside class="phases">
+          <div class="phases-title">
+            <strong>Run progress</strong>
+            <span class="status-pill">running</span>
+          </div>
+          <button class="phase done" data-view="evidence">
+            <span class="phase-dot">✓</span>
+            <span>
+              <span class="phase-name">Prepare evidence</span>
+              <span class="phase-detail">76 projects frozen for this run</span>
+            </span>
+          </button>
+          <button class="phase active" data-view="generate">
+            <span class="phase-dot">✦</span>
+            <span>
+              <span class="phase-name">Generate candidates</span>
+              <span class="phase-detail">12 of 76 projects · 3 candidates</span>
+            </span>
+          </button>
+          <button class="phase" data-view="generate">
+            <span class="phase-dot">○</span>
+            <span>
+              <span class="phase-name">Validate</span>
+              <span class="phase-detail">Validate each Agent response</span>
+            </span>
+          </button>
+          <button class="phase" data-view="generate">
+            <span class="phase-dot">○</span>
+            <span>
+              <span class="phase-name">Save drafts</span>
+              <span class="phase-detail">Save only after the full run succeeds</span>
+            </span>
+          </button>
+        </aside>
+
+        <div class="workspace">
+          <div class="generate-layout" id="generate-view">
+            <aside class="process">
+              <p class="section-kicker">Process</p>
+              <div class="timeline">
+                <div class="event">
+                  <span class="event-dot"></span>
+                  <span><strong>Prepared project bundle</strong><span>rules-manager · 18 sessions</span></span>
+                </div>
+                <div class="event">
+                  <span class="event-dot"></span>
+                  <span><strong>Agent replied</strong><span>2 candidates · 8.4s</span></span>
+                </div>
+                <div class="event warning">
+                  <span class="event-dot"></span>
+                  <span><strong>Split large context</strong><span>agent-workspace · 2 bundles</span></span>
+                </div>
+                <div class="event active">
+                  <span class="event-dot"></span>
+                  <span><strong>Generating</strong><span>bundle 12 of 76 · skills</span></span>
+                </div>
+              </div>
+            </aside>
+
+            <section class="conversation" id="conversation" aria-label="Agent output">
+              <article class="message">
+                <div class="message-head"><span class="avatar">A</span><strong>Agent</strong><span>rules-manager</span></div>
+                <div class="bubble">
+                  I found two durable instructions in this project. Both are explicit constraints and have direct evidence.
+                  <div class="candidate-grid">
+                    <button class="candidate" data-candidate="language">
+                      <span class="candidate-top">
+                        <span class="candidate-title">Always respond in Chinese</span>
+                        <span class="chip high">High confidence</span>
+                      </span>
+                      <p>Always respond in 中文，生成的文档也要中文。</p>
+                    </button>
+                    <button class="candidate" data-candidate="ambiguity">
+                      <span class="candidate-top">
+                        <span class="candidate-title">Resolve ambiguity before acting</span>
+                        <span class="chip high">High confidence</span>
+                      </span>
+                      <p>When an instruction is ambiguous, enumerate interpretations and apply the decision rule before taking action.</p>
+                    </button>
+                  </div>
+                </div>
+              </article>
+
+              <div class="activity-card"><span>↳</span>Validated 2 candidates against the response schema</div>
+
+              <article class="message" style="margin-top:18px">
+                <div class="message-head"><span class="avatar">A</span><strong>Agent</strong><span>agent-workspace</span></div>
+                <div class="bubble">
+                  One project-specific workflow is repeated across the selected sessions.
+                  <div class="candidate-grid">
+                    <button class="candidate" data-candidate="tests">
+                      <span class="candidate-top">
+                        <span class="candidate-title">Verify each implementation step</span>
+                        <span class="chip high">High confidence</span>
+                      </span>
+                      <p>Every implementation step must be runnable, observable, and independently verifiable.</p>
+                    </button>
+                  </div>
+                </div>
+              </article>
+
+              <div class="activity-card" style="margin-top:18px"><span class="spinner"></span>Agent is generating candidates for <strong>skills</strong>…</div>
+
+              <details class="raw">
+                <summary>Raw response · diagnostic only</summary>
+                <pre>[{"scope":"global","rule_text":"Always respond in Chinese…"}]</pre>
+              </details>
+            </section>
+          </div>
+
+          <div class="evidence-layout" id="evidence-view">
+            <aside>
+              <input class="search" id="project-search" placeholder="Search projects" aria-label="Search projects" />
+              <div class="project-list" id="project-list"></div>
+            </aside>
+            <section class="project-detail">
+              <p class="section-kicker">Evidence project</p>
+              <h2 id="project-name">rules-manager</h2>
+              <p class="project-meta" id="project-meta">18 sessions · latest 30 rounds · 42 excerpts</p>
+              <div class="sessions" id="session-list"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="candidate-dialog">
+    <div class="dialog-head">
+      <div>
+        <h2 id="dialog-title">Candidate detail</h2>
+        <span class="chip high">High confidence</span>
+      </div>
+      <button class="close" id="dialog-close" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <div class="detail-block"><label>Rule</label><p id="dialog-rule"></p></div>
+      <div class="detail-block"><label>Scope</label><p id="dialog-scope"></p></div>
+      <div class="detail-block"><label>Reasoning</label><p id="dialog-reason"></p></div>
+      <div class="detail-block"><label>Evidence</label><p id="dialog-evidence"></p></div>
+    </div>
+  </dialog>
+
+  <script>
+    const candidates = {
+      language: {
+        title: "Always respond in Chinese",
+        rule: "Always respond in 中文，生成的文档也要中文。",
+        scope: "Global · applies to every Agent",
+        reason: "This instruction appears as an explicit hard constraint in the project instructions and is reinforced across multiple sessions.",
+        evidence: "rules-manager · 4 sessions · 6 direct references"
+      },
+      ambiguity: {
+        title: "Resolve ambiguity before acting",
+        rule: "When a user instruction is ambiguous, enumerate reasonable interpretations, apply the decision rule, and ask the user only when the ambiguity cannot be resolved safely.",
+        scope: "Global · decision workflow",
+        reason: "The same ambiguity-handling process is stated in AGENTS.md and repeated in session corrections.",
+        evidence: "rules-manager · 3 sessions · 5 direct references"
+      },
+      tests: {
+        title: "Verify each implementation step",
+        rule: "Every implementation step must be runnable, observable, and independently verifiable before continuing.",
+        scope: "Project · agent-workspace",
+        reason: "The workflow is repeated across planning and implementation sessions and is explicitly named as a project requirement.",
+        evidence: "agent-workspace · 8 sessions · 11 direct references"
+      }
+    };
+
+    const projects = [
+      { name: "rules-manager", sessions: 18, rounds: 30, excerpts: 42, agents: "Codex · Claude" },
+      { name: "agent-workspace", sessions: 307, rounds: 30, excerpts: 614, agents: "Codex · Copilot · OpenCode · Pi" },
+      { name: "a-stock-trade", sessions: 90, rounds: 30, excerpts: 166, agents: "Codex · Cursor" },
+      { name: "boarding-desktop", sessions: 12, rounds: 30, excerpts: 28, agents: "Codex" },
+      { name: "skills", sessions: 10, rounds: 30, excerpts: 19, agents: "Codex" }
+    ];
+
+    const dialog = document.querySelector("#candidate-dialog");
+    document.querySelectorAll("[data-candidate]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const item = candidates[button.dataset.candidate];
+        document.querySelector("#dialog-title").textContent = item.title;
+        document.querySelector("#dialog-rule").textContent = item.rule;
+        document.querySelector("#dialog-scope").textContent = item.scope;
+        document.querySelector("#dialog-reason").textContent = item.reason;
+        document.querySelector("#dialog-evidence").textContent = item.evidence;
+        dialog.showModal();
+      });
+    });
+    document.querySelector("#dialog-close").addEventListener("click", () => dialog.close());
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+
+    function showView(view, activePhase) {
+      document.querySelector("#generate-view").style.display = view === "generate" ? "grid" : "none";
+      document.querySelector("#evidence-view").style.display = view === "evidence" ? "grid" : "none";
+      document.querySelectorAll(".phase").forEach((phase) => {
+        phase.classList.toggle("active", phase === activePhase);
+      });
+    }
+
+    document.querySelectorAll(".phase").forEach((phase) => {
+      phase.addEventListener("click", () => showView(phase.dataset.view, phase));
+    });
+
+    function renderProjects(query = "") {
+      const normalized = query.trim().toLowerCase();
+      const rows = projects.filter((project) => project.name.includes(normalized));
+      const list = document.querySelector("#project-list");
+      list.innerHTML = "";
+      rows.forEach((project, index) => {
+        const button = document.createElement("button");
+        button.className = `project-row${index === 0 ? " active" : ""}`;
+        button.innerHTML = `<strong>${project.name}</strong><span>${project.sessions} sessions · ${project.excerpts} excerpts</span>`;
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".project-row").forEach((row) => row.classList.remove("active"));
+          button.classList.add("active");
+          renderProjectDetail(project);
+        });
+        list.appendChild(button);
+      });
+      if (rows[0]) renderProjectDetail(rows[0]);
+    }
+
+    function renderProjectDetail(project) {
+      document.querySelector("#project-name").textContent = project.name;
+      document.querySelector("#project-meta").textContent =
+        `${project.sessions} sessions · latest ${project.rounds} rounds · ${project.excerpts} excerpts · ${project.agents}`;
+      const sessionList = document.querySelector("#session-list");
+      sessionList.innerHTML = "";
+      const visible = Math.min(project.sessions, 4);
+      for (let index = 0; index < visible; index += 1) {
+        const row = document.createElement("div");
+        row.className = "session";
+        row.innerHTML = `<span><strong>${project.name} · Session ${index + 1}</strong><code>019e${String(index + 1).padStart(4, "0")}… · technical ID</code></span><span class="chip">Preview</span>`;
+        sessionList.appendChild(row);
+      }
+      if (project.sessions > visible) {
+        const more = document.createElement("div");
+        more.className = "activity-card";
+        more.textContent = `+ ${project.sessions - visible} more sessions · virtualized on scroll`;
+        sessionList.appendChild(more);
+      }
+    }
+
+    document.querySelector("#project-search").addEventListener("input", (event) => {
+      renderProjects(event.target.value);
+    });
+    renderProjects();
+  </script>
+</body>
+</html>

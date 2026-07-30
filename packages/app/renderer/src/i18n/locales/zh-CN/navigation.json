@@ -1,0 +1,15 @@
+{
+  "scan": "扫描",
+  "projects": "项目",
+  "rules": "规则",
+  "settings": "设置",
+  "workspace": "本地工作区",
+  "mainLabel": "主导航",
+  "rulesLabel": "规则导航",
+  "rulesOverview": "概览",
+  "agentInstructions": "Agent 指令",
+  "generatedRules": "生成的规则",
+  "generationHistory": "生成历史",
+  "switchLight": "切换到浅色模式",
+  "switchDark": "切换到深色模式"
+}

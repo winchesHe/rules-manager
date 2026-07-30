@@ -1,0 +1,117 @@
+{
+  "title": "Scan",
+  "description": "Discover local agent sessions and organize them into projects.",
+  "loading": {
+    "scan": "Loading scan",
+    "history": "Loading scan history"
+  },
+  "errors": {
+    "loadStatus": "Unable to load scan status",
+    "failed": "Scan failed",
+    "loadHistory": "Unable to load scan history",
+    "historyVersion": "Scan history is available in the new app version. Restart the app to finish updating."
+  },
+  "notices": {
+    "cancelled": "Scan cancelled. Partial indexing was kept; Latest scan still shows the previous completed result."
+  },
+  "history": {
+    "back": "Back to latest scan",
+    "title": "Scan history",
+    "description": "All completed scans, newest first.",
+    "all": "All completed scans",
+    "empty": "No completed scans yet.",
+    "tableLabel": "Scan history",
+    "viewRow": "View scan completed {{time}}",
+    "backToHistory": "Back to history",
+    "action": "History"
+  },
+  "create": {
+    "back": "Back to latest scan",
+    "title": "New scan",
+    "description": "Choose agents and how far back to scan.",
+    "scopeTitle": "Scan scope",
+    "scopeDescription": "Select the session activity window for this scan.",
+    "rangeLabel": "Scan time range",
+    "fullHistory": "Full history",
+    "lastDays": "Last X days",
+    "daysLabel": "Days to scan",
+    "daysUnit": "days",
+    "agentsTitle": "Agents",
+    "agentsDescription": "Only selected agents will be scanned.",
+    "agentsLabel": "Scan agents",
+    "selectAgent": "Select at least one agent",
+    "summaryRecent_one": "{{count}} agent · last {{days}} days",
+    "summaryRecent_other": "{{count}} agents · last {{days}} days",
+    "summaryFull_one": "{{count}} agent · full history",
+    "summaryFull_other": "{{count}} agents · full history",
+    "start": "Start scan"
+  },
+  "latest": {
+    "newScan": "New scan",
+    "historicalDescription": "Review this historical scan result and open its affected projects.",
+    "resultDescription": "Review what changed, then continue in Projects or Rules.",
+    "emptyDescription": "Discover local agent sessions and organize them into projects.",
+    "stoppingTitle": "Stopping scan",
+    "progressTitle": "Scan in progress",
+    "resultTitle": "Scan result",
+    "latestTitle": "Latest scan",
+    "title": "Scan",
+    "completedAt": "Completed {{time}}",
+    "filterLabel": "Change filter",
+    "changesTableLabel": "Latest scan changes",
+    "emptyFilter": "No project changes in this filter.",
+    "viewSessions": "View sessions",
+    "viewProjectSessions": "View sessions for {{project}}",
+    "firstTitle": "Set up your first scan",
+    "firstDescription": "Choose which local agents to scan for sessions.",
+    "configureFirst": "Configure first scan"
+  },
+  "progress": {
+    "cancellingTitle": "Cancelling scan",
+    "runningTitle": "Scanning sessions",
+    "backgroundHint": "You can continue using Projects and Rules while this runs.",
+    "cancelling": "Cancelling",
+    "stop": "Stop scan",
+    "agentLabel": "{{agent}} scan progress"
+  },
+  "phase": {
+    "waiting": "Waiting",
+    "processing": "Processing",
+    "discovering": "Discovering",
+    "done": "Done",
+    "skipped": "Skipped",
+    "error": "Error"
+  },
+  "scope": {
+    "recent": "Last {{days}} days",
+    "full": "Full history"
+  },
+  "filters": {
+    "all": "All",
+    "new": "New",
+    "updated": "Updated",
+    "missing": "Missing"
+  },
+  "columns": {
+    "completed": "Completed",
+    "status": "Status",
+    "scope": "Scope",
+    "sessions": "Sessions",
+    "new": "New",
+    "updated": "Updated",
+    "errors": "Errors",
+    "project": "Project",
+    "agents": "Agents",
+    "missing": "Missing",
+    "actions": "Actions"
+  },
+  "summary": {
+    "sessions_one": "{{count}} session",
+    "sessions_other": "{{count}} sessions",
+    "new": "{{count}} new",
+    "updated": "{{count}} updated",
+    "missing": "{{count}} missing",
+    "errors_one": "{{count}} error",
+    "errors_other": "{{count}} errors"
+  }
+}

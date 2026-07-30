@@ -1,0 +1,36 @@
+{
+  "name": "@memory-manager/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "test": "node --experimental-vm-modules ../../node_modules/.bin/jest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@heroui/react": "3.2.2",
+    "@memory-manager/core": "0.1.0",
+    "better-sqlite3-electron": "npm:better-sqlite3@13.0.1",
+    "framer-motion": "12.42.2",
+    "i18next": "^26.3.6",
+    "lucide-react": "1.27.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-i18next": "^17.0.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "22.15.21",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "43.2.0",
+    "electron-vite": "5.0.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.8.3",
+    "vite": "7.3.6"
+  }
+}

@@ -126,3 +126,4 @@ memory/process.md        实现决策上下文，每段完成后追加
 | 怀疑 adapter 行为 | `test/sources/<agent>/` + `test/unit/adapter-*.test.ts` |
 | 改 schema | [src/db.ts](src/db.ts) 现有 `migrateV*To*` + `addColumnIfMissing` 守卫 |
 | spec 对账 | [docs/specs/memory-manager-spec.md](docs/specs/memory-manager-spec.md) |
+| APP UI 开发 | [DESIGN.md](DESIGN.md)（主题 token、组件映射、布局规范） |

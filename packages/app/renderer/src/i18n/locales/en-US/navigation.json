@@ -1,0 +1,15 @@
+{
+  "scan": "Scan",
+  "projects": "Projects",
+  "rules": "Rules",
+  "settings": "Settings",
+  "workspace": "Local workspace",
+  "mainLabel": "Main navigation",
+  "rulesLabel": "Rules navigation",
+  "rulesOverview": "Overview",
+  "agentInstructions": "Agent instructions",
+  "generatedRules": "Generated rules",
+  "generationHistory": "Generation history",
+  "switchLight": "Switch to light theme",
+  "switchDark": "Switch to dark theme"
+}

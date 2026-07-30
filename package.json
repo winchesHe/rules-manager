@@ -1,34 +1,12 @@
 {
-  "name": "memory-manager",
+  "name": "memory-manager-monorepo",
   "version": "0.1.0",
   "description": "本地优先 AI agent session 管理与 rules 生成 CLI",
+  "private": true,
   "type": "module",
-  "bin": {
-    "memory-manager": "./dist/cli.js"
-  },
+  "workspaces": ["packages/*"],
   "scripts": {
-    "build": "tsdown",
-    "cli": "tsx src/cli.ts",
-    "dev": "tsdown --watch",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest",
-    "test:ci": "node --experimental-vm-modules node_modules/.bin/jest --ci"
-  },
-  "dependencies": {
-    "@clack/prompts": "^0.10.1",
-    "@opencode-ai/sdk": "^1.17.11",
-    "better-sqlite3": "^11.10.0",
-    "commander": "^13.1.0",
-    "picocolors": "^1.1.1",
-    "yaml": "^2.9.0"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/jest": "^29.5.14",
-    "@types/node": "^22.15.21",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.3.4",
-    "tsdown": "^0.12.6",
-    "tsx": "^4.23.1",
-    "typescript": "^5.8.3"
+    "build": "npm run build -w @memory-manager/core",
+    "test": "npm test -w @memory-manager/core"
   }
 }

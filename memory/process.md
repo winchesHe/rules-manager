@@ -927,3 +927,362 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 每个 agent 只剩一个主要 instruction source，因此 `rules show <agent> <source-id>` 简化为 `rules show <agent>`；内部 `showGlobalInstructionSource` 和 command runner 同步删除 source id 参数。
 - source id 仍作为返回 metadata 和错误诊断字段，但不再由用户选择；辅助来源也因此没有 show 入口。
 - CLI 回归明确要求旧的第三位置参数报 `too many arguments`；最终验收为 14 suites、174/174 tests、`npm run build`、新旧命令真实 smoke 和 `git diff --check` 全部通过。构建仍只有既有 tsdown `define` warning。
+
+## Rule Candidate 生成链路（2026-07-27，进行中）
+
+- 任务 0 基线：14 suites、174 tests 全绿；schema v5 与六 agent session show 路由符合任务前提。
+- schema v6 新增 `rule_candidates` / `llm_runs`，v5 原地迁移保留 sessions；配置读取 `<workspace>/config.json`，缺失时默认 claude + medium effort，model 使用 provider 原生默认。
+- 既有 `workspace-state.test.ts` 硬编码 v5/3 表且任务禁止修改现有测试，形成验收冲突，已记录在 `BLOCKED.md`；v6/config 新增测试 5/5 通过。
+- Evidence 通过既有 `runSessionsShow` 同源路由在进程内读取，不写 transcript；工具块仅保留工具名与固定摘要，默认每 session 最新 30 条，支持 full/rounds、关键词排序、跨 session 精确规范化频次和 secret 脱敏。
+- Evidence/redaction 定向测试 7/7 通过，使用临时 JSONL fixture，未修改 `test/sources/`。
+- 双 Provider：Claude 通过 `@anthropic-ai/claude-agent-sdk query()`，Codex 通过 `spawn('codex', args)` 读取 stdout；model/effort 只作为调用参数，不写 prompt。
+- 结构化生成使用 Zod JSON Schema 注入和最多 2 次纠错重试。candidate DB 保存完整 EvidenceBundle + reasoning/evidence refs；llm_runs 只存 prompt/output SHA-256，不存正文。
+- `rules generate` 已注册 dry-run/project/provider/model/effort/rounds/full 参数，full 与 rounds 互斥。
+- 任务 3 定向测试 4/4、全部新增测试 16/16、构建通过。
+- Review 命令提供 draft 列表、accept/reject 状态更新和 explain；explain 从 candidate 的 evidence_json 展示 reasoning、refs 和回源片段，不重新读取源 session。
+- 收尾审查补齐按 timestamp 选择最新轮次、Copilot `user.message` event、Codex 独立 `function_call` 工具摘要，以及 CLI provider/effort 运行时校验。
+- 最终新增测试 20/20 通过，构建、tsc、diff check、generate/review help 通过。
+- 全量为 192 passed / 2 failed / 194 total；仅失败项是既有测试硬编码 v5/3 表，与 v6 任务冲突且本任务禁止修改旧测试，详见 `BLOCKED.md`。
+
+---
+
+## Desktop GUI 骨架（2026-07-28）
+
+- 仓库改为 npm workspaces：既有 CLI 源码、测试与配置整体搬入 `packages/core/`，包名为 `@memory-manager/core`；core 业务逻辑未改。
+- `packages/app/` 使用 Electron 43.2.0、React 19、HeroUI v3、TailwindCSS v4 与 electron-vite，提供暗色侧边栏和卡片工作区。
+- Electron main 直接导入 core 项目与 rule candidate 模块；preload 在 contextIsolation 下只暴露 `window.api.invoke`。
+- IPC 通道固定为 `projects.list`、`rules.candidates`、`rules.updateStatus`；未初始化 workspace 的列表请求返回空数组，status 更新仅接受 accepted/rejected。
+- main bundle 内联 workspace core、external `better-sqlite3`，避免 Electron 运行时加载被打包破坏的原生模块。
+- 验收：core 204/204 tests、core/app build、app typecheck、根 `tsc -b`、CLI help 与 diff check 全通过；dev renderer 地址为 `http://localhost:5173/`，renderer IPC 实际返回 projects JSON 数组。
+- 实例治理补充：main 使用 `app.requestSingleInstanceLock()` 防止重复 Electron 实例；第二次启动只聚焦已有窗口。开发验收结束必须清理整个进程树，不再把长驻 dev 进程留给用户。
+
+## HeroUI 双主题（2026-07-28）
+
+- renderer 改为 dark/light 双模式，默认 dark；根 class 驱动完整 CSS/Tailwind 语义 token，并同步覆盖 HeroUI v3 的 background/surface/foreground/accent/border/status 变量。
+- App 使用 Button/Card/Chip/Spinner/Alert/Table/Tooltip，移除手写组件状态和硬编码颜色；主题按钮 dark 显示 Sun、light 显示 Moon。
+- `@heroui/react@3.2.2` 不提供 v2 的 `HeroUIProvider`，因此使用 v3 官方 CSS token 集成路径；该任务要求冲突记录在 `BLOCKED.md`。
+- CDP 实测根 class、侧边栏、workspace 与 HeroUI Card 在 dark/light 间变化；typecheck/build/dev/diff check 通过，源码十六进制及 rgb 颜色为 0。
+- 所有 Electron UI 验收都使用独立进程组，完成后整体终止并复查端口/项目进程为 0。
+
+## APP 导航与规则审核（2026-07-28）
+
+- Renderer 拆为 Overview/Projects/Rules 三视图，App 只管理 activeView 与主题；各视图独立管理 loading/error/data。
+- 所有读取在 IPC 前等待一个 animation frame，确保 Spinner 真实绘制；所有 invoke 都有 catch Alert 与 finally loading 收尾。
+- Rules 提供 Draft/Accepted/Rejected，draft 行支持 accept/reject；同步 Set 防重复提交，同行按钮 disabled，目标按钮 Spinner，成功移除，失败保留并 Alert。
+- CDP 验证导航切换时 Projects/Rules 都先出现 loading，再显示对应视图；typecheck/build/dev/diff check 通过。
+- 真实 Electron 数据验收曾发现根 better-sqlite3 ABI 137 与 Electron 43 ABI 148 不兼容；后续已通过 app 独立原生依赖解决，方案见“Electron SQLite ABI 隔离”段。
+
+## APP 扫描与设置（2026-07-28）
+
+- preload 新增 callback + channel 精确配对的 `onEvent/offEvent`；main 的 `scan.run` 转发 scanner progress/done，并用进程级互斥禁止并发 scan。
+- Overview 预置六 agent 状态，显示 phase/current/total；任一 progress 可恢复切页后 scanning 状态，done 统一刷新项目并展示 new/updated/errors。
+- `saveLlmConfig` 与 load 共用校验，使用同目录临时文件 + rename 原子写 config.json；Settings Modal 每次打开重新加载，保存 provider/model/effort。
+- core package exports 未暴露 scanner/config，且本轮白名单不含 package.json；app 暂用 core source import。electron-vite build 和扩大 rootDir 的完整 TS 检查通过，标准 app composite typecheck 的 TS6059/TS6307 记录于 `BLOCKED.md`。
+- 本轮结束时 Electron SQLite ABI 137/148 曾阻塞真实 scan 成功事件链；后续已完成真实 Scan 验收。Settings 另已在隔离 HOME 下验证保存和重开保持。
+- 最终验收：core 22 suites、204/204 tests，app build、受控 dev renderer-ready、diff check、进程清理均通过。
+
+## APP Generate 与 Output（2026-07-28）
+
+- `runRulesGenerate` 新增可选 progress 回调，覆盖 extracting/generating/splitting/done；CLI stderr、返回值、deps 与持久化行为保持不变。
+- main 转发 generate progress/done/failed，使用进程级锁禁止并发生成；Rules Draft 展示实时阶段和候选计数，完成后刷新 draft。
+- Accepted 有规则时可同步 Output Rules，UI 展示 core 输出的绝对路径。由于 `runRulesOutput` 返回 void 且本轮禁止修改该文件，main 暂在同步调用期间解析并继续转发现有写入日志；后续应改为结构化返回。
+- 本轮结束时 Electron SQLite ABI 137/148 曾阻塞真实 DB 成功链；后续已完成原生依赖隔离。临时 Electron 内存 IPC harness 已验证 Generate loading→extracting→generating→done→draft refresh，以及 Output loading→路径 Alert。
+
+## Electron SQLite ABI 隔离（2026-07-28）
+
+- Node v24.14.0 使用 ABI 137，Electron 43.2.0 使用 ABI 148；同一个根 `better-sqlite3` 原生二进制不能同时服务两个运行时。
+- app 依赖别名 `better-sqlite3-electron` 固定到 `better-sqlite3@13.0.1`，electron-vite 将 app main 的 `better-sqlite3` 映射并 externalize 到该别名；core 保持 `better-sqlite3@11.10.0`，CLI 行为不变。
+- v13 提供可被 Electron ABI 148 加载的 N-API prebuild，因此不保留 `@electron/rebuild` 或 postinstall rebuild；lockfile 只记录 app 别名依赖。
+- GUI 首次 scan 可能尚无 `.memory-manager` 目录，`scan.run` 在打开 DB 前创建 workspace 目录；这不改变 scanner/db/adapter 行为。
+- 真实隔离 Electron Scan 使用 Codex fixture 收到 14 条 progress，返回 total=1/new=1/errors=0，并刷新项目表显示 `cloud-code-master`；ABI 阻塞已解除。
+- 最终验收：core 22 suites、204/204 tests，app production build、扩大 rootDir 的完整 TypeScript 检查、`git diff --check` 全部通过；Node ABI 137 与 Electron ABI 148 的 SQLite smoke test 均成功。
+
+## APP Scan 后台异步化（2026-07-28）
+
+- 问题根因不是 scanner 缺少 `async` 关键字，而是 GUI 的 `scan.run` IPC 一直等待 Worker 完成才返回，使 renderer 生命周期与一条长请求绑定；现有进度事件也无法完整恢复切页前的六 agent 状态。
+- 新增 `ScanController` 管理 Worker 生命周期。`scan.run` 现在只负责启动并立即返回 `{ started }`，扫描结果继续通过 `scan.progress / scan.done / scan.failed` 事件推送；`scan.status` 提供运行中、完成、失败和各 agent 最新进度快照。
+- 互斥由 controller 统一持有：运行中第二次调用返回 `already-running`，worker error、显式 error message 或未完成即 exit 都会释放互斥并广播失败。
+- Overview 挂载时先订阅事件再读取 status；切页重进可恢复 `progressByAgent`，完成后仍刷新项目列表。core scanner、adapter、DB schema 与 CLI 行为未改。
+- 定向回归 3/3、core 22 suites / 204 tests、core/app build、扩大范围 TypeScript 检查和 `git diff --check` 全通过。标准 app composite typecheck 仍只有 `BLOCKED.md` 已记录的跨包 rootDir/TS6307 问题。
+- 隔离真实 Electron 扫描 1548 sessions、errors=0；扫描期间 Projects 导航与主题切换保持响应，切回 Overview 时恢复到 Codex `300/693`，完成后刷新 84 个项目。
+
+## APP Settings Paseo 布局修正（2026-07-29）
+
+- 主 App 改为固定 `h-screen` 布局：侧栏始终占满视口，Overview/Projects/Rules 仅在右侧独立滚动，Settings 与主题入口不会再被长内容推到页面底部。
+- Settings 不再嵌在主布局中；进入后完全替换主界面，使用 Paseo 风格独立设置 shell，左上返回恢复来源视图。
+- Settings 分类为 Providers/About。Providers 复用既有后台 Worker/IPC snapshot，展示 Claude/Codex 实时状态、模型数量、默认标记、启用状态与 generation effort。
+- Provider 详情恢复搜索、Discovered/Custom、模型默认选择、自定义模型增删、脱敏 Diagnostic 与 Refresh，视觉对齐 P2/P3。
+- 隔离 Electron 实测 Overview/Projects 的 Settings 均可见；Projects → Settings → Projects 恢复正确；Claude 4 models、Codex 5 models，搜索与诊断可用。
+- 最终 app 6/6 tests、renderer TypeScript、production build、硬编码颜色检查与 diff check 全部通过；验收进程和临时 HOME 已清理。
+
+## APP Generation defaults 与 Provider Footer 修正（2026-07-29）
+
+- Effort 配置从 `low / medium / high` 扩展为 Claude Agent SDK 当前声明的完整五档 `low / medium / high / xhigh / max`；config、CLI 参数类型、renderer 类型和运行时校验保持一致。
+- 新增可选 `fastMode` 配置。旧 config 不加字段仍可读取，但生成链路会把缺失值解释为 `false`，避免本机 Claude 全局设置意外改变规则生成行为。
+- Claude 调用通过 Agent SDK query options 的 `settings.fastMode` 启用/关闭 Fast Mode；Codex 调用不消费该字段。自动拆分后的递归请求继续携带同一 effort / fastMode。
+- Settings 的 Generation defaults 改为两行设置卡：Effort 五档下拉 + Claude Fast Mode Switch；非 Claude 默认 provider 时开关禁用并显示说明。
+- Provider 详情 Footer 改为完整宽度 flex 容器：更新时间在左，Add model / Diagnostic / Refresh 在右，窄宽度可整体换行，移除依靠单个元素 `mr-auto` 造成的不稳定间距。
+- 隔离 Electron 真实验收：下拉展示五档，Max 和 Fast Mode 能保存为 `{ effort: "max", fastMode: true }`；Provider Footer 左右分组和滚动内容正常。验收后 Electron、Vite 与临时 HOME 已清理。
+- 最终验收：core 23 suites / 213 tests、app 2 suites / 6 tests、core/app build、renderer strict TypeScript 与 `git diff --check` 全通过。标准 app composite typecheck 仍只有 `BLOCKED.md` 已记录的跨 workspace `TS6059/TS6307`。
+
+## APP 无边框窗口拖动修复（2026-07-29）
+
+- `BrowserWindow` 使用 `titleBarStyle: hiddenInset` 后，renderer 必须显式提供 `-webkit-app-region: drag`；此前没有 drag region，导致鼠标无法移动窗口。
+- App 根层新增固定 2rem 顶部拖动带，左侧保留 5rem 给 macOS traffic lights；该节点位于 Settings 条件分支之外，因此所有页面和 Modal 打开状态都保留拖动能力。
+- button / link / input / textarea / select / role=button 显式设为 `-webkit-app-region: no-drag`，避免交互控件被拖动语义吞掉。
+- 新增 `window-drag-region.test.ts` 锁定 JSX 与 CSS 契约；测试先在旧实现上失败，修复后通过。
+- 真实 Electron 分别在 Overview 与 Settings 顶部执行拖动；随后 Settings 与返回按钮点击正常，应用保持运行并回到 Overview。
+- 最终验收：App 3 suites / 7 tests、renderer strict TypeScript、production build、`git diff --check` 全通过。
+
+## APP 首页工作流渐进式重构（2026-07-29）
+
+- 主导航收敛为 Scan / Projects / Rules；三页都使用“列表 / 结果优先，配置与详情按任务进入独立页面”的渐进式结构，移除 PageHeader 默认 Local 徽标。
+- Scan 默认展示最近结果，新建扫描独立配置全量扫描范围；所选 Agent 经过 IPC 校验传入 ScanController 和 Worker，仍保持后台运行与切页恢复。
+- Projects 增加搜索与 All / Changed / Has drafts / Unclassified 筛选；详情拆分 Sessions / Rules，Sessions 通过 `listProjectSessions` IPC 查询并以 56px 固定行高、overscan=4 的 renderer 虚拟窗口展示。
+- Scan 结果可直接进入对应项目详情；项目 Rules 可带 project scope 跳到规则生成页。
+- Rules 默认只显示候选队列，Generate / Review / Output 分为独立页面；Generate 支持 recent（每 session 最近 30 rounds）、full 和指定多个 projects，避免把 recent 误称为增量扫描。
+- Output 继续只调用既有 `runRulesOutput({ all: true })` 写 `.memory-manager/rules`；Agent system prompt / project memory 的 live write 因缺少备份与冲突协议继续排除。
+- Electron smoke 发现长 Projects 表格会造成文档级横向滚动并在切页后压住侧栏；根容器与 main 现已锁定 viewport 宽度、隐藏全局横向溢出，并用 active view key 重置滚动上下文。
+- 最终验收：App 5 suites / 15 tests、Core 23 suites / 213 tests、Core/App build、renderer 扩大 rootDir TypeScript、`git diff --check` 全通过；真实验证 Scan 配置、Projects 搜索筛选、306 sessions 虚拟列表和 Rules Generate，测试 Electron 实例已退出。
+
+## APP 最近 Scan 跨重启恢复（2026-07-29）
+
+- 原因：`ScanController` 仅保存当前 Electron 进程内的 summary，应用重启后 `scan.status` 变为空，即使 `run_metadata` 已有成功记录也会误显示未扫描。
+- main 新增只读 Scan history loader，从 `run_metadata` 选择最近一次 success/partial Scan，严格解析 summary，并兼容旧记录缺少 `changes` 的情况；不修改 schema 和 scanner 写入逻辑。
+- `scan.status` 优先返回运行中或当前进程结果；内存无 summary 时才恢复 DB 历史。当前 Worker 完成状态新增 `completedAt`，renderer 展示 sessions 总量与完成时间。
+- 真正无历史时首页标题改为 Scan，并提供 Configure first scan 入口，不再只显示被动空卡片。
+- 受控 Computer Use 会以隔离 HOME 启动 Electron，不能用于默认 workspace 的历史数据验收；改用真实默认 DB 只读检查，确认恢复 2026-07-29 最近记录：1036 sessions / 3 new / 4 updated。
+- 最终验收：App 7 suites / 22 tests、App production build、renderer 扩大 rootDir TypeScript、真实 DB 恢复断言与 `git diff --check` 全通过；无残留 Electron/Vite 进程。
+
+## APP 窗口位置恢复（2026-07-29）
+
+- Electron 主进程将主窗口最后一次普通状态位置保存到 `app.getPath('userData')/window-position.json`；窗口 `move` 时更新，`close` 前同步兜底保存。
+- 启动时仅恢复 `{x, y}`，不记录尺寸、最大化、全屏或多窗口状态；最小化、最大化或全屏状态不会覆盖最后一次普通位置。
+- 读取位置时要求安全整数坐标，且窗口左上角仍位于当前任一 display work area；损坏 JSON、非法字段、文件缺失或外接屏移除都会回退 BrowserWindow 默认位置。
+- 写入使用同目录临时文件 + rename，失败只记录主进程 warning，不阻止窗口继续运行。
+- 真实 Electron 验收预置 `(400, 180)` 后启动并正常退出，状态仍精确为 `(400, 180)`；测试状态文件、临时目录与测试进程均已清理。
+- 最终验收：App 7 suites / 23 tests、Core 23 suites / 213 tests、renderer 扩大 rootDir TypeScript、App/Core build 与 `git diff --check` 全通过。
+
+## APP Projects 整行点击热区（2026-07-29）
+
+- Projects 表格从仅 project name Button 可点击，调整为 HeroUI Table 的 `onRowAction`；点击任意单元格都进入对应项目详情。
+- Project name 恢复为普通强调文本；整行增加 pointer、hover、focus-visible 背景和键盘焦点环。
+- 交互沿用 React Aria row action 语义，保留鼠标与键盘操作，不给 `Table.Row` 注入其类型不支持的原生事件。
+- 最终验收：Projects 布局定向测试、renderer 扩大 rootDir TypeScript、App production build、App 7 suites / 23 tests 与 `git diff --check` 全通过。
+
+## APP Projects 首行热区圆角修正（2026-07-29）
+
+- HeroUI Table 为首行单元格附带圆角，整行 hover 时首行右上角出现圆弧缺口，与其余行的矩形热区不一致。
+- Project row 与直接子 `td` 统一设为 `rounded-none`；只修正行内热区形状，保留表格 Card 外框圆角与既有 `onRowAction`。
+- 最终验收：Projects 布局定向测试、renderer 扩大 rootDir TypeScript、App production build、App 7 suites / 23 tests 与 `git diff --check` 全通过。
+
+## APP Session 筛选与内容浏览（2026-07-29）
+
+- Project Sessions 增加 session id / source path 搜索、Agent 筛选、状态筛选和结果计数；筛选后的数据继续进入 56px 固定行高、overscan=4 的虚拟窗口。
+- Session 行改为整行可点击的 button 热区；详情作为 ProjectDetails 内部子页面，返回时保留搜索、筛选和虚拟列表滚动位置。
+- Core 新增只读 `readSessionPreview`：按需读取源 Session，不写 DB，只返回脱敏后的 user / assistant 文本和工具名摘要；工具参数、tool output 与 LLM prompt 不进入 renderer。
+- Session 解析运行在独立 `session-preview-worker`，避免大文件读取和解析占用 Electron 主进程；详情最多渲染最近 200 条可展示消息，并标明总消息数。
+- 最终验收：App 7 suites / 24 tests、Core 23 suites / 214 tests、renderer 扩大 rootDir TypeScript、Core/App build 与 `git diff --check` 全通过。
+
+## APP Session 面包屑与 IPC 版本漂移修复（2026-07-29）
+
+- Project 与 Session 详情统一使用语义化面包屑：Project 为 `Projects / project`，Session 为 `Projects / project / Session`；上级节点可点击返回，并保留 Project 内的筛选与滚动状态。
+- 截图中的 `No handler registered for 'sessions.preview'` 根因是旧 Electron 主进程仍持有 single-instance lock，同时 renderer 已连接到更新后的开发资源；新启动实例因此退出，造成 renderer/main 版本漂移。
+- renderer 对缺失 handler 增加可理解的重启提示，不再直接把底层 remote-method 错误暴露给用户；IPC 契约测试同时锁定 handler 与 session-preview Worker 构建入口。
+- 真实默认 workspace 验收：彻底退出旧主进程和旧 Vite server 后，新进程成功打开 `agent-workspace` Session，读取 209 条可展示消息并渲染最近 200 条；两级面包屑返回正常，无 IPC 报错。
+- 最终验收：App 7 suites / 26 tests、Core 23 suites / 214 tests、renderer 扩大 rootDir TypeScript、Core/App build 与 `git diff --check` 全通过；Electron/Vite 验收进程已清理。
+
+## APP Session 行鼠标反馈修正（2026-07-29）
+
+- Session 虚拟列表整行 button 显式增加 `cursor-pointer`，hover 时显示可点击的手型光标；点击热区、hover 背景、键盘焦点和虚拟滚动行为保持不变。
+- 布局契约测试新增 Session 行 cursor 断言，避免后续样式整理再次丢失点击反馈。
+- 最终验收：App 7 suites / 26 tests、renderer 扩大 rootDir TypeScript、App production build 与 `git diff --check` 全通过。
+
+## APP Claude / Codex 共用 Fast Mode（2026-07-29）
+
+- `fastMode` 继续使用单一 generation default，不新增配置字段或迁移；Claude 与 Codex 会按当前默认 Provider 消费同一个值。
+- Claude 保持映射到 Agent SDK `settings.fastMode`；Codex 新增显式 tier 映射：开启为 `service_tier="priority"`，关闭为 `service_tier="default"`，避免本机全局 Codex tier 改变规则生成的确定性。
+- Settings 的 Fast Mode 标记改为 `Claude · Codex`，移除 Codex 默认 Provider 下的禁用逻辑和 Claude 专属套餐文案。
+- 测试先锁定旧实现缺少 Codex tier 和 UI provider 限制，再完成修复；最终 Core 23 suites / 216 tests、App 7 suites / 27 tests、Core/App build、renderer 扩大 rootDir TypeScript 与 `git diff --check` 全通过。
+
+## APP Scan 结果直达 Project Sessions（2026-07-29）
+
+- Latest scan 结果表接入 HeroUI Table `onRowAction`，点击项目行任意单元格都进入对应 Project 详情；原有右侧动作保留并改名为 `View sessions`。
+- Project 详情既有默认 tab 仍为 `sessions`，因此导航无需新增路由状态，也不会影响 Projects 列表搜索、筛选与虚拟 Sessions 列表。
+- Scan 行补齐 `cursor-pointer`、hover、focus-visible 与方形单元格热区，鼠标和键盘都具备一致的可操作反馈。
+- 最终验收：App 7 suites / 28 tests、renderer 扩大 rootDir TypeScript、App production build 与 `git diff --check` 全通过。
+
+## APP 最近 7 天 Scan History 与变更 Sessions 生成（2026-07-29）
+
+- 新建 Scan 继续保持全量遍历所选 Agents，不引入按文件时间裁剪的增量扫描；“最近 7 天”仅用于已完成 Scan 的历史查询与规则 evidence 范围。
+- Scan History 从 `run_metadata` 只读加载最近 7 天 success/partial 记录，按 `ended_at` 倒序；列表可进入任意历史结果并复用项目变更表。旧 summary 缺少 `changes` 时仍能查看统计。
+- Rules Generate 新增 `Changed in last 7 days`：汇总 7 天内各次 Scan 的 new/updated session id，排除 missing、去重，再通过 `sessionIds` 精确过滤 evidence；空范围直接产生 0 candidates，不回退到全量。
+- 未修改 DB schema，也不保存新的 session 原文。默认 workspace 只读 smoke 返回 7 条历史扫描、1179 个去重变更 sessions，最近完成时间为 `2026-07-29T07:34:11.379Z`。
+- 最终验收：App 7 suites / 30 tests、Core 23 suites / 218 tests、Core/App build、renderer 扩大 rootDir TypeScript 与 `git diff --check` 全通过。
+
+## APP Scan History IPC 版本漂移修复（2026-07-29）
+
+- 截图中的 `No handler registered for 'scan.history'` 与先前 Session preview 一致：renderer 热更新后，16:45 启动的 Electron main 仍持有旧 IPC handler 集合；源码和 production main bundle 均已包含 `scan.history`。
+- History catch 增加缺失 handler 识别，旧主进程场景改为提示 `Restart the app to finish updating`，不再暴露底层 remote-method 错误。
+- 仅终止本项目旧 electron-vite / Electron 进程并重新启动；新进程于 17:13 启动，5173 重新监听。默认 workspace 的真实 History 查询返回 7 条记录。
+- UI 自动化插件两次因 macOS AppleEvent timeout 无法读取窗口，未继续重试；改用新进程启动时间、端口、构建产物 handler 和真实 DB 查询完成替代验收。
+- 最终验收：App 7 suites / 30 tests、renderer 扩大 rootDir TypeScript、App production build 与 `git diff --check` 全通过。
+
+## APP New Scan 最近 X 天时间范围（2026-07-29）
+
+- 用户澄清“最近 7 天”应是 New Scan 的 session 时间范围，而不是 History 的保留窗口；New Scan 现支持 `Full history` 和自定义正整数 `Last X days`，并与所选 Agents 一起传入后台 Scan Worker。
+- Core `ScanOptions` 新增 `sinceDays`，以 adapter 权威 `DiscoveredSession.updatedAt` 和扫描开始时间计算窗口；窗口外 session 不进入 parse / classify / FS / DB 更新链路。
+- 时间窗口扫描不执行 missing 对账：范围外 session 本轮没有被发现不代表源文件已删除，只有 Full history 扫描继续把真实缺失记录标为 missing 并移除链接。
+- `run_metadata.details` 新增 `scope` 元数据；旧扫描记录缺少 scope 时兼容解释为 Full history。Scan History 改为列出全部已完成记录，并展示每次扫描的 Full history / Last X days 范围。
+- Rules 的 `Changed in last 7 days` 仍保持独立 evidence 范围：`listChangedSessionIds` 显式默认查询最近 7 天，不受 History 全部展示语义影响。
+- 测试先锁定 `sinceDays` 类型缺口；实现后验证删除旧 Codex fixture 再执行最近 1 天扫描时 `total=0`、`missing=0`，原 DB session 不会变为 missing。
+- 最终验收：Core 23 suites / 220 tests、App 7 suites / 31 tests、Core/App production build、renderer 扩大 rootDir TypeScript 与 `git diff --check` 全通过；旧开发进程已退出，新 Electron 主进程已于本轮重启。
+
+## APP Rules Generate 后台 Worker 与紧凑状态（2026-07-29）
+
+- 卡死根因：`rules.generate` IPC handler 在 Electron 主线程内直接 `await runRulesGenerate`，evidence 提取、session 文件解析和 LLM 调用全都占用主进程事件循环。
+- 新增独立 Generation Worker 与 Controller：IPC 只校验请求并启动 Worker，立即返回 `{ started: true }`；运行中互斥、进度、完成、失败和 Worker 提前退出由 Controller 统一维护。
+- renderer 新增 `rules.generate.status` 恢复链路；离开 Rules、切换其他主导航或 renderer 重挂载后，仍能恢复后台任务的运行进度与最终结果。
+- 现有 `generate.progress / generate.done / generate.failed` 事件名保持不变，但改为广播到所有窗口，不再绑定发起请求的单个 sender。
+- Generate 页面移除大块居中状态 Card，改为紧凑的行内状态条：Spinner、阶段、详情和完成 Chip 同行展示；错误继续使用 Alert。
+- 测试先确认旧实现缺少 Controller/Worker 和 status handler；实现后新增 4 个 Controller 状态机测试，并锁定 Worker 构建入口、主线程不再调用 `await runRulesGenerate` 和紧凑状态布局。
+- 最终验收：App 8 suites / 36 tests、Core 23 suites / 220 tests、App production build、renderer 扩大 rootDir TypeScript 与 `git diff --check` 全通过；production Generation Worker 独立启动 smoke 返回 `done / candidateCount: 0`，Electron 主进程已重启加载新 handler。
+
+## APP Scan / Generate 可恢复、可取消、可观察后台 Run（2026-07-29）
+
+- ScanController 与 GenerationController 统一补齐稳定 `runId`、单调 `seq` 和 `idle / running / cancelling / cancelled / completed / failed / interrupted` 生命周期；启动 IPC 立即返回，取消请求必须携带当前 runId，旧页面不能误取消新任务。
+- Scan Worker 和 core scanner 接入 AbortSignal，在 Agent / Session / missing 对账等安全边界协作停止；取消前已完成的 DB/FS 索引保留，`run_metadata` 记录 cancelled 与脱敏 summary。History 展示 cancelled，但 Latest 继续只恢复最近 success/partial。
+- Rules Generate 保持一次用户可见 Run：启动时先一次性冻结 Evidence snapshot，再允许内部按 bundle / retry 调用 Provider。取消或失败发生在最终事务前，不写入任何 Draft；Generate lifecycle 只向 `run_metadata` 写 request、来源计数和结果摘要，不保存 prompt、Session 原文或 Agent output。
+- Claude Agent SDK 开启 partial messages 并归一化 text delta；Codex 使用 `exec --json --ephemeral --ignore-rules --sandbox read-only`、stdin prompt 和 JSONL 事件，取消时 SIGTERM 后超时 SIGKILL。Provider 未产生 partial event 时用最终 assistant message 兜底，保证 UI 仍有可见输出。
+- Generation Worker 将高频 token delta 以约 32ms 合并后广播；Controller 仅在内存保留最多 512 KiB Agent output 和 200 条非文本事件。切换主导航或 Renderer 重挂载后从 status 恢复同一 runId、Evidence 与已累积输出，App 重启不续跑，遗留 running 记录标为 interrupted。
+- Rules Queue 在活跃任务时显示 `View generation` 和运行条；Run detail 提供 Prepare evidence / Generate candidates / Validate / Save 阶段、Agent output / Evidence 两个 tab、自动跟随与 Jump to latest、Stop generation、完成后 Review drafts。Evidence Session 列表继续使用固定行高虚拟滚动，内容按需复用脱敏 `sessions.preview`。
+- Scan 运行卡增加 Stop scan / Cancelling；History 与其他主导航运行时仍可使用。取消完成后自动恢复上一次完整 Scan 结果，并明确提示部分索引已保留。
+- 测试先锁定 Run 状态机、错误 Worker、重复启动、stale runId、取消无 Draft、Scan cancelled metadata、Claude/Codex 流事件、Evidence snapshot、History/Latest 分离和 renderer 交互契约。
+- 最终验收：Core 23 suites / 228 tests、App 8 suites / 41 tests、Core/App production build、扩大 rootDir 的完整 TypeScript 检查与 `git diff --check` 全部通过。标准 App composite typecheck 仍只有 `BLOCKED.md` 记录的跨 workspace rootDir 限制。
+
+## APP Generation Run Paseo 项目化输出（2026-07-29）
+
+- Generation Run 移除右侧顶部 Agent output / Evidence Tabs；左侧 Prepare evidence / Generate candidates / Validate / Save drafts 成为唯一阶段导航，四项均可点击且唯一选中。Validate / Save drafts 暂复用过程视图。
+- Core 在每个 Evidence 项目生成完成后立即发布结构化响应，包含 project slug、自然语言摘要及 Candidate 的 rule/scope/confidence/reasoning/evidence refs；最终 Draft 仍只在全部项目完成后的原事务内写入。
+- Worker 只把结构化响应作为内存事件转发；`run_metadata` 继续只保存 request、Evidence 数量与结果摘要，不保存响应、Session 原文、tool output、prompt 或 raw Agent output。
+- Controller 独立保存最近 100 个项目响应，每项目最多 50 个 Candidate、每 Candidate 最多 50 个 Evidence refs，并限制详情文本长度；status 对响应、refs、Evidence 与事件做深层 defensive copy。
+- Renderer 从 status 恢复项目响应并按 runId 在进程内记忆阶段与对话滚动位置。Generate 同屏展示 Process、项目化 Agent 对话、typing/activity 与可点击 Candidate 只读详情；raw Provider output 仅在默认折叠的 Diagnostic 中显示。
+- Evidence 改为先搜索/选择 Project，再虚拟浏览该项目 Sessions；Project name 为标题主信息，Session ID 为次级技术信息，脱敏 Preview 仍通过既有 `sessions.preview` 按需加载。
+- 红测证据：Core 因缺少 `onProjectResponse` 编译失败；App 因缺少 `projectResponses` 编译失败；布局测试确认旧实现仍有顶部 Tabs 且不是 Project-first。
+- 最终验收第 1 轮即全绿：Core 23 suites / 230 tests、App 8 suites / 45 tests、Core/App production build 与 `git diff --check` 全部通过。
+
+## APP Candidate 详情弹窗键盘关闭（2026-07-29）
+
+- Candidate 详情标题明确显示 `Project · <slug>`，关闭操作改为标题栏右上角的 icon-only X，同时保留可访问名称。
+- 弹窗挂载时监听 `keydown`；按 Escape 调用同一关闭回调，卸载时移除 listener，避免重复注册或泄漏。
+- 测试先确认旧实现缺少 Project 标签、X 与 Escape 监听；实现后布局契约 14/14、App 全量 8 suites / 46 tests、production build 与 `git diff --check` 全通过。
+
+## APP Generation Run 初始阶段修正（2026-07-30）
+
+- 问题根因是 GenerationRunPage 对无 runId UI 记忆的情况使用 `generate` 作为 fallback；Evidence 实际仍先在 Worker 中完成，只是新 Run 第一屏错误选中了 Generate candidates。
+- 新 Run 的 fallback 改为 `evidence`，因此进入 Run detail 时先展示 Prepare evidence；已有 runId 仍从 renderer 内存恢复用户上次选择，不影响切页恢复。
+- 红测先锁定旧 `generate` fallback；实现后 App 全量 8 suites / 47 tests、production build 与 `git diff --check` 全通过。
+
+## APP 窗口位置与大小恢复（2026-07-30）
+
+- 窗口状态文件从 `{x,y}` 扩展为普通窗口完整 bounds `{x,y,width,height}`；启动时若存在合法尺寸则一并恢复，已有仅位置状态继续兼容并使用默认尺寸。
+- 主进程统一通过 `window.getBounds()` 保存状态，监听 move、resize 与 close；最小化、最大化和全屏期间仍不覆盖最后一次普通窗口状态。
+- 状态解析要求 width/height 成对出现且为正安全整数；损坏、非法或已离开当前显示器工作区的状态继续安全回退。
+- 红测证据：新增尺寸契约后旧 `WindowPosition` 类型报 TS2353（不存在 width）；实现后定向测试 9/9、App 全量 8 suites / 50 tests、production build 与 `git diff --check` 全通过。
+
+## Rules 全流程与 Paseo 风格 Agent Chat HTML 原型（2026-07-30）
+
+- 新增 `docs/prototypes/rules-workflow-redesign.html`，以 Generate → Review → Publish 为稳定顶层流水线；运行中的 Generation 作为 Generate 的上下文页面，不再成为并列业务阶段。
+- Generate 使用 Evidence scope + Generation summary；Review 使用候选列表与 Inspector 主从工作台；Publish 在写入前按 scope 预览已接受规则与 managed output 目标。
+- Generation Run 参考 Paseo Agent Stream：Request 右侧气泡、Assistant 无气泡正文、可展开 Activity、结构化 Candidate、Turn Footer、底部运行状态与自动回到底部入口；项目 Rail 只表达处理对象，不重复阶段导航。
+- Evidence 从独立内容页降级为 Run 内 Drawer，避免 Evidence / Generate / Validate / Save 与 Process timeline 双重导航；Candidate 支持就地展开 reasoning 和 refs。
+- 原型保持现有隐私边界，只展示请求摘要与脱敏 Evidence 元数据，不把 Prompt、Session 原文、tool output 或 raw Agent output写入持久化状态。
+- 浏览器实测 Generate → Run、Evidence Drawer、Review Accept & next、Publish 全链路可用；Accept 后 Draft 12 → 11，1280px 与 700px 宽度均无页面级横向溢出。静态契约、内联脚本语法与 `git diff --check` 通过。
+
+## Rules HTML 完整 Run 状态演示（2026-07-30）
+
+- Generation Run 补齐 Evidence collecting / Generating / Validate & save / Completed 四个可固定查看的状态；顶部 `Prototype states` 明确标注为原型演示控制，不进入生产信息架构。
+- Evidence collecting 在同一 Chat 中展示 Request、隐私说明、逐项目 Session/Excerpt 收集、进度条、项目 Rail 与实时 Footer；不新增 Loading 页面或重复阶段导航。
+- Generating 延续 Paseo 风格 Assistant Turn、Activity 和 Candidate；Validate & save 展示 9 → 7 去重、schema/evidence 校验与事务保存；Completed 汇总 5 Projects / 7 Drafts / 1m18s，并在此时才显示 Review drafts。
+- `Replay full run` 以 Evidence → Generating → Validating → Completed 自动演示完整状态机，四个状态也可以手动固定，方便设计评审。
+- 视觉验收发现通用 `.button` 覆盖原生 `[hidden]`，曾导致 Review drafts 在 Evidence 阶段提前显示；增加全局 `[hidden] { display: none !important; }` 后复验通过。
+- 浏览器逐状态验证标题、Badge、Project Rail、Chat、Footer 与 Review 出口一致；Replay 自动完成，700px 窄窗口无横向溢出，静态契约、脚本语法和 `git diff --check` 通过。
+
+## Rules Evidence 聚合快照语义修正（2026-07-30）
+
+- Core 实际模型是 `extractEvidence → EvidenceBundle[]`（每个 bundle 保留 `projectSlug`）→ Worker 汇总为一份 `EvidenceSnapshot.projects[]` → Generation 再逐 bundle 调用 Agent；不是每个 Project 独立生成一份 snapshot，也不是把项目边界完全扁平化。
+- 原型此前在 Evidence collecting 同时展示左侧 Project queue 和卡片内逐项目完成/等待，错误暗示“逐项目收集多份 Evidence”；用户截图明确指出该歧义。
+- Evidence 状态现使用 `.chat-shell.evidence-mode` 隐藏 Project rail，Chat 扩为单列；主卡明确命名 `One evidence snapshot`，只展示 Run-level 5 Project groups / 19 of 28 Sessions / 312 Excerpts 聚合进度。
+- Project 名称仅作为 snapshot 内无状态 source chips；删除 `Collecting cloud-code-master evidence`，改为跨全部 source groups 的 normalize/de-duplicate Activity。
+- 进入 Generating 后移除 `evidence-mode`，恢复 230px Project queue，表示 Agent 按 Project bundle 逐个生成的真实顺序。
+- 浏览器对账：Evidence 为单列 926px 且 Rail `display:none`；Generating 为 `230px + 696px` 且 Rail 可见；两态均无页面级横向溢出，静态契约、脚本语法与 `git diff --check` 通过。
+
+## Rules Overview / Chat / Publish 生产重构（2026-07-30）
+
+- Rules 默认入口改为 Overview：集中展示 5 个 Agent 各自独立的全局 instruction 文件、Project Rules 跳转、Recent generations 和按状态筛选的 Generated rules；Cursor 从 Rules instruction 与发布目标中彻底移除，Session 扫描能力保持不变。
+- Claude / Codex / Copilot / OpenCode / Pi instruction 支持读取、缺失文件创建、编辑和 CAS revision 保存；写入采用临时文件、fsync、rename，保留 symlink 目标语义，限制 UTF-8 正文最大 1 MiB。
+- Start Generate 进入 Chat 后再选择 Evidence scope（Recent activity / Select projects / Full history）；Evidence collecting 只展示一份 run-level snapshot，Project 仅作为 snapshot 内 source group，不再伪装成多个独立收集任务。
+- `rule_candidates` 通过仅吞 `duplicate column name` 的受保护加列补充 `run_id`；Generation Worker 保存 Evidence 的项目 slug、session id 与数量元数据，仍不持久化 prompt、Session 原文、tool output 或 raw Agent output。
+- Recent generation 的任意历史行现在可重新打开为 Chat 风格详情，恢复 request、统一 Evidence snapshot、Candidate 及 draft / accepted / rejected 状态；旧记录没有 run 关联时安全降级。
+- Draft Candidate 支持正文编辑后再接受/拒绝；Publish 默认不选 Agent，只把 accepted global rules 写入用户选中的 Agent managed block，保留人工内容并对各目标独立报告 published / unchanged / failed；Project rules 继续由 Projects 管理。
+- 运行时使用隔离 HOME 实测 Rules Overview → Start Generate → Evidence scope → 空 Evidence completed → Overview 更新 → 重启应用 → 历史 Chat 重新打开；5 个 Agent 路径、统一 Evidence 语义和历史恢复均与设计一致。
+- 最终验收：Core 24 suites / 237 tests、App 9 suites / 55 tests、Core/App production build、扩大 rootDir 的 renderer TypeScript 检查与 `git diff --check` 全通过。
+
+## Rules Overview 工作台式 HTML 重设计（2026-07-30）
+
+- 新增 `docs/prototypes/rules-overview-workbench-v2.html`，推翻原有“大卡片纵向堆叠 + 居中标题 + Project/Recent 强行等宽”的 Overview 结构。
+- 首页改为单一左对齐视觉轴：顶部状态条 → 5 Agent instruction dock → Generated Rules 主工作区；Recent generations 与 Project rules 降级为右侧辅助信息栏。
+- Overview 不再直接展示完整文件路径，只展示 Agent、文件名、配置状态和更新时间；点击 Agent 后使用 Drawer 展示路径与可编辑正文。
+- Publish 从 Recent generations 中移除，只保留在 Accepted/Generated Rules 上下文；Start Generate 使用 Evidence scope 弹窗衔接 Agent Chat。
+- 原型支持 Draft / Accepted / Rejected 切换、Candidate 详情、Agent 编辑抽屉、历史 run 摘要和 Evidence scope 选择。
+- 浏览器验证无页面级横向溢出；Agent Drawer、Evidence scope、状态切换均可操作，内联脚本语法和 `git diff --check` 通过。
+
+## Rules 二级菜单 HTML 信息架构（2026-07-30）
+
+- `rules-overview-workbench-v2.html` 的 Rules 主导航新增 Overview / Agent instructions / Generated rules / Generation history 四个二级入口，Rules 主项再次点击回到 Overview。
+- Overview 进一步减负，只保留聚合指标、待审核规则、Agent 健康状态、最近一次生成和 Project Rules 跳转。
+- Agent instructions 独立展示 5 个 Agent 的文件位置与状态；Generated rules 独立承担审核和 Publish；Generation history 独立展示可重新打开的 run 列表。
+- Project Rules 继续归属 Projects，不进入 Rules 二级菜单，避免同一对象出现两套管理入口。
+- Agent instructions 列表用独立图形与颜色区分 Claude、Codex、Copilot、OpenCode、Pi，替换字母缩写占位，同时保持统一图标容器尺寸。
+- 补回 Generate Chat View 的真实页面切换：Evidence scope 确认后进入独立对话工作区，右侧固定 Run context 与单份 Evidence snapshot；Project 仅作为 snapshot 内 source groups 展示。
+- Chat View 提供 Evidence / Generate / Complete 三态预览、Stop、返回 Rules 与进入 Generated rules 的完整交互，不再用 toast 假装跳转。
+- 浏览器逐项验证四个二级页面切换、Agent 编辑 Drawer 与规则列表渲染；无页面级横向溢出，内联脚本语法与 `git diff --check` 通过。
+
+## Rules 最新 Scope 生产界面重构（2026-07-30）
+
+- APP 侧栏在 Rules 主项下新增 `Overview / Agent instructions / Generated rules / Generation history` 二级菜单；再次点击 Rules 回到 Overview，二级菜单能从编辑、审核和历史详情中直接切回对应列表。
+- Overview 改为聚合状态条、Needs your attention、Instruction health、Latest generation 和 Project Rules 跳转，不再堆叠完整 Agent、Project、History 与 Candidate 管理列表。
+- Agent instructions 独立展示 Claude / Codex / Copilot / OpenCode / Pi 的文件状态、路径、更新时间与编辑入口；字母占位替换为 Lucide 图形和克制的 Agent 识别色。
+- Generated rules 独立承担 Draft / Accepted / Rejected 审核与 Publish；Generation history 独立展示全部 run，并可重新打开同构 Chat View。
+- Start Generate 进入独立 Evidence scope 对话入口；确认后继续进入 Agent Chat。活跃 Run 改为顶部阶段导航、中央 Request / Assistant 对话、底部运行状态与右侧 Run context，不再使用左侧阶段栏。
+- Evidence collecting 继续只展示一份 run-level snapshot，Project 只作为 snapshot 内 source group；历史 Chat 同样恢复 request、统一 Evidence、candidate 状态和 publish 出口。
+- 真实 Electron 窗口逐页验收 Overview、Agent instructions、Generated rules、Generation history、Evidence scope 与历史 Chat；未实际启动 Provider 生成，避免产生无意义外部调用。
+- 最终验收：App 9 suites / 55 tests、Core 24 suites / 237 tests、renderer TypeScript、App production build 与 `git diff --check` 全通过；标准 App composite typecheck 仍只有 `BLOCKED.md` 已记录的跨 workspace rootDir / TS6307 问题。
+
+## Rules 子页面层级精简（2026-07-30）
+
+- Rules 二级菜单已经表达当前所在模块，因此 Agent instructions、Generated rules、Generation history 移除重复的 PageHeader 大标题、说明和 Start Generate。
+- Start Generate 只保留在 Overview；三个子页面直接以 `Global instruction files / Rule candidates / Recent runs` 的内容标题开始。
+- 新增布局契约测试，分别截取三个 Index Page 源码并禁止出现 PageHeader 和 StartGenerateButton；Overview 继续保留唯一生成入口。
+- 冷启动 Electron 实测 Generation history 内容直接贴合页面首层，无遗留空白占位；同一结构同步应用于 Agent instructions 与 Generated rules。
+- 最终验收：App 10 suites / 63 tests、App production build 与 `git diff --check` 全部通过。
+
+## APP i18n 第一期设计（2026-07-30）
+
+- 第一期只支持 `zh-CN / en-US`，没有有效偏好时固定默认 `zh-CN`，不跟随操作系统自动选择。
+- Locale 是当前设备的 Renderer UI 偏好：使用 `localStorage` 在 React 挂载前同步恢复，不进入 workspace `config.json`、SQLite、规则文件或 Session 索引。
+- 技术方案采用 `i18next + react-i18next`、按页面 namespace 拆分资源，并用集中 formatter 显式处理日期、数字、字节和复数；缺 key 回退中文。
+- Settings 新增 General / Language，切换即时生效并同步 `<html lang>`；不翻译品牌、slug、路径、用户内容、Session/Evidence/Agent output 或 Provider 原始诊断。
+- Main/Core 动态错误第一期不做字符串翻译，只本地化 Renderer 的稳定标题、兜底说明和恢复操作；后续完整本地化需先引入 IPC error code。
+- 可执行计划见 `docs/plans/app-i18n-phase-1.md`，按端到端最小骨架 → formatter → Scan → Projects → Rules → Providers/审计 → 全量回归分步实施。
+
+## APP i18n 第一期落地（2026-07-30）
+
+- Renderer 接入 `i18next + react-i18next`，在 React 挂载前同步读取 `localStorage` 偏好并初始化；仅支持 `zh-CN / en-US`，无值或非法值固定回退中文，同时同步 `<html lang>`。
+- Settings 增加 General / Language，选项固定自标识为 `简体中文 / English`；切换即时生效并持久化，写入失败时保留当前会话切换结果并显示可恢复错误。
+- 翻译资源按 `common / navigation / scan / projects / rules / settings` 拆分，Scan、Projects、Rules、Settings、Providers、About 及共享生产界面完成迁移；品牌、路径、slug、用户内容和 Provider/Core 原始诊断继续按一期边界保留。
+- 日期、日期时间、数字、字节均由集中 formatter 显式接收 locale；英文数量使用 i18next plural key，状态枚举映射为 translation key，避免依赖系统语言或在 JSX 中拼接语言规则。
+- 新增 i18n 契约测试，覆盖默认/合法 locale、偏好读写失败、资源 namespace/key 对齐、显式 locale formatter、初始化顺序、Settings 入口、用户可见硬编码 AST 审计、隐式 locale API 审计与 Rules translation key 完整性。
+- 真实 Electron 窗口完成中文默认 → 英文即时切换 → 中文切回 → 重启保持中文的闭环验证，并检查 Scan、Rules、Settings 的日期、导航、状态与布局；未发现页面级溢出。
+- 最终验收：App 10 suites / 62 tests、Core 24 suites / 237 tests、Core/App production build、Renderer TypeScript 与 `git diff --check` 全通过。Core build 仍输出既有的 `tsdown define` 配置警告，但命令成功退出且与本次 i18n 无关。
+- 当前工作树仍处于既有 monorepo 迁移状态，包含大量用户已有删除、修改和未跟踪文件；本轮未代替用户暂存或提交整棵工作树。

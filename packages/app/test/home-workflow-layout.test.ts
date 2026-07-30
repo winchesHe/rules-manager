@@ -1,0 +1,275 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from '@jest/globals'
+
+const rendererRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../renderer/src',
+)
+const appRoot = path.resolve(rendererRoot, '../..')
+
+function read(relativePath: string): string {
+  return fs.readFileSync(path.join(rendererRoot, relativePath), 'utf8')
+}
+
+describe('home workflow layout', () => {
+  it('主导航使用 Scan / Projects / Rules', () => {
+    const source = read('App.tsx')
+    expect(source).toContain("labelKey: 'scan'")
+    expect(source).toContain("labelKey: 'projects'")
+    expect(source).toContain("labelKey: 'rules'")
+    expect(source).toContain("useTranslation('navigation')")
+    expect(source).toContain('overflow-x-hidden')
+  })
+
+  it('Scan 拆分最近结果与新建扫描配置', () => {
+    const source = read('views/OverviewView.tsx')
+    expect(source).toContain("'latest'")
+    expect(source).toContain("'create'")
+    expect(source).toContain('selectedAgents')
+    expect(source).toContain("t('latest.completedAt'")
+    expect(source).toContain("t('latest.configureFirst')")
+    expect(source).toContain("useState<ScanRange>('full')")
+    expect(source).toContain('sinceDays')
+    expect(source).toContain("t('create.fullHistory')")
+    expect(source).toContain("t('create.lastDays')")
+  })
+
+  it('Scan 结果整行可进入对应 Project 的 Sessions', () => {
+    const scanSource = read('views/OverviewView.tsx')
+    const projectsSource = read('views/ProjectsView.tsx')
+    expect(scanSource).toContain('onRowAction={(key) => onOpenProject?.(String(key))}')
+    expect(scanSource).toContain("t('latest.viewProjectSessions'")
+    expect(scanSource).toContain('cursor-pointer')
+    expect(scanSource).toContain("t('latest.viewSessions')")
+    expect(projectsSource).toContain("initialTab = 'sessions'")
+    expect(projectsSource).toContain('useState<DetailTab>(initialTab)')
+  })
+
+  it('Scan 提供全部 History 并可查看历史结果与扫描范围', () => {
+    const scanSource = read('views/OverviewView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    expect(scanSource).toContain("'history'")
+    expect(scanSource).toContain("'scan.history'")
+    expect(scanSource).toContain("t('history.title')")
+    expect(scanSource).toContain("t('history.all')")
+    expect(scanSource).toContain('formatScanScope(entry.scope)')
+    expect(scanSource).toContain('selectedHistory')
+    expect(scanSource).toContain('isMissingScanHistoryHandler')
+    expect(scanSource).toContain("i18n.t('scan:errors.historyVersion')")
+    expect(ipcSource).toContain("ipcMain.handle('scan.history'")
+  })
+
+  it('Projects 拆分列表和详情并使用虚拟 Sessions 列表', () => {
+    const source = read('views/ProjectsView.tsx')
+    expect(source).toContain("'list'")
+    expect(source).toContain("'detail'")
+    expect(source).toContain('VirtualSessionList')
+    expect(source).toContain('onRowAction={(key) =>')
+    expect(source).toContain('hover:bg-surface-hover')
+    expect(source).toContain('focus-visible:bg-surface-hover')
+    expect(source).toContain('[&>td]:rounded-none')
+    expect(source).toContain('sessionQuery')
+    expect(source).toContain('filterProjectSessions')
+    expect(source).toContain('SessionDetails')
+    expect(source).toContain('onOpen')
+    expect(source).toContain('className="grid w-full cursor-pointer grid-cols-')
+  })
+
+  it('Session 详情使用 Projects / project / session 面包屑并处理旧主进程', () => {
+    const source = read('views/ProjectsView.tsx')
+    expect(source).toContain("aria-label={t('breadcrumbs.label')}")
+    expect(source).toContain('onBackToProjects')
+    expect(source).toContain('projectSlug')
+    expect(source).toContain('isMissingIpcHandler')
+    expect(source).toContain("i18n.t('projects:errors.previewVersion')")
+  })
+
+  it('Session preview handler 和 Worker 一起进入主进程构建', () => {
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const viteSource = fs.readFileSync(path.join(appRoot, 'electron.vite.config.ts'), 'utf8')
+    expect(ipcSource).toContain("ipcMain.handle('sessions.preview'")
+    expect(ipcSource).toContain('runSessionPreviewWorker(sessionId)')
+    expect(viteSource).toContain("'session-preview-worker'")
+  })
+
+  it('Rules 拆分 Overview、Agent instruction、生成、审核与输出页面', () => {
+    const appSource = read('App.tsx')
+    const source = read('views/RulesView.tsx')
+    expect(source).toContain("'overview'")
+    expect(source).toContain("'agent'")
+    expect(source).toContain("'generate'")
+    expect(source).toContain("'review'")
+    expect(source).toContain("'output'")
+    expect(source).toContain("'changed7d'")
+    expect(source).toContain("tr('scope.changed')")
+    expect(appSource).toContain("t('rulesLabel')")
+    expect(appSource).toContain("labelKey: 'agentInstructions'")
+    expect(appSource).toContain("labelKey: 'generatedRules'")
+    expect(appSource).toContain("labelKey: 'generationHistory'")
+    expect(source).toContain("section === 'agents'")
+    expect(source).toContain("section === 'generated'")
+    expect(source).toContain("section === 'history'")
+  })
+
+  it('Rules 子页面不重复 PageHeader 与 Start Generate', () => {
+    const source = read('views/RulesView.tsx')
+    const agentPage = source.slice(
+      source.indexOf('function AgentInstructionsIndexPage'),
+      source.indexOf('function GeneratedRulesIndexPage'),
+    )
+    const generatedPage = source.slice(
+      source.indexOf('function GeneratedRulesIndexPage'),
+      source.indexOf('function GenerationHistoryIndexPage'),
+    )
+    const historyPage = source.slice(
+      source.indexOf('function GenerationHistoryIndexPage'),
+      source.indexOf('function AgentInstructionDetailPage'),
+    )
+
+    for (const page of [agentPage, generatedPage, historyPage]) {
+      expect(page).not.toContain('<PageHeader')
+      expect(page).not.toContain('<StartGenerateButton')
+    }
+    const dashboard = source.slice(
+      source.indexOf('function RulesDashboardPage'),
+      source.indexOf('function AgentInstructionsIndexPage'),
+    )
+    expect(dashboard).toContain('<PageHeader')
+    expect(dashboard).toContain("tr('actions.startGenerate')")
+  })
+
+  it('Rules 通过 IPC 管理五个 Agent instruction 文件且不展示 Cursor', () => {
+    const source = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+
+    expect(ipcSource).toContain("ipcMain.handle('rules.instructions.list'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.instructions.read'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.instructions.save'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.updateText'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.publishAgents'")
+    expect(source).toContain("tr('instructions.title')")
+    expect(source).toContain('Claude')
+    expect(source).toContain('Codex')
+    expect(source).toContain('Copilot')
+    expect(source).toContain('OpenCode')
+    expect(source).toContain('Pi')
+    expect(source).toContain("tr('publish.noDefault')")
+    expect(source).toContain("tr('publish.results')")
+    expect(source).not.toContain('Cursor global instructions')
+  })
+
+  it('Rules Generate 在后台 Worker 运行并提供可恢复、可取消的流式详情页', () => {
+    const source = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const viteSource = fs.readFileSync(path.join(appRoot, 'electron.vite.config.ts'), 'utf8')
+
+    expect(ipcSource).toContain("ipcMain.handle('rules.generate.status'")
+    expect(ipcSource).toContain('generationController.start(generation)')
+    expect(ipcSource).not.toContain('await runRulesGenerate')
+    expect(viteSource).toContain("'generation-worker'")
+    expect(source).toContain("'rules.generate.status'")
+    expect(source).toContain("'generate.event'")
+    expect(source).toContain("'rules.generate.cancel'")
+    expect(source).toContain('GenerationRunPage')
+    expect(source).toContain("tr('evidence.agentOutput')")
+    expect(source).toContain('Evidence')
+    expect(source).toContain("tr('actions.stopGeneration')")
+    expect(source).toContain("tr('actions.viewGeneration')")
+    expect(source).not.toContain('CompactGenerationStatus')
+  })
+
+  it('Generation Run 使用 Chat 主视图、顶部阶段和右侧 Run context', () => {
+    const source = read('views/RulesView.tsx')
+
+    expect(source).not.toContain('aria-label="Generation run content"')
+    expect(source).not.toContain("useState<'output' | 'evidence'>")
+    expect(source).toContain("aria-label={tr('run.progressLabel')}")
+    expect(source).toContain("tr('run.context')")
+    expect(source).toContain("tr('run.snapshotDescription')")
+    expect(source).toContain('grid-cols-[minmax(0,1fr)_18rem]')
+    expect(source).toContain('data-phase={phase.key}')
+    expect(source).toContain('setSelectedPhase(phase.key)')
+    expect(source).toContain('ProjectResponseConversation')
+    expect(source).toContain('CandidateDetailsModal')
+    expect(source).toContain('projectResponses')
+    expect(source).toContain('<summary')
+    expect(source).toContain("tr('run.diagnostic')")
+  })
+
+  it('新 Generation Run 默认从 Prepare evidence 开始，旧 Run 恢复记忆阶段', () => {
+    const source = read('views/RulesView.tsx')
+
+    expect(source).toContain("remembered?.phase ?? 'evidence'")
+    expect(source).toContain('generationRunMemory.get(generation.runId)')
+    expect(source).toContain('phase: selectedPhase')
+  })
+
+  it('Candidate 详情显示 Project，并支持右上角 X 与 Esc 关闭', () => {
+    const source = read('views/RulesView.tsx')
+
+    expect(source).toContain("tr('evidence.project', { project: projectSlug })")
+    expect(source).toContain("aria-label={tr('actions.closeCandidate')}")
+    expect(source).toContain('<X aria-hidden="true"')
+    expect(source).toContain("event.key === 'Escape'")
+    expect(source).toContain("window.addEventListener('keydown', onKeyDown)")
+    expect(source).toContain("window.removeEventListener('keydown', onKeyDown)")
+  })
+
+  it('Evidence collecting 展示一份跨项目快照而不是逐项目收集队列', () => {
+    const source = read('views/RulesView.tsx')
+
+    expect(source).toContain("tr('evidence.oneSnapshot')")
+    expect(source).toContain("tr('evidence.insideSnapshot')")
+    expect(source).toContain('EvidenceCollectionView')
+    expect(source).not.toContain('Collecting cloud-code-master evidence')
+  })
+
+  it('Recent generations 的历史行可重新打开 Chat、Evidence 与候选状态', () => {
+    const source = read('views/RulesView.tsx')
+    const historySource = fs.readFileSync(
+      path.join(appRoot, 'main/generation-history.ts'),
+      'utf8',
+    )
+
+    expect(source).toContain("'history'")
+    expect(source).toContain('HistoricalGenerationPage')
+    expect(source).toContain('onOpenHistory')
+    expect(source).toContain("tr('history.snapshotTitle')")
+    expect(source).toContain('candidate.status')
+    expect(historySource).toContain('WHERE run_id = ?')
+    expect(historySource).toContain('projects: value.projects.flatMap')
+  })
+
+  it('Start Generate 直接进入 Chat 并在对话中选择 Evidence scope', () => {
+    const source = read('views/RulesView.tsx')
+
+    expect(source).toContain("tr('generate.question')")
+    expect(source).toContain("tr('generate.evidenceScope')")
+    expect(source).toContain("tr('generate.prepareEvidence')")
+    expect(source).toContain("tr('generate.reviewPublish')")
+    expect(source).toContain("labelKey: 'generate.modes.recent.label'")
+  })
+
+  it('Scan 运行可取消，取消后继续展示最近一次完成结果', () => {
+    const source = read('views/OverviewView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+
+    expect(source).toContain("'scan.cancelled'")
+    expect(source).toContain("'scan.cancel'")
+    expect(source).toContain("t('progress.stop')")
+    expect(source).toContain("t('progress.cancelling')")
+    expect(source).toContain('restoreLatestScan')
+    expect(ipcSource).toContain("ipcMain.handle('scan.cancel'")
+    expect(ipcSource).toContain('markInterruptedBackgroundRuns')
+  })
+
+  it('Fast Mode 同时适用于 Claude 与 Codex', () => {
+    const source = read('views/SettingsView.tsx')
+    expect(source).toContain('Claude · Codex')
+    expect(source).toContain("aria-label={t('providers.fastModeLabel')}")
+    expect(source).not.toContain("config.provider !== 'claude'")
+    expect(source).not.toContain('your Claude plan')
+  })
+})

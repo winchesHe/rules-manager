@@ -1,0 +1,260 @@
+import { EventEmitter } from 'node:events'
+import { jest } from '@jest/globals'
+
+const queryMock = jest.fn()
+const spawnMock = jest.fn()
+
+jest.unstable_mockModule('@anthropic-ai/claude-agent-sdk', () => ({
+  query: queryMock,
+}))
+jest.unstable_mockModule('node:child_process', () => ({
+  spawn: spawnMock,
+}))
+
+const { candidateRulesSchema, getStructuredResponse } = await import('../../src/llm')
+
+function response(result: string): AsyncIterable<unknown> {
+  return (async function* () {
+    yield { type: 'result', subtype: 'success', result, usage: { input_tokens: 1, output_tokens: 1 } }
+  })()
+}
+
+function codexProcess(lines: unknown[]) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter & { setEncoding: ReturnType<typeof jest.fn> }
+    stderr: EventEmitter & { setEncoding: ReturnType<typeof jest.fn> }
+    stdin: { end: ReturnType<typeof jest.fn> }
+    kill: ReturnType<typeof jest.fn>
+  }
+  child.stdout = Object.assign(new EventEmitter(), { setEncoding: jest.fn() })
+  child.stderr = Object.assign(new EventEmitter(), { setEncoding: jest.fn() })
+  child.stdin = { end: jest.fn() }
+  child.kill = jest.fn(() => true)
+  queueMicrotask(() => {
+    child.stdout.emit('data', `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`)
+    child.emit('close', 0)
+  })
+  return child
+}
+
+describe('getStructuredResponse', () => {
+  beforeEach(() => {
+    queryMock.mockReset()
+    spawnMock.mockReset()
+  })
+
+  it('Claude 使用 query({ prompt, options: { maxTurns: 1 } }) 并校验结构', async () => {
+    queryMock.mockReturnValue(response(JSON.stringify([{
+      scope: 'project',
+      project_slug: 'demo',
+      rule_text: 'Always run tests',
+      confidence_level: 'high',
+      reasoning: 'Repeated requirement',
+      evidence_refs: ['s1:0'],
+    }])))
+
+    const value = await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      'sonnet-test',
+      'max',
+      { fastMode: true },
+    )
+
+    expect(value).toHaveLength(1)
+    expect(queryMock).toHaveBeenCalledTimes(1)
+    expect(queryMock.mock.calls[0][0]).toMatchObject({
+      options: {
+        maxTurns: 1,
+        includePartialMessages: true,
+        model: 'sonnet-test',
+        effort: 'max',
+        settings: { fastMode: true },
+      },
+    })
+    expect((queryMock.mock.calls[0][0] as { prompt: string }).prompt).toContain('JSON Schema')
+  })
+
+  it('Fast Mode 关闭时仍显式覆盖 Claude session settings', async () => {
+    queryMock.mockReturnValue(response('[]'))
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      'xhigh',
+      { fastMode: false },
+    )
+
+    expect(queryMock.mock.calls[0][0]).toMatchObject({
+      options: {
+        maxTurns: 1,
+        includePartialMessages: true,
+        effort: 'xhigh',
+        settings: { fastMode: false },
+      },
+    })
+  })
+
+  it.each([
+    [true, 'priority'],
+    [false, 'default'],
+  ])('Codex Fast Mode %s 映射为 service_tier=%s', async (fastMode, serviceTier) => {
+    const child = codexProcess([{
+      type: 'item.completed',
+      item: { type: 'agent_message', text: '[]' },
+    }])
+    spawnMock.mockReturnValue(child)
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      'gpt-test',
+      'high',
+      { fastMode },
+    )
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0][1]).toEqual([
+      'exec',
+      '--json',
+      '--ephemeral',
+      '--ignore-rules',
+      '--skip-git-repo-check',
+      '--sandbox',
+      'read-only',
+      '-m',
+      'gpt-test',
+      '-c',
+      'model_reasoning_effort="high"',
+      '-c',
+      `service_tier=${JSON.stringify(serviceTier)}`,
+      '-',
+    ])
+    expect(child.stdin.end).toHaveBeenCalledWith(expect.stringContaining('JSON Schema'))
+  })
+
+  it('无效 JSON 最多重试 2 次，并把校验错误带入重试 prompt', async () => {
+    queryMock
+      .mockReturnValueOnce(response('not json'))
+      .mockReturnValueOnce(response('{"wrong":true}'))
+      .mockReturnValueOnce(response('[]'))
+
+    await expect(getStructuredResponse('evidence', candidateRulesSchema, 'claude')).resolves.toEqual([])
+    expect(queryMock).toHaveBeenCalledTimes(3)
+    expect((queryMock.mock.calls[1][0] as { prompt: string }).prompt).toContain('上次输出无效')
+  })
+
+  it('Claude 把 partial text delta 归一化为 assistant_delta', async () => {
+    queryMock.mockReturnValue((async function* () {
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'streamed ' },
+        },
+      }
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'reply' },
+        },
+      }
+      yield { type: 'result', subtype: 'success', result: '[]' }
+    })())
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([
+      { type: 'assistant_delta', text: 'streamed ' },
+      { type: 'assistant_delta', text: 'reply' },
+    ])
+  })
+
+  it('Claude 未提供 partial event 时仍把最终回复展示到输出流', async () => {
+    queryMock.mockReturnValue(response('[]'))
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([{ type: 'assistant_delta', text: '[]' }])
+  })
+
+  it('Codex 逐行解析 JSONL delta，并用 completed message 作为最终输出', async () => {
+    const child = codexProcess([
+      {
+        type: 'item.updated',
+        item: {
+          type: 'agent_message',
+          delta: { text: '[' },
+        },
+      },
+      {
+        type: 'item.updated',
+        item: {
+          type: 'agent_message',
+          delta: { text: ']' },
+        },
+      },
+      {
+        type: 'item.completed',
+        item: { type: 'agent_message', text: '[]' },
+      },
+    ])
+    spawnMock.mockReturnValue(child)
+    const events: unknown[] = []
+
+    await expect(getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )).resolves.toEqual([])
+
+    expect(events).toEqual([
+      { type: 'assistant_delta', text: '[' },
+      { type: 'assistant_delta', text: ']' },
+    ])
+  })
+
+  it('Codex 只有 completed message 时仍把最终回复展示到输出流', async () => {
+    const child = codexProcess([{
+      type: 'item.completed',
+      item: { type: 'agent_message', text: '[]' },
+    }])
+    spawnMock.mockReturnValue(child)
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([{ type: 'assistant_delta', text: '[]' }])
+  })
+})
