@@ -5,7 +5,10 @@ import type { EvidenceBundle, EvidenceExcerpt } from './evidence.js'
 
 const CONTEXT_PREFIX = 'memory-manager-evidence-'
 const DEFAULT_MAX_BATCH_BYTES = 512 * 1024
+const COMPLETE_READ_MAX_BYTES = 128 * 1024
 const DEFAULT_STALE_AGE_MS = 24 * 60 * 60 * 1_000
+
+export type EvidenceReadingStrategy = 'complete' | 'selective'
 
 export interface EvidenceProjectContext {
   projectSlug: string
@@ -14,6 +17,8 @@ export interface EvidenceProjectContext {
   baselinePath: string
   outputSchemaPath: string
   batchCount: number
+  readingStrategy: EvidenceReadingStrategy
+  totalBatchBytes: number
 }
 
 export interface EvidenceContext {
@@ -134,6 +139,10 @@ function writeProjectContext(
       bytes: Buffer.byteLength(content, 'utf8'),
     }
   })
+  const totalBatchBytes = batchRows.reduce((sum, batch) => sum + batch.bytes, 0)
+  const readingStrategy: EvidenceReadingStrategy = totalBatchBytes <= COMPLETE_READ_MAX_BYTES
+    ? 'complete'
+    : 'selective'
   const baselinePath = path.join(directory, 'baseline.md')
   const existingRules = bundle.existingRules ?? []
   const baselineContent = renderBaseline(existingRules)
@@ -148,6 +157,8 @@ function writeProjectContext(
     sessionCount: bundle.sourceSessions.length,
     roundCount: bundle.roundCount,
     excerptCount: bundle.excerpts.length,
+    readingStrategy,
+    totalBatchBytes,
     baseline: {
       path: path.basename(baselinePath),
       bytes: Buffer.byteLength(baselineContent, 'utf8'),
@@ -163,6 +174,8 @@ function writeProjectContext(
     baselinePath,
     outputSchemaPath: path.join(directory, 'candidate-rules.schema.json'),
     batchCount: batchRows.length,
+    readingStrategy,
+    totalBatchBytes,
   }
 }
 

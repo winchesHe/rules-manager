@@ -1586,3 +1586,27 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   Header 到主区均为 24px，Generate 均为 28px；两页无横向溢出，Pane 折叠保持正确。
 - 最终验收：App 14 suites / 91 tests、Core 25 suites / 260 tests、skipped=0，
   Core/App production build 与 `git diff --check` 全通过。
+
+## Rules 生成质量加固（2026-07-31）
+
+- Evidence 读取由统一关键词检索改为按正文体积自适应：不超过 128 KiB 的项目使用
+  `complete`，要求 Agent 读取全部 batch；更大的项目使用 `selective`，要求中英文
+  规则信号检索、命中位置上下文阅读，以及逐 batch 搜索覆盖检查。manifest 和
+  Project Context 同步记录 `readingStrategy / totalBatchBytes`，便于 Prompt 与测试
+  观察真实策略。
+- `frequency` 的语义明确为标准化后整条用户消息完全一致的跨 Session 次数，只作为
+  重复信号的保守下界；不引入容易误聚类的本地语义相似算法。Agent 若判断存在同义
+  重复，必须实际找到并引用每条 locator，不能把 `frequency=1` 当作没有同义证据。
+- Prompt 增加持久性、原子性、Evidence 忠实度和 scope 自检：排除一次性任务、状态
+  描述、普通事实、粘贴内容、临时 workaround 与 Assistant 自创做法；每条候选只表达
+  一个行为约束，不得把局部要求泛化；不再输出基于单次推断的 low 候选。
+- 单项目 Evidence 默认只支持 project rule。只有引用的真实用户消息明确表达所有项目、
+  所有任务、跨项目、以后都或对应英文全局意图时，global 才保留；本地资格校验会在
+  Chat response 和持久化前将无依据 global 降级为当前 project、纠正伪造/错误
+  `project_slug`、清除合法 global 的 project slug，并过滤所有 low 候选。
+- 计划与逐步验收记录见 `docs/plans/rules-generation-quality.md`。测试先覆盖两种读取
+  策略的 manifest / Prompt，以及 project slug 纠正、global 保留/降级和 low 过滤，
+  再完成实现。
+- 最终验收：Core 25 suites / 263 tests、App 14 suites / 91 tests、skipped=0，
+  Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。

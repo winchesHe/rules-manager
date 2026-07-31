@@ -47,11 +47,16 @@ describe('EvidenceContext', () => {
       const manifest = JSON.parse(fs.readFileSync(project.manifestPath, 'utf8')) as {
         projectSlug: string
         excerptCount: number
+        readingStrategy: string
+        totalBatchBytes: number
         batches: Array<{ path: string }>
         baseline: { path: string }
       }
       expect(manifest.projectSlug).toBe('../unsafe/project')
       expect(manifest.excerptCount).toBe(2)
+      expect(project.readingStrategy).toBe('complete')
+      expect(manifest.readingStrategy).toBe('complete')
+      expect(manifest.totalBatchBytes).toBeGreaterThan(0)
       const content = manifest.batches
         .map((batch) => fs.readFileSync(path.join(project.directory, batch.path), 'utf8'))
         .join('\n')
@@ -70,6 +75,31 @@ describe('EvidenceContext', () => {
 
       context.cleanup()
       expect(fs.existsSync(context.rootDir)).toBe(false)
+    } finally {
+      fs.rmSync(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('Evidence 正文超过阈值时标记为选择性读取', () => {
+    const parentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-context-large-'))
+    try {
+      const context = createEvidenceContext([{
+        ...bundle,
+        excerpts: [{
+          ...bundle.excerpts[0],
+          text: '必须保留的大型 Evidence\n'.repeat(8_000),
+        }],
+      }], { parentDir, maxBatchBytes: 32 * 1024 })
+      const project = context.projects[0]
+      const manifest = JSON.parse(fs.readFileSync(project.manifestPath, 'utf8')) as {
+        readingStrategy: string
+        totalBatchBytes: number
+      }
+
+      expect(project.readingStrategy).toBe('selective')
+      expect(manifest.readingStrategy).toBe('selective')
+      expect(manifest.totalBatchBytes).toBeGreaterThan(128 * 1024)
+      context.cleanup()
     } finally {
       fs.rmSync(parentDir, { recursive: true, force: true })
     }

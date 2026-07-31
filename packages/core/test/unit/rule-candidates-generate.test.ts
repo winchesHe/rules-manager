@@ -118,19 +118,127 @@ describe('runRulesGenerate', () => {
     )
     const prompt = generate.mock.calls[0][0]
     expect(prompt).toContain('manifest.json')
-    expect(prompt).toContain('优先使用 Glob 和 Grep')
-    expect(prompt).toContain('禁止依次或完整读取全部 batch')
-    expect(prompt).toContain('只对命中的相关位置使用 Read')
+    expect(prompt).toContain('读取 manifest 列出的全部 batch')
+    expect(prompt).not.toContain('禁止依次或完整读取全部 batch')
     expect(prompt).toContain('user_signal')
     expect(prompt).toContain('assistant_context')
     expect(prompt).toContain('baseline')
-    expect(prompt).not.toContain('读取 manifest.batches 列出的全部文件')
-    expect(prompt).not.toContain('完成全部 batch 阅读')
+    expect(prompt).toContain('保守下界')
+    expect(prompt).toContain('默认只能产出 project rule')
+    expect(prompt).toContain('一次性任务')
+    expect(prompt).toContain('每条候选只表达一个行为约束')
+    expect(prompt).toContain('不要输出 low')
     expect(prompt).not.toContain('Always run tests')
     expect(generate.mock.calls[0][5]).toEqual(expect.objectContaining({
       maxTurns: 32,
       tools: ['Read', 'Grep', 'Glob'],
     }))
+  })
+
+  it('大型 Evidence 使用选择性检索并要求逐 batch 覆盖检查', async () => {
+    const generate = jest.fn(async (..._args: unknown[]) => generated)
+    const largeEvidence: EvidenceBundle[] = [{
+      ...evidence[0],
+      excerpts: [{
+        ...evidence[0].excerpts[0],
+        text: 'Always run tests\n'.repeat(12_000),
+      }],
+    }]
+
+    await runRulesGenerate({ homeDir: home, dryRun: true }, {
+      extract: async () => largeEvidence,
+      generate,
+    })
+
+    const prompt = generate.mock.calls[0][0]
+    expect(prompt).toContain('优先使用 Glob 和 Grep')
+    expect(prompt).toContain('不要依次或完整读取全部 batch')
+    expect(prompt).toContain('每个 batch 都至少参与过一次搜索')
+    expect(prompt).toContain('只对命中的相关位置使用 Read')
+    expect(prompt).not.toContain('读取 manifest 列出的全部 batch')
+  })
+
+  it('规范化 scope 并过滤 low 候选', async () => {
+    const scopedEvidence: EvidenceBundle[] = [{
+      projectSlug: 'demo',
+      sourceSessions: ['s1'],
+      roundCount: 2,
+      existingRules: [],
+      excerpts: [{
+        locator: { sessionId: 's1', agent: 'claude', messageIndex: 0 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: '在这个项目中，修改代码前先运行测试。',
+        tools: [],
+        frequency: 1,
+      }, {
+        locator: { sessionId: 's1', agent: 'claude', messageIndex: 1 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: '所有项目中都使用中文回复。',
+        tools: [],
+        frequency: 1,
+      }],
+    }]
+
+    await runRulesGenerate({ homeDir: home }, {
+      extract: async () => scopedEvidence,
+      generate: async () => [{
+        scope: 'project',
+        project_slug: 'other-project',
+        rule_text: '修改代码前先运行测试。',
+        confidence_level: 'medium',
+        reasoning: '项目内明确要求',
+        evidence_refs: ['s1:0'],
+      }, {
+        scope: 'global',
+        project_slug: 'other-project',
+        rule_text: '修改代码前始终运行测试。',
+        confidence_level: 'high',
+        reasoning: '错误提升为全局',
+        evidence_refs: ['s1:0'],
+      }, {
+        scope: 'global',
+        project_slug: 'other-project',
+        rule_text: '所有项目都使用中文回复。',
+        confidence_level: 'high',
+        reasoning: '明确的跨项目要求',
+        evidence_refs: ['s1:1'],
+      }, {
+        scope: 'project',
+        project_slug: 'demo',
+        rule_text: '推断出的临时偏好。',
+        confidence_level: 'low',
+        reasoning: '单次推断',
+        evidence_refs: ['s1:0'],
+      }],
+    })
+
+    const db = initDatabase(home)
+    const rows = db.prepare(`
+      SELECT scope, project_slug, rule_text
+      FROM rule_candidates
+      ORDER BY rule_text
+    `).all() as Array<{ scope: string; project_slug: string | null; rule_text: string }>
+    db.close()
+
+    expect(rows).toEqual([
+      {
+        scope: 'project',
+        project_slug: 'demo',
+        rule_text: '修改代码前先运行测试。',
+      },
+      {
+        scope: 'project',
+        project_slug: 'demo',
+        rule_text: '修改代码前始终运行测试。',
+      },
+      {
+        scope: 'global',
+        project_slug: null,
+        rule_text: '所有项目都使用中文回复。',
+      },
+    ])
   })
 
   it('本次切换 Provider 时不沿用另一 Provider 的默认 model', async () => {
