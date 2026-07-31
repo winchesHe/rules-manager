@@ -48,13 +48,39 @@ export function updateRuleCandidateStatus(
   status: 'accepted' | 'rejected',
   homeDir?: string,
 ): RuleCandidateRow {
+  return updateRuleCandidatesStatus([id], status, homeDir)[0]
+}
+
+export function updateRuleCandidatesStatus(
+  ids: string[],
+  status: 'accepted' | 'rejected',
+  homeDir?: string,
+): RuleCandidateRow[] {
+  const normalizedIds = [...new Set(ids.map((id) => id.trim()))]
+  if (normalizedIds.length === 0 || normalizedIds.some((id) => !id)) {
+    throw new Error('至少需要一个 rule candidate')
+  }
+  if (normalizedIds.length > 500) {
+    throw new Error('单次最多更新 500 个 rule candidate')
+  }
   const db = openDatabase(homeDir, false)
   try {
-    const result = db.prepare(`
+    const select = db.prepare('SELECT * FROM rule_candidates WHERE id = ?')
+    const update = db.prepare(`
       UPDATE rule_candidates SET status = ?, updated_at = ? WHERE id = ?
-    `).run(status, new Date().toISOString(), id)
-    if (result.changes === 0) throw new Error(`rule candidate 不存在：${id}`)
-    return db.prepare('SELECT * FROM rule_candidates WHERE id = ?').get(id) as RuleCandidateRow
+    `)
+    return db.transaction(() => {
+      const candidates = normalizedIds.map((id) => {
+        const row = select.get(id) as RuleCandidateRow | undefined
+        if (!row) throw new Error(`rule candidate 不存在：${id}`)
+        return row
+      })
+      const updatedAt = new Date().toISOString()
+      for (const candidate of candidates) {
+        update.run(status, updatedAt, candidate.id)
+      }
+      return normalizedIds.map((id) => select.get(id) as RuleCandidateRow)
+    })()
   } finally {
     db.close()
   }

@@ -7,6 +7,7 @@ import { getDbPath, isDatabaseReady } from '@memory-manager/core/db'
 import { resolveWorkspace } from '@memory-manager/core/workspace'
 import {
   listRuleCandidates,
+  updateRuleCandidatesStatus,
   updateRuleCandidateText,
   updateRuleCandidateStatus,
 } from '@memory-manager/core/rule-candidates'
@@ -253,6 +254,19 @@ export function registerIpcHandlers(): void {
       throw new Error(`unsupported candidate status: ${status}`)
     }
     return updateRuleCandidateStatus(id, status)
+  })
+  ipcMain.handle('rules.batchUpdateStatus', (_event, ids: unknown, status: unknown) => {
+    if (
+      !Array.isArray(ids)
+      || ids.length === 0
+      || ids.some((id) => typeof id !== 'string' || !id.trim())
+    ) {
+      throw new Error('candidate ids are required')
+    }
+    if (status !== 'accepted' && status !== 'rejected') {
+      throw new Error(`unsupported candidate status: ${String(status)}`)
+    }
+    return updateRuleCandidatesStatus(ids, status)
   })
   ipcMain.handle('rules.updateText', (_event, id: unknown, ruleText: unknown) => {
     if (typeof id !== 'string' || !id) throw new Error('candidate id is required')

@@ -203,6 +203,23 @@ describe('home workflow layout', () => {
     expect(reviewPage).not.toContain("tr('fields.evidenceReferences')")
   })
 
+  it('候选规则列表支持当前可见范围多选与事务型批量状态更新', () => {
+    const source = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const generatedPage = source.slice(
+      source.indexOf('function GeneratedRulesIndexPage'),
+      source.indexOf('function GenerationHistoryIndexPage'),
+    )
+
+    expect(ipcSource).toContain("ipcMain.handle('rules.batchUpdateStatus'")
+    expect(ipcSource).toContain('updateRuleCandidatesStatus(ids, status)')
+    expect(generatedPage).toContain('<Checkbox')
+    expect(generatedPage).toContain('isIndeterminate')
+    expect(generatedPage).toContain("tr('generated.bulkAccept')")
+    expect(generatedPage).toContain("tr('generated.bulkReject')")
+    expect(generatedPage).toContain('setSelectedIds(new Set())')
+  })
+
   it('Recent activity 直接按 Session updated_at 收集，不依赖 Scan History', () => {
     const workerSource = fs.readFileSync(
       path.join(appRoot, 'main/generation-worker.ts'),

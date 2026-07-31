@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Chip,
   ListBox,
   Select,
@@ -173,6 +174,8 @@ export function RulesView({
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<RuleStatus | null>(null)
+  const [pendingBatchAction, setPendingBatchAction] =
+    useState<'accepted' | 'rejected' | null>(null)
   const [pendingEdit, setPendingEdit] = useState(false)
   const [generation, setGeneration] = useState<GenerationStatus | null>(null)
   const [selectedInstructionAgent, setSelectedInstructionAgent] =
@@ -368,6 +371,33 @@ export function RulesView({
     }
   }
 
+  async function updateStatuses(
+    ids: string[],
+    nextStatus: 'accepted' | 'rejected',
+  ): Promise<boolean> {
+    if (ids.length === 0 || pendingBatchAction) return false
+    setPendingBatchAction(nextStatus)
+    setActionError(null)
+    try {
+      await afterNextPaint(() =>
+        window.api.invoke<RuleCandidate[]>(
+          'rules.batchUpdateStatus',
+          ids,
+          nextStatus,
+        ),
+      )
+      if (mounted.current) setQueueRefresh((current) => current + 1)
+      return true
+    } catch (reason: unknown) {
+      if (mounted.current) {
+        setActionError(reason instanceof Error ? reason.message : String(reason))
+      }
+      return false
+    } finally {
+      if (mounted.current) setPendingBatchAction(null)
+    }
+  }
+
   async function cancelGeneration(): Promise<void> {
     if (!generation?.runId || generation.state !== 'running') return
     setActionError(null)
@@ -506,10 +536,12 @@ export function RulesView({
       onOpenRun={() => {
         if (generation?.runId) onOpenChat(generation.runId)
       }}
+      onBatchUpdate={updateStatuses}
       onReview={openReview}
       onRunChange={setSelectedRunId}
       onSectionChange={onSectionChange}
       onStatusChange={setStatus}
+      pendingBatchAction={pendingBatchAction}
       section={section}
       selectedRunId={selectedRunId}
       status={status}
@@ -527,6 +559,7 @@ function RulesOverviewPage({
   historyLoading,
   loading,
   onGenerate,
+  onBatchUpdate,
   onOpenAgent,
   onOpenOutput,
   onOpenHistory,
@@ -536,6 +569,7 @@ function RulesOverviewPage({
   onRunChange,
   onSectionChange,
   onStatusChange,
+  pendingBatchAction,
   section,
   selectedRunId,
   status,
@@ -549,6 +583,10 @@ function RulesOverviewPage({
   historyLoading: boolean
   loading: boolean
   onGenerate: () => void
+  onBatchUpdate: (
+    ids: string[],
+    status: 'accepted' | 'rejected',
+  ) => Promise<boolean>
   onOpenAgent: (agent: GlobalInstructionAgent) => void
   onOpenOutput: () => void
   onOpenHistory: (entry: GenerationHistoryEntry) => void
@@ -558,6 +596,7 @@ function RulesOverviewPage({
   onRunChange: (runId: string | null) => void
   onSectionChange: (section: RulesSection) => void
   onStatusChange: (status: RuleStatus) => void
+  pendingBatchAction: 'accepted' | 'rejected' | null
   section: RulesSection
   selectedRunId: string | null
   status: RuleStatus
@@ -622,11 +661,13 @@ function RulesOverviewPage({
         historyError={historyError}
         historyLoading={historyLoading}
         loading={loading}
+        onBatchUpdate={onBatchUpdate}
         onOpenHistory={onOpenHistory}
         onOpenOutput={onOpenOutput}
         onReview={onReview}
         onRunChange={onRunChange}
         onStatusChange={onStatusChange}
+        pendingBatchAction={pendingBatchAction}
         selectedRunId={selectedRunId}
         status={status}
       />
@@ -1196,11 +1237,13 @@ function GeneratedRulesIndexPage({
   historyError,
   historyLoading,
   loading,
+  onBatchUpdate,
   onOpenHistory,
   onOpenOutput,
   onReview,
   onRunChange,
   onStatusChange,
+  pendingBatchAction,
   selectedRunId,
   status,
 }: {
@@ -1211,18 +1254,44 @@ function GeneratedRulesIndexPage({
   historyError: string | null
   historyLoading: boolean
   loading: boolean
+  onBatchUpdate: (
+    ids: string[],
+    status: 'accepted' | 'rejected',
+  ) => Promise<boolean>
   onOpenHistory: (entry: GenerationHistoryEntry) => void
   onOpenOutput: () => void
   onReview: (candidate: RuleCandidate) => void
   onRunChange: (runId: string | null) => void
   onStatusChange: (status: RuleStatus) => void
+  pendingBatchAction: 'accepted' | 'rejected' | null
   selectedRunId: string | null
   status: RuleStatus
 }) {
   const runs = selectableGenerationRuns(history)
   const selectedRun = runs.find((entry) => entry.id === selectedRunId)
   const visibleCandidates = filterCandidatesByRun(candidates, selectedRunId)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const allVisibleSelected = visibleCandidates.length > 0
+    && visibleCandidates.every((candidate) => selectedIds.has(candidate.id))
+  const someVisibleSelected = visibleCandidates.some((candidate) => selectedIds.has(candidate.id))
   const loadError = actionError ?? error ?? historyError
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [selectedRunId, status])
+
+  useEffect(() => {
+    const visibleIds = new Set(visibleCandidates.map((candidate) => candidate.id))
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => visibleIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [candidates, selectedRunId])
+
+  async function runBulkUpdate(nextStatus: 'accepted' | 'rejected'): Promise<void> {
+    const succeeded = await onBatchUpdate([...selectedIds], nextStatus)
+    if (succeeded) setSelectedIds(new Set())
+  }
   return (
     <>
       {loadError && (
@@ -1313,6 +1382,56 @@ function GeneratedRulesIndexPage({
           ))}
         </div>
       </div>
+      {selectedIds.size > 0 && (
+        <div
+          className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3"
+          data-candidate-bulk-toolbar
+        >
+          <div className="flex items-center gap-3">
+            <strong className="text-sm font-medium text-foreground">
+              {tr('generated.selectedCount', { count: selectedIds.size })}
+            </strong>
+            <Button
+              isDisabled={pendingBatchAction !== null}
+              onPress={() => setSelectedIds(new Set())}
+              size="sm"
+              variant="ghost"
+            >
+              {tr('generated.clearSelection')}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {status !== 'accepted' && (
+              <Button
+                className="gap-2"
+                isDisabled={pendingBatchAction !== null}
+                onPress={() => void runBulkUpdate('accepted')}
+                size="sm"
+                variant="primary"
+              >
+                {pendingBatchAction === 'accepted'
+                  ? <Spinner color="current" size="sm" />
+                  : <Check aria-hidden="true" size={16} />}
+                {tr('generated.bulkAccept')}
+              </Button>
+            )}
+            {status !== 'rejected' && (
+              <Button
+                className="gap-2"
+                isDisabled={pendingBatchAction !== null}
+                onPress={() => void runBulkUpdate('rejected')}
+                size="sm"
+                variant="danger"
+              >
+                {pendingBatchAction === 'rejected'
+                  ? <Spinner color="current" size="sm" />
+                  : <X aria-hidden="true" size={16} />}
+                {tr('generated.bulkReject')}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       <Card className="min-h-64 border border-border bg-surface shadow-none">
         <Card.Content className="p-0">
           {loading || historyLoading ? (
@@ -1324,6 +1443,19 @@ function GeneratedRulesIndexPage({
               <Table.ScrollContainer>
                 <Table.Content aria-label={tr('overview.tableLabel', { status: tr(`status.${status}`) })}>
                   <Table.Header>
+                    <Table.Column>
+                      <Checkbox
+                        aria-label={tr('generated.selectAllVisible')}
+                        isDisabled={pendingBatchAction !== null}
+                        isIndeterminate={someVisibleSelected && !allVisibleSelected}
+                        isSelected={allVisibleSelected}
+                        onChange={(selected) => {
+                          setSelectedIds(selected
+                            ? new Set(visibleCandidates.map((candidate) => candidate.id))
+                            : new Set())
+                        }}
+                      />
+                    </Table.Column>
                     <Table.Column isRowHeader>{tr('overview.columns.rule')}</Table.Column>
                     <Table.Column>{tr('overview.columns.scope')}</Table.Column>
                     <Table.Column>{tr('overview.columns.confidence')}</Table.Column>
@@ -1332,6 +1464,21 @@ function GeneratedRulesIndexPage({
                   <Table.Body>
                     {visibleCandidates.map((candidate) => (
                       <Table.Row id={candidate.id} key={candidate.id}>
+                        <Table.Cell>
+                          <Checkbox
+                            aria-label={tr('generated.selectCandidate', { rule: candidate.rule_text })}
+                            isDisabled={pendingBatchAction !== null}
+                            isSelected={selectedIds.has(candidate.id)}
+                            onChange={(selected) => {
+                              setSelectedIds((current) => {
+                                const next = new Set(current)
+                                if (selected) next.add(candidate.id)
+                                else next.delete(candidate.id)
+                                return next
+                              })
+                            }}
+                          />
+                        </Table.Cell>
                         <Table.Cell className="max-w-xl"><p className="line-clamp-2">{candidate.rule_text}</p></Table.Cell>
                         <Table.Cell className="text-muted">{candidate.project_slug ?? candidate.scope}</Table.Cell>
                         <Table.Cell><ConfidenceChip level={candidate.confidence_level} /></Table.Cell>

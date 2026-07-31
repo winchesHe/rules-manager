@@ -1682,3 +1682,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 268 tests、App 14 suites / 96 tests、skipped=0，Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
   警告。
+
+## 候选规则多选与批量状态操作（2026-07-31）
+
+- Generated Rules 候选表新增表头全选、半选态和逐行 Checkbox；选择范围始终是当前状态
+  与当前生成批次下的可见候选，切换状态或批次会清空选择，数据刷新时也会裁掉不可见 ID。
+- 选中后显示就近批量工具栏，包含已选数量、清空选择、批量接受与批量拒绝。草稿页提供
+  两个动作；已接受/已拒绝页只保留有意义的反向动作。提交期间 Checkbox 和按钮统一禁用，
+  成功后刷新候选列表与计数，单条审核和发布流程不变。
+- Core 新增 `updateRuleCandidatesStatus`：去重并限制单批最多 500 个 ID，事务内先验证全部
+  候选存在，再使用同一时间戳统一更新；任一 ID 无效会整批回滚。Renderer 通过新的
+  `rules.batchUpdateStatus` IPC 一次提交，不在前端循环单条更新。
+- 计划与逐步验收见 `docs/plans/rule-candidates-bulk-actions.md`。测试覆盖两条候选成功更新
+  与缺失 ID 的原子回滚，以及 IPC、全选/半选、批量动作和清空选择 UI 契约。
+- 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
+  警告。

@@ -7,7 +7,10 @@ import {
   runRulesReject,
 } from '../../src/commands/rules-review'
 import { initDatabase } from '../../src/db'
-import { updateRuleCandidateText } from '../../src/rule-candidates'
+import {
+  updateRuleCandidatesStatus,
+  updateRuleCandidateText,
+} from '../../src/rule-candidates'
 import { resolveWorkspace } from '../../src/workspace'
 
 describe('rules review actions', () => {
@@ -81,5 +84,40 @@ describe('rules review actions', () => {
     expect(() =>
       updateRuleCandidateText('candidate-1', 'Change after accept', home),
     ).toThrow('只有 draft candidate 可以编辑')
+  })
+
+  it('批量状态更新保持事务原子性', () => {
+    const db = initDatabase(home)
+    db.prepare(`
+      INSERT INTO rule_candidates (
+        id, scope, project_slug, rule_text, confidence_level, evidence_json,
+        source_sessions, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'candidate-2', 'project', 'demo', 'Run typecheck', 'high', '{}', '[]',
+      '2026-07-27T00:00:00.000Z', '2026-07-27T00:00:00.000Z',
+    )
+    db.close()
+
+    expect(updateRuleCandidatesStatus(
+      ['candidate-1', 'candidate-2'],
+      'accepted',
+      home,
+    ).map((candidate) => candidate.status)).toEqual(['accepted', 'accepted'])
+
+    const resetDb = initDatabase(home)
+    resetDb.prepare("UPDATE rule_candidates SET status = 'draft'").run()
+    resetDb.close()
+    expect(() => updateRuleCandidatesStatus(
+      ['candidate-1', 'missing-candidate'],
+      'rejected',
+      home,
+    )).toThrow('rule candidate 不存在：missing-candidate')
+
+    const verifyDb = initDatabase(home)
+    expect(verifyDb.prepare(
+      'SELECT status FROM rule_candidates WHERE id = ?',
+    ).get('candidate-1')).toEqual({ status: 'draft' })
+    verifyDb.close()
   })
 })

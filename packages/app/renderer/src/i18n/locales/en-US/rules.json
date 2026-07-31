@@ -158,7 +158,13 @@
     "allRuns": "All generation batches",
     "visibleCount_one": "{{count}} visible",
     "visibleCount_other": "{{count}} visible",
-    "viewRun": "View generation"
+    "viewRun": "View generation",
+    "selectedCount": "{{count}} selected",
+    "clearSelection": "Clear selection",
+    "bulkAccept": "Accept selected",
+    "bulkReject": "Reject selected",
+    "selectAllVisible": "Select all visible rule candidates",
+    "selectCandidate": "Select rule candidate: {{rule}}"
   },
   "history": {
     "title": "Generation history",

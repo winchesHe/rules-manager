@@ -158,7 +158,13 @@
     "allRuns": "全部生成批次",
     "visibleCount_one": "当前 {{count}} 条",
     "visibleCount_other": "当前 {{count}} 条",
-    "viewRun": "查看生成过程"
+    "viewRun": "查看生成过程",
+    "selectedCount": "已选 {{count}} 条",
+    "clearSelection": "清空选择",
+    "bulkAccept": "批量接受",
+    "bulkReject": "批量拒绝",
+    "selectAllVisible": "选择当前显示的全部候选规则",
+    "selectCandidate": "选择候选规则：{{rule}}"
   },
   "history": {
     "title": "生成历史",
