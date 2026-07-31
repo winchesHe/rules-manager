@@ -187,6 +187,12 @@
     "generateRules": "Generate rules",
     "reviewPublish": "Review & publish",
     "question": "What evidence should I use for this generation? After you confirm, I’ll freeze one cross-project Evidence snapshot before analyzing any rules.",
+    "evidenceEyebrow": "Step one",
+    "evidenceTitle": "Select evidence",
+    "evidenceDescription": "Choose the conversation scope to analyze for this generation.",
+    "configurationEyebrow": "Run parameters",
+    "runConfiguration": "This run",
+    "runConfigurationDescription": "Confirm the Agent and reasoning parameters for this generation.",
     "modes": {
       "recent": {
         "label": "Recent activity",
@@ -220,7 +226,7 @@
     "agentDescription": "Choose the provider that runs this generation.",
     "model": "Model",
     "modelDescription": "The model list follows the selected Agent.",
-    "providerDefaultModel": "Use provider default model",
+    "providerDefaultModel": "Provider default",
     "effort": "Reasoning Effort",
     "effortDescription": "Control the reasoning depth for this run.",
     "fastMode": "Fast Mode",

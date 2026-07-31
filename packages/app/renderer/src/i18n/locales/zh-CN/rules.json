@@ -187,6 +187,12 @@
     "generateRules": "生成规则",
     "reviewPublish": "审核并发布",
     "question": "这次生成应该使用哪些 Evidence？确认后，我会先冻结一份跨项目 Evidence 快照，再分析规则。",
+    "evidenceEyebrow": "第一步",
+    "evidenceTitle": "选择 Evidence",
+    "evidenceDescription": "选择本次生成要分析的会话范围。",
+    "configurationEyebrow": "执行参数",
+    "runConfiguration": "本次运行",
+    "runConfigurationDescription": "确认 Agent 与推理参数，仅对本次生成生效。",
     "modes": {
       "recent": {
         "label": "最近活动",
@@ -220,7 +226,7 @@
     "agentDescription": "选择执行本次生成的 Provider。",
     "model": "Model",
     "modelDescription": "Model 列表会随 Agent 切换。",
-    "providerDefaultModel": "使用 Provider 默认 Model",
+    "providerDefaultModel": "Provider 默认",
     "effort": "Reasoning Effort",
     "effortDescription": "控制本次任务的推理深度。",
     "fastMode": "Fast Mode",

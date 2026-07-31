@@ -1523,3 +1523,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 260 tests、App 13 suites / 86 tests、Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Generation 发起页视觉层级收敛（2026-07-31）
+
+- 移除包裹整个发起页的大型 Card、隐藏流程栏和悬空全局 Footer，页面高度改为由真实
+  内容决定，不再制造首屏大块无效留白。
+- 桌面端使用 `Evidence 主区 + 22rem 本次运行面板` 的左右布局；Evidence 增加明确的
+  步骤标题，选中项使用细左边框和低强度底色，右侧只保留紧凑参数行。
+- 本次 Evidence 摘要与“继续进入对话”收进右侧面板底部，使执行参数、范围确认和提交
+  行为成为一个完整操作单元；窄于 1100px 时仍回退为单栏。
+- Model 默认项缩短为“Provider 默认”，避免右侧窄面板中的换行。
+- 使用真实 Electron 窗口完成中文深色主题截图对账，确认左右主次、控件密度、按钮
+  归属与首屏留白符合预期。
+- 最终验收：Core 25 suites / 260 tests、App 13 suites / 86 tests、Core/App
+  production build 与 `git diff --check` 全通过。App 独立 `tsc --noEmit` 仍受既有
+  monorepo `rootDir` / JSON include 配置及 `RulesSection` 的 `history` 类型问题影响；
+  production build 不受影响。

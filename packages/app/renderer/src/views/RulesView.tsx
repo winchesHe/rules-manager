@@ -1689,51 +1689,32 @@ function GenerateRulesPage({
         title={tr('generate.title')}
       />
       {error && <div className="mb-4"><ErrorAlert message={error} title={tr('errors.generate')} /></div>}
-      <Card className="overflow-hidden border border-border bg-surface shadow-none">
-        <Card.Content className="grid min-h-[34rem] p-0">
-          <aside className="hidden">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">{tr('generate.process')}</p>
-            <div className="grid gap-1">
-              {[
-                ['1', tr('generate.evidenceScope'), true],
-                ['2', tr('generate.prepareEvidence'), false],
-                ['3', tr('generate.generateRules'), false],
-                ['4', tr('generate.reviewPublish'), false],
-              ].map(([index, label, active]) => (
-                <div
-                  className={`grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2 rounded-lg px-2 py-3 ${
-                    active ? 'bg-primary-soft' : ''
-                  }`}
-                  key={String(label)}
-                >
-                  <span className={`grid size-5 place-items-center rounded-full text-xs ${
-                    active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-surface-hover text-muted'
-                  }`}>
-                    {index}
-                  </span>
-                  <span className={active ? 'text-sm text-foreground' : 'text-sm text-muted'}>
-                    {label}
-                  </span>
-                </div>
-              ))}
+      <section
+        className="mx-auto w-full max-w-6xl"
+        data-layout="generation-launcher"
+      >
+        <div className="grid grid-cols-[minmax(0,1fr)_22rem] items-start gap-6 max-[1100px]:grid-cols-1">
+          <article className="min-w-0">
+            <div className="mb-4">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
+                {tr('generate.evidenceEyebrow')}
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-foreground">
+                {tr('generate.evidenceTitle')}
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                {tr('generate.evidenceDescription')}
+              </p>
             </div>
-          </aside>
-          <section className="grid min-w-0 grid-rows-[minmax(0,1fr)_auto] bg-background">
-            <div className="mx-auto w-full max-w-6xl p-7">
-              <article className="grid gap-4">
-                <p className="leading-7 text-foreground">
-                  {tr('generate.question')}
-                </p>
-                <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)] items-start gap-4 max-[1100px]:grid-cols-1">
-                  <div className="grid content-start gap-4">
+            <div className="grid content-start gap-4">
                     <div className="overflow-hidden rounded-xl border border-border bg-surface">
                       {generationModes.map((item) => (
                         <button
                           aria-pressed={mode === item.value}
-                          className={`grid w-full cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] gap-3 border-b border-border p-4 text-left transition-colors last:border-b-0 hover:bg-surface-hover ${
-                            mode === item.value ? 'bg-primary-soft' : ''
+                          className={`grid w-full cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] gap-3 border-b border-l-2 border-border p-4 text-left transition-colors last:border-b-0 hover:bg-surface-hover ${
+                            mode === item.value
+                              ? 'border-l-primary bg-primary/10'
+                              : 'border-l-transparent'
                           }`}
                           disabled={starting}
                           key={item.value}
@@ -1789,18 +1770,23 @@ function GenerateRulesPage({
                         </div>
                       </div>
                     )}
-                  </div>
+            </div>
+          </article>
 
-                  <div className="overflow-hidden rounded-xl border border-border bg-surface">
-                  <div className="p-4">
-                    <h2 className="text-sm font-medium text-foreground">{tr('generate.agentOptions')}</h2>
-                    <p className="mt-1 text-sm text-muted">{tr('generate.agentOptionsDescription')}</p>
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{tr('generate.agent')}</p>
-                      <p className="mt-1 text-xs text-muted">{tr('generate.agentDescription')}</p>
-                    </div>
+          <aside className="sticky top-6 overflow-hidden rounded-xl border border-border bg-surface max-[1100px]:static">
+            <div className="px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
+                {tr('generate.configurationEyebrow')}
+              </p>
+              <h2 className="mt-2 text-base font-semibold text-foreground">
+                {tr('generate.runConfiguration')}
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                {tr('generate.runConfigurationDescription')}
+              </p>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
+              <p className="text-sm font-medium text-foreground">{tr('generate.agent')}</p>
                     <Select
                       aria-label={tr('generate.agent')}
                       isDisabled={starting || !config}
@@ -1823,12 +1809,9 @@ function GenerateRulesPage({
                         </ListBox>
                       </Select.Popover>
                     </Select>
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{tr('generate.model')}</p>
-                      <p className="mt-1 text-xs text-muted">{tr('generate.modelDescription')}</p>
-                    </div>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
+              <p className="text-sm font-medium text-foreground">{tr('generate.model')}</p>
                     <Select
                       aria-label={tr('generate.model')}
                       isDisabled={starting || !config}
@@ -1857,12 +1840,9 @@ function GenerateRulesPage({
                         </ListBox>
                       </Select.Popover>
                     </Select>
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{tr('generate.effort')}</p>
-                      <p className="mt-1 text-xs text-muted">{tr('generate.effortDescription')}</p>
-                    </div>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
+              <p className="text-sm font-medium text-foreground">{tr('generate.effort')}</p>
                     <Select
                       aria-label={tr('generate.effort')}
                       isDisabled={starting || !config}
@@ -1889,15 +1869,12 @@ function GenerateRulesPage({
                         </ListBox>
                       </Select.Popover>
                     </Select>
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{tr('generate.fastMode')}</p>
-                      <p className="mt-1 text-xs text-muted">{tr('generate.fastModeDescription')}</p>
-                    </div>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
+              <p className="text-sm font-medium text-foreground">{tr('generate.fastMode')}</p>
                     <Switch
                       aria-label={tr('generate.fastMode')}
-                      className="justify-self-end max-sm:justify-self-start"
+                      className="justify-self-end"
                       isDisabled={starting || !config}
                       isSelected={fastMode}
                       onChange={setFastMode}
@@ -1908,15 +1885,14 @@ function GenerateRulesPage({
                         </Switch.Control>
                       </Switch.Content>
                     </Switch>
-                  </div>
-                </div>
-                </div>
-              </article>
             </div>
-            <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-5 py-3.5">
-              <span className="text-sm text-muted">{scopeSummary}</span>
+            <div
+              className="border-t border-border bg-surface-hover/40 p-4"
+              data-generation-action="true"
+            >
+              <p className="mb-3 text-xs text-muted">{scopeSummary}</p>
               <Button
-                className="gap-2 bg-primary text-primary-foreground"
+                className="w-full gap-2 bg-primary text-primary-foreground"
                 isDisabled={!config || starting || (mode === 'projects' && selectedProjects.length === 0)}
                 onPress={() => void generate()}
               >
@@ -1927,10 +1903,10 @@ function GenerateRulesPage({
                 )}
                 {starting ? tr('actions.starting') : tr('actions.continueChat')}
               </Button>
-            </footer>
-          </section>
-        </Card.Content>
-      </Card>
+            </div>
+          </aside>
+        </div>
+      </section>
     </>
   )
 }
