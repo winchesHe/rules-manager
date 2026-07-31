@@ -3,6 +3,10 @@ import type {
   ProjectGenerationResponse,
 } from '../types'
 
+export function canRegenerate(status: ChatThread['status']): boolean {
+  return status === 'failed' || status === 'cancelled' || status === 'interrupted'
+}
+
 export function visibleProjectResponses(
   status: ChatThread['status'],
   responses: ProjectGenerationResponse[],

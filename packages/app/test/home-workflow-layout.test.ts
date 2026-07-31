@@ -65,6 +65,17 @@ describe('home workflow layout', () => {
     expect(source).toContain('visibleProjectResponses')
   })
 
+  it('Chat 失败终态可复用原请求重新生成并进入新 Thread', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('canRegenerate(thread.status)')
+    expect(source).toContain("t('regenerate')")
+    expect(source).toContain("'rules.generate',")
+    expect(source).toContain('thread.request')
+    expect(source).toContain('await refresh(result.runId)')
+    expect(source).toContain('isRegenerating')
+  })
+
   it('Chat 移除 Assistant 外壳并支持展开 Activity 正文', () => {
     const source = read('views/ChatView.tsx')
     const conversation = source.slice(

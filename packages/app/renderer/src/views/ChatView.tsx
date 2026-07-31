@@ -22,9 +22,11 @@ import type {
   ChatThread,
   ChatThreadSummary,
   GenerationHistoryEntry,
+  GenerationStartResult,
   RunCancelResult,
 } from '../types'
 import {
+  canRegenerate,
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
@@ -46,6 +48,8 @@ export function ChatView({
   const [legacy, setLegacy] = useState<GenerationHistoryEntry | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [errorTitle, setErrorTitle] = useState<'loadError' | 'actionError'>('loadError')
+  const [isRegenerating, setIsRegenerating] = useState(false)
   const selectedIdRef = useRef<string | null>(selectedId)
   const conversationRef = useRef<HTMLElement | null>(null)
   const followStreamRef = useRef(true)
@@ -97,6 +101,7 @@ export function ChatView({
       await loadSelected(result.selectedId, result.threadRows, result.historyRows)
       setError(null)
     } catch (reason: unknown) {
+      setErrorTitle('loadError')
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setLoading(false)
@@ -177,7 +182,31 @@ export function ChatView({
       )
       await refresh(thread.id)
     } catch (reason: unknown) {
+      setErrorTitle('actionError')
       setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  async function regenerate(): Promise<void> {
+    if (!thread || !canRegenerate(thread.status) || isRegenerating) return
+    setIsRegenerating(true)
+    setError(null)
+    try {
+      const result = await window.api.invoke<GenerationStartResult>(
+        'rules.generate',
+        thread.request,
+      )
+      if (!result.started) {
+        setErrorTitle('actionError')
+        setError(t('generationAlreadyRunning'))
+        return
+      }
+      await refresh(result.runId)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setIsRegenerating(false)
     }
   }
 
@@ -214,12 +243,24 @@ export function ChatView({
               <ChevronRight aria-hidden="true" size={17} />
             </Button>
           )}
+          {thread && canRegenerate(thread.status) && (
+            <Button
+              className="gap-2 bg-primary text-primary-foreground"
+              isDisabled={isRegenerating}
+              onPress={() => void regenerate()}
+            >
+              {isRegenerating
+                ? <Spinner color="current" size="sm" />
+                : <RotateCcw aria-hidden="true" size={17} />}
+              {isRegenerating ? t('regenerating') : t('regenerate')}
+            </Button>
+          )}
         </header>
 
         {error && (
           <Alert className="mb-4" status="danger">
             <Alert.Content>
-              <Alert.Title>{t('loadError')}</Alert.Title>
+              <Alert.Title>{t(errorTitle)}</Alert.Title>
               <Alert.Description>{error}</Alert.Description>
             </Alert.Content>
           </Alert>

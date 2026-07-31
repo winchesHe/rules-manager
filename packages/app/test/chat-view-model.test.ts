@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 import {
+  canRegenerate,
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
@@ -48,6 +49,15 @@ describe('chat view model', () => {
       { ...responses[0], status: 'completed' },
     ])
     expect(visibleProjectResponses('failed', responses)).toEqual(responses)
+  })
+
+  it('只有失败、取消或中断的 Thread 可以重新生成', () => {
+    expect(canRegenerate('failed')).toBe(true)
+    expect(canRegenerate('cancelled')).toBe(true)
+    expect(canRegenerate('interrupted')).toBe(true)
+    expect(canRegenerate('running')).toBe(false)
+    expect(canRegenerate('cancelling')).toBe(false)
+    expect(canRegenerate('completed')).toBe(false)
   })
 
   it('格式化秒级 elapsed time', () => {

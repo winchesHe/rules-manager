@@ -1610,3 +1610,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 263 tests、App 14 suites / 91 tests、skipped=0，
   Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Chat 失败任务重新生成（2026-07-31）
+
+- Chat 对 `failed / cancelled / interrupted` 规则生成 Thread 提供“重新生成”；成功态
+  继续只提供候选审核出口，运行态继续只提供停止操作，保持每页一个 Primary Action。
+- 重新生成直接复用原 Thread 持久化的 `mode / projects / provider / model / effort /
+  fastMode` 请求，通过既有 `rules.generate` IPC 创建全新 Run；旧 Thread 不覆盖，成功
+  返回后自动刷新并选中新 Thread。
+- 提交期间按钮禁用并展示 loading；若已有生成任务占用 Controller，则在当前页面展示
+  明确错误，不创建重复 Run。加载错误与操作错误使用不同标题。
+- 状态资格拆为 `canRegenerate` 纯函数；计划与观察点见
+  `docs/plans/chat-regenerate.md`。测试覆盖六种 Run 状态和 Renderer 调用 / 跳转契约。
+- 最终验收：App 14 suites / 93 tests、Core 25 suites / 263 tests、skipped=0，
+  Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。
