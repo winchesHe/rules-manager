@@ -1721,74 +1721,77 @@ function GenerateRulesPage({
             </div>
           </aside>
           <section className="grid min-w-0 grid-rows-[minmax(0,1fr)_auto] bg-background">
-            <div className="mx-auto w-full max-w-3xl p-7">
+            <div className="mx-auto w-full max-w-6xl p-7">
               <article className="grid gap-4">
                 <p className="leading-7 text-foreground">
                   {tr('generate.question')}
                 </p>
-                <div className="overflow-hidden rounded-xl border border-border bg-surface">
-                  {generationModes.map((item) => (
-                    <button
-                      aria-pressed={mode === item.value}
-                      className={`grid w-full cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] gap-3 border-b border-border p-4 text-left transition-colors last:border-b-0 hover:bg-surface-hover ${
-                        mode === item.value ? 'bg-primary-soft' : ''
-                      }`}
-                      disabled={starting}
-                      key={item.value}
-                      onClick={() => setMode(item.value)}
-                      type="button"
-                    >
-                      <span className={`mt-0.5 size-4 rounded-full border ${
-                        mode === item.value ? 'border-[5px] border-primary' : 'border-muted'
-                      }`} />
-                      <span>
-                        <strong className="block text-sm font-medium text-foreground">{tr(item.labelKey)}</strong>
-                        <span className="mt-1 block text-sm text-muted">{tr(item.descriptionKey)}</span>
-                      </span>
-                      <span className="text-xs text-muted">
-                        {item.value === 'projects'
-                          ? tr('generate.available', { count: projects.length })
-                          : item.value === 'full'
-                            ? tr('generate.allSessions')
-                            : tr('generate.lastDays')}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)] items-start gap-4 max-[1100px]:grid-cols-1">
+                  <div className="grid content-start gap-4">
+                    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+                      {generationModes.map((item) => (
+                        <button
+                          aria-pressed={mode === item.value}
+                          className={`grid w-full cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] gap-3 border-b border-border p-4 text-left transition-colors last:border-b-0 hover:bg-surface-hover ${
+                            mode === item.value ? 'bg-primary-soft' : ''
+                          }`}
+                          disabled={starting}
+                          key={item.value}
+                          onClick={() => setMode(item.value)}
+                          type="button"
+                        >
+                          <span className={`mt-0.5 size-4 rounded-full border ${
+                            mode === item.value ? 'border-[5px] border-primary' : 'border-muted'
+                          }`} />
+                          <span>
+                            <strong className="block text-sm font-medium text-foreground">{tr(item.labelKey)}</strong>
+                            <span className="mt-1 block text-sm text-muted">{tr(item.descriptionKey)}</span>
+                          </span>
+                          <span className="text-xs text-muted">
+                            {item.value === 'projects'
+                              ? tr('generate.available', { count: projects.length })
+                              : item.value === 'full'
+                                ? tr('generate.allSessions')
+                                : tr('generate.lastDays')}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
 
-                {mode === 'projects' && (
-                  <div className="rounded-xl border border-border bg-surface p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h2 className="text-sm font-medium text-foreground">{tr('generate.projectGroups')}</h2>
-                      <Chip size="sm" variant="soft">{tr('generate.selected', { count: selectedProjects.length })}</Chip>
-                    </div>
-                    <div className="flex max-h-44 flex-wrap content-start gap-2 overflow-y-auto">
-                      {projectsError ? (
-                        <p className="text-sm text-danger">{projectsError}</p>
-                      ) : projects.length === 0 ? (
-                        <p className="text-sm text-muted">{tr('generate.noProjects')}</p>
-                      ) : (
-                        projects.map((project) => {
-                          const selected = selectedProjects.includes(project.slug)
-                          return (
-                            <Button
-                              aria-pressed={selected}
-                              isDisabled={starting}
-                              key={project.slug}
-                              onPress={() => toggleProject(project.slug)}
-                              size="sm"
-                              variant={selected ? 'primary' : 'ghost'}
-                            >
-                              {project.slug}
-                            </Button>
-                          )
-                        })
-                      )}
-                    </div>
+                    {mode === 'projects' && (
+                      <div className="rounded-xl border border-border bg-surface p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <h2 className="text-sm font-medium text-foreground">{tr('generate.projectGroups')}</h2>
+                          <Chip size="sm" variant="soft">{tr('generate.selected', { count: selectedProjects.length })}</Chip>
+                        </div>
+                        <div className="flex max-h-44 flex-wrap content-start gap-2 overflow-y-auto">
+                          {projectsError ? (
+                            <p className="text-sm text-danger">{projectsError}</p>
+                          ) : projects.length === 0 ? (
+                            <p className="text-sm text-muted">{tr('generate.noProjects')}</p>
+                          ) : (
+                            projects.map((project) => {
+                              const selected = selectedProjects.includes(project.slug)
+                              return (
+                                <Button
+                                  aria-pressed={selected}
+                                  isDisabled={starting}
+                                  key={project.slug}
+                                  onPress={() => toggleProject(project.slug)}
+                                  size="sm"
+                                  variant={selected ? 'primary' : 'ghost'}
+                                >
+                                  {project.slug}
+                                </Button>
+                              )
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                <div className="overflow-hidden rounded-xl border border-border bg-surface">
+                  <div className="overflow-hidden rounded-xl border border-border bg-surface">
                   <div className="p-4">
                     <h2 className="text-sm font-medium text-foreground">{tr('generate.agentOptions')}</h2>
                     <p className="mt-1 text-sm text-muted">{tr('generate.agentOptionsDescription')}</p>
@@ -1906,6 +1909,7 @@ function GenerateRulesPage({
                       </Switch.Content>
                     </Switch>
                   </div>
+                </div>
                 </div>
               </article>
             </div>

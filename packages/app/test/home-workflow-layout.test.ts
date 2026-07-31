@@ -337,6 +337,8 @@ describe('home workflow layout', () => {
     expect(source).toContain('model,')
     expect(source).toContain('effort,')
     expect(source).toContain('fastMode,')
+    expect(source).toContain('grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]')
+    expect(source).toContain('max-[1100px]:grid-cols-1')
     expect(source).toContain('grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)]')
     expect(chatSource).toContain("label={t('agent')}")
     expect(chatSource).toContain("label={t('model')}")

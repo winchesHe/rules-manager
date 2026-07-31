@@ -1507,7 +1507,9 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Generate 发起页新增 Agent（Claude / Codex）、Model、Reasoning Effort 与
   Fast Mode 选择器；初始值读取 Settings，Model catalog 随 Agent 切换并监听
   Provider 刷新，禁用的 Provider 不进入可选列表，本次选择不会改写全局默认配置。
-- 四个配置项统一使用“左侧说明、右侧控件”的横向行布局，窄屏才降为上下排列。
+- Generate 主内容在桌面端使用双栏：Evidence scope / 项目选择位于左侧，完整
+  Agent 配置卡位于右侧；窗口窄于 1100px 时回退为单栏。配置卡内部四个配置项继续
+  使用“左侧说明、右侧控件”的横向行布局，窄屏才降为上下排列。
 - Generation Request 扩展为携带 `provider / model / effort / fastMode`，IPC 会补齐
   旧调用缺失的默认值并拒绝非法或已禁用 Provider；Worker 将四个字段显式传给
   `runRulesGenerate`，运行元数据与 FS-first Chat Thread 同步保存本次配置快照。

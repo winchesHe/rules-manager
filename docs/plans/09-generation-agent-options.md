@@ -18,9 +18,9 @@
 
 ## Step 2 · Generate 选择器
 
-只在 Generate 发起页增加 Agent、Model、Effort、Fast Mode 控件，并从 Settings 加载初始值与 Model catalog。每一项采用左侧标签、右侧控件的横向结构。
+只在 Generate 发起页增加 Agent、Model、Effort、Fast Mode 控件，并从 Settings 加载初始值与 Model catalog。桌面端将 Evidence scope 与完整 Agent 配置分成左右两栏；配置项内部仍采用左侧标签、右侧控件的横向结构。
 
-- 观察点：四个控件在 Evidence 范围下方可见，标签与控件左右分布；禁用 Provider 不可选，切换 Agent 会更新 Model，发起按钮在配置加载完成前不可用。
+- 观察点：Evidence scope 位于左栏，完整 Agent 配置位于右栏；四个配置项的标签与控件左右分布；窄屏回退为单栏。禁用 Provider 不可选，切换 Agent 会更新 Model，发起按钮在配置加载完成前不可用。
 - 验证方式：APP 布局契约测试检查控件与请求字段；production build 验证组件 API 和类型。
 
 ## Step 3 · Chat Context 展示
