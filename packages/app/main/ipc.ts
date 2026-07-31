@@ -11,7 +11,14 @@ import {
   updateRuleCandidateStatus,
 } from '@memory-manager/core/rule-candidates'
 import { publishGlobalRulesToAgents } from '../../core/src/agent-instruction-publish.js'
-import { loadLlmConfig, saveLlmConfig, type LlmConfig } from '../../core/src/config.js'
+import {
+  isLlmEffort,
+  loadLlmConfig,
+  saveLlmConfig,
+  type LlmConfig,
+  type LlmEffort,
+  type LlmProvider,
+} from '../../core/src/config.js'
 import { runRulesOutput } from '../../core/src/commands/rules-output.js'
 import type { SessionPreview } from '../../core/src/evidence.js'
 import {
@@ -32,7 +39,6 @@ import {
   ProviderController,
   type ProviderControllerEvent,
 } from './provider-controller.js'
-import type { LlmProvider } from '../../core/src/config.js'
 import {
   addCustomProviderModel,
   removeCustomProviderModel,
@@ -361,15 +367,50 @@ function validateScanRequest(value: unknown): {
 }
 
 function validateGenerateRequest(value: unknown): GenerationRequest {
-  if (value === undefined) return { mode: 'recent', projects: [] }
+  const config = loadLlmConfig()
+  if (value === undefined) {
+    return {
+      mode: 'recent',
+      projects: [],
+      provider: config.provider,
+      effort: config.effort,
+      fastMode: config.fastMode ?? false,
+    }
+  }
   if (!value || typeof value !== 'object') throw new Error('invalid generation request')
-  const request = value as { mode?: unknown; projects?: unknown }
+  const request = value as {
+    mode?: unknown
+    projects?: unknown
+    provider?: unknown
+    effort?: unknown
+    fastMode?: unknown
+  }
+  const provider = request.provider ?? config.provider
+  const effort = request.effort ?? config.effort
+  const fastMode = request.fastMode ?? config.fastMode ?? false
+  if (provider !== 'claude' && provider !== 'codex') {
+    throw new Error('generation provider must be claude or codex')
+  }
+  if (config.providers?.[provider]?.enabled === false) {
+    throw new Error('generation provider is disabled')
+  }
+  if (!isLlmEffort(effort)) {
+    throw new Error('generation effort is unsupported')
+  }
+  if (typeof fastMode !== 'boolean') {
+    throw new Error('generation fastMode must be boolean')
+  }
+  const options: {
+    provider: LlmProvider
+    effort: LlmEffort
+    fastMode: boolean
+  } = { provider, effort, fastMode }
   if (
     request.mode === 'recent'
     || request.mode === 'changed7d'
     || request.mode === 'full'
   ) {
-    return { mode: request.mode, projects: [] }
+    return { mode: request.mode, projects: [], ...options }
   }
   if (request.mode !== 'projects' || !Array.isArray(request.projects)) {
     throw new Error('unsupported generation mode')
@@ -381,7 +422,7 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
   ) {
     throw new Error('at least one project is required')
   }
-  return { mode: 'projects', projects: projects as string[] }
+  return { mode: 'projects', projects: projects as string[], ...options }
 }
 
 function validateRunId(value: unknown): string {

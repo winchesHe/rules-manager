@@ -320,6 +320,7 @@ describe('home workflow layout', () => {
 
   it('Start Generate 直接进入 Chat 并在对话中选择 Evidence scope', () => {
     const source = read('views/RulesView.tsx')
+    const chatSource = read('views/ChatView.tsx')
 
     expect(source).toContain("tr('generate.question')")
     expect(source).toContain("tr('generate.evidenceScope')")
@@ -327,6 +328,15 @@ describe('home workflow layout', () => {
     expect(source).toContain("tr('generate.reviewPublish')")
     expect(source).toContain("labelKey: 'generate.modes.recent.label'")
     expect(source).toContain('onOpenChat(status.runId)')
+    expect(source).toContain("tr('generate.agent')")
+    expect(source).toContain("tr('generate.effort')")
+    expect(source).toContain("tr('generate.fastMode')")
+    expect(source).toContain('provider,')
+    expect(source).toContain('effort,')
+    expect(source).toContain('fastMode,')
+    expect(chatSource).toContain("label={t('agent')}")
+    expect(chatSource).toContain("label={t('effort')}")
+    expect(chatSource).toContain("label={t('fastMode')}")
   })
 
   it('Scan 运行可取消，取消后继续展示最近一次完成结果', () => {

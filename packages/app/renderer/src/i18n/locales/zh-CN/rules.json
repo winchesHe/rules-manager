@@ -213,7 +213,20 @@
     "scopeSelected_other": "已选择 {{count}} 个项目",
     "scopeFull": "{{count}} 个项目 · 全部索引历史",
     "scopeRecent": "{{count}} 个项目 · 最近 7 天有变更的会话",
-    "startingLabel": "正在启动生成"
+    "startingLabel": "正在启动生成",
+    "agentOptions": "Agent 配置",
+    "agentOptionsDescription": "这些选项只用于本次生成，不会修改 Settings 中的默认值。",
+    "agent": "Agent",
+    "effort": "Reasoning Effort",
+    "fastMode": "Fast Mode",
+    "fastModeDescription": "使用更快的服务层执行本次任务。",
+    "efforts": {
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "xhigh": "超高",
+      "max": "最高"
+    }
   },
   "run": {
     "reviewDrafts_one": "审核 {{count}} 条草稿",

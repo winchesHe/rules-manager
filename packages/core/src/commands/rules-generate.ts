@@ -266,7 +266,11 @@ export async function runRulesGenerate(
 ): Promise<void> {
   const config = loadLlmConfig(opts.homeDir)
   const provider = opts.provider ?? config.provider
-  const model = opts.model ?? config.model
+  const model = opts.model ?? (
+    opts.provider === undefined || opts.provider === config.provider
+      ? config.model
+      : undefined
+  )
   const effort = opts.effort ?? config.effort
   const fastMode = opts.fastMode ?? config.fastMode ?? false
   throwIfAborted(opts.signal)

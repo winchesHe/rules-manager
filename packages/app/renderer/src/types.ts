@@ -185,6 +185,14 @@ export interface GenerateProgress {
 
 export type GenerationMode = 'recent' | 'changed7d' | 'full' | 'projects'
 
+export interface GenerationRequest {
+  mode: GenerationMode
+  projects: string[]
+  provider?: ProviderId
+  effort?: LlmConfig['effort']
+  fastMode?: boolean
+}
+
 export interface EvidenceSnapshot {
   mode: GenerationMode
   rounds?: number
@@ -244,7 +252,7 @@ export interface GenerationStatus {
   state: RunState
   runId?: string
   lastSeq: number
-  request?: { mode: GenerationMode; projects: string[] }
+  request?: GenerationRequest
   progress?: GenerateProgress
   evidence?: EvidenceSnapshot
   projectResponses: ProjectGenerationResponse[]
@@ -302,7 +310,7 @@ export interface ChatThreadSummary {
   kind: 'rules-generation'
   title: string
   status: Exclude<RunState, 'idle'>
-  request: { mode: GenerationMode; projects: string[] }
+  request: GenerationRequest
   projectCount: number
   sessionCount: number
   candidateCount: number

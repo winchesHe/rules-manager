@@ -61,7 +61,13 @@ describe('GenerationController', () => {
     const worker = new FakeWorker()
     const factory = jest.fn(() => worker)
     const controller = new GenerationController(factory, () => undefined)
-    const request: GenerationRequest = { mode: 'changed7d', projects: [] }
+    const request: GenerationRequest = {
+      mode: 'changed7d',
+      projects: [],
+      provider: 'codex',
+      effort: 'high',
+      fastMode: true,
+    }
 
     const result = controller.start(request)
     expect(result).toEqual({ started: true, runId: expect.any(String) })

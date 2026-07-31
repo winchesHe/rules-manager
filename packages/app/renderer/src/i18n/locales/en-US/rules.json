@@ -213,7 +213,20 @@
     "scopeSelected_other": "{{count}} selected projects",
     "scopeFull": "{{count}} projects · full indexed history",
     "scopeRecent": "{{count}} projects · sessions changed in the last 7 days",
-    "startingLabel": "Starting generation"
+    "startingLabel": "Starting generation",
+    "agentOptions": "Agent options",
+    "agentOptionsDescription": "These options apply only to this generation and do not change your Settings defaults.",
+    "agent": "Agent",
+    "effort": "Reasoning Effort",
+    "fastMode": "Fast Mode",
+    "fastModeDescription": "Use the faster service tier for this run.",
+    "efforts": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "xhigh": "Extra high",
+      "max": "Maximum"
+    }
   },
   "run": {
     "reviewDrafts_one": "Review {{count}} draft",

@@ -106,7 +106,13 @@ describe('ChatStore', () => {
     const { chatsDir, store } = createStore()
     store.createGenerationThread({
       runId: 'run-1',
-      request: { mode: 'projects', projects: ['rules-manager'] },
+      request: {
+        mode: 'projects',
+        projects: ['rules-manager'],
+        provider: 'codex',
+        effort: 'high',
+        fastMode: true,
+      },
       startedAt: '2026-07-30T00:00:00.000Z',
     })
 
@@ -116,7 +122,13 @@ describe('ChatStore', () => {
       id: 'run-1',
       kind: 'rules-generation',
       status: 'running',
-      request: { mode: 'projects', projects: ['rules-manager'] },
+      request: {
+        mode: 'projects',
+        projects: ['rules-manager'],
+        provider: 'codex',
+        effort: 'high',
+        fastMode: true,
+      },
       messages: [{ role: 'user', kind: 'rules-generation-request' }],
     })
   })

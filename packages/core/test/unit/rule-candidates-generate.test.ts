@@ -133,6 +133,38 @@ describe('runRulesGenerate', () => {
     }))
   })
 
+  it('本次切换 Provider 时不沿用另一 Provider 的默认 model', async () => {
+    fs.writeFileSync(
+      path.join(resolveWorkspace(home).workspaceDir, 'config.json'),
+      JSON.stringify({
+        provider: 'claude',
+        model: 'claude-default-model',
+        effort: 'medium',
+      }),
+    )
+    const generate = jest.fn(async (..._args: unknown[]) => generated)
+
+    await runRulesGenerate({
+      homeDir: home,
+      provider: 'codex',
+      effort: 'high',
+      fastMode: true,
+      dryRun: true,
+    }, {
+      extract: async () => evidence,
+      generate,
+    })
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.any(String),
+      'codex',
+      undefined,
+      'high',
+      true,
+      expect.any(Object),
+    )
+  })
+
   it('只保留真实用户证据支持且不与既有规则重复的候选', async () => {
     const qualifiedEvidence: EvidenceBundle[] = [{
       ...evidence[0],

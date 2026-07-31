@@ -3,6 +3,7 @@ import type {
   ProjectGenerationResponse,
 } from '../../core/src/commands/rules-generate.js'
 import type { AgentActivity } from '../../core/src/llm.js'
+import type { LlmEffort, LlmProvider } from '../../core/src/config.js'
 import {
   createRunId,
   isActiveRun,
@@ -11,11 +12,18 @@ import {
   type RunState,
 } from './background-run.js'
 
-export type GenerationRequest =
+type GenerationRunOptions = {
+  provider?: LlmProvider
+  effort?: LlmEffort
+  fastMode?: boolean
+}
+
+export type GenerationRequest = (
   | { mode: 'recent'; projects: [] }
   | { mode: 'changed7d'; projects: [] }
   | { mode: 'full'; projects: [] }
   | { mode: 'projects'; projects: string[] }
+) & GenerationRunOptions
 
 export interface EvidenceSnapshot {
   mode: GenerationRequest['mode']

@@ -7,6 +7,7 @@ import {
   ListBox,
   Select,
   Spinner,
+  Switch,
   Table,
 } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
@@ -46,6 +47,7 @@ import type {
   GenerationEventEnvelope,
   GenerationHistoryEntry,
   GenerationMode,
+  GenerationRequest,
   GenerationStartResult,
   GenerationStatus,
   GlobalInstructionAgent,
@@ -53,6 +55,8 @@ import type {
   GlobalInstructionReadResult,
   Project,
   ProjectGenerationCandidate,
+  LlmConfig,
+  ProviderId,
   RunCancelResult,
   RuleCandidate,
   RuleStatus,
@@ -105,6 +109,19 @@ const generationModes: Array<{
     labelKey: 'generate.modes.full.label',
     descriptionKey: 'generate.modes.full.description',
   },
+]
+
+const generationProviders: Array<{ id: ProviderId; label: string }> = [
+  { id: 'claude', label: 'Claude' },
+  { id: 'codex', label: 'Codex' },
+]
+
+const generationEfforts: LlmConfig['effort'][] = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
 ]
 
 function tr(
@@ -1544,6 +1561,10 @@ function GenerateRulesPage({
   )
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [config, setConfig] = useState<LlmConfig | null>(null)
+  const [provider, setProvider] = useState<ProviderId>('claude')
+  const [effort, setEffort] = useState<LlmConfig['effort']>('medium')
+  const [fastMode, setFastMode] = useState(false)
 
   useEffect(() => {
     let current = true
@@ -1559,6 +1580,27 @@ function GenerateRulesPage({
       current = false
     }
   }, [])
+
+  useEffect(() => {
+    let current = true
+    void window.api
+      .invoke<LlmConfig>('settings.load')
+      .then((value) => {
+        if (!current) return
+        setConfig(value)
+        setProvider(value.provider)
+        setEffort(value.effort)
+        setFastMode(value.fastMode ?? false)
+      })
+      .catch((reason: unknown) => {
+        if (current) {
+          onError(reason instanceof Error ? reason.message : String(reason))
+        }
+      })
+    return () => {
+      current = false
+    }
+  }, [onError])
 
   function toggleProject(slug: string): void {
     setSelectedProjects((current) =>
@@ -1577,7 +1619,10 @@ function GenerateRulesPage({
         window.api.invoke<GenerationStartResult>('rules.generate', {
           mode,
           projects: mode === 'projects' ? selectedProjects : undefined,
-        }),
+          provider,
+          effort,
+          fastMode,
+        } satisfies Partial<GenerationRequest>),
       )
       const status = await window.api.invoke<GenerationStatus>('rules.generate.status')
       if (status.error) onError(status.error)
@@ -1701,13 +1746,94 @@ function GenerateRulesPage({
                     </div>
                   </div>
                 )}
+
+                <div className="grid gap-4 rounded-xl border border-border bg-surface p-4">
+                  <div>
+                    <h2 className="text-sm font-medium text-foreground">{tr('generate.agentOptions')}</h2>
+                    <p className="mt-1 text-sm text-muted">{tr('generate.agentOptionsDescription')}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+                    <label className="grid gap-2 text-sm text-muted">
+                      {tr('generate.agent')}
+                      <Select
+                        aria-label={tr('generate.agent')}
+                        isDisabled={starting || !config}
+                        onSelectionChange={(key) => setProvider(String(key) as ProviderId)}
+                        selectedKey={provider}
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {generationProviders
+                              .filter((item) => config?.providers?.[item.id]?.enabled !== false)
+                              .map((item) => (
+                                <ListBox.Item id={item.id} key={item.id} textValue={item.label}>
+                                  {item.label}
+                                </ListBox.Item>
+                              ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </label>
+                    <label className="grid gap-2 text-sm text-muted">
+                      {tr('generate.effort')}
+                      <Select
+                        aria-label={tr('generate.effort')}
+                        isDisabled={starting || !config}
+                        onSelectionChange={(key) =>
+                          setEffort(String(key) as LlmConfig['effort'])
+                        }
+                        selectedKey={effort}
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {generationEfforts.map((item) => (
+                              <ListBox.Item
+                                id={item}
+                                key={item}
+                                textValue={tr(`generate.efforts.${item}`)}
+                              >
+                                {tr(`generate.efforts.${item}`)}
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    </label>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{tr('generate.fastMode')}</p>
+                      <p className="mt-1 text-sm text-muted">{tr('generate.fastModeDescription')}</p>
+                    </div>
+                    <Switch
+                      aria-label={tr('generate.fastMode')}
+                      isDisabled={starting || !config}
+                      isSelected={fastMode}
+                      onChange={setFastMode}
+                    >
+                      <Switch.Content>
+                        <Switch.Control>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                      </Switch.Content>
+                    </Switch>
+                  </div>
+                </div>
               </article>
             </div>
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-5 py-3.5">
               <span className="text-sm text-muted">{scopeSummary}</span>
               <Button
                 className="gap-2 bg-primary text-primary-foreground"
-                isDisabled={starting || (mode === 'projects' && selectedProjects.length === 0)}
+                isDisabled={!config || starting || (mode === 'projects' && selectedProjects.length === 0)}
                 onPress={() => void generate()}
               >
                 {starting ? (

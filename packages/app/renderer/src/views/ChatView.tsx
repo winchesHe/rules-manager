@@ -297,6 +297,23 @@ export function ChatView({
               <div className="mt-4 grid gap-4">
                 <ContextDetail label={t('run')} value={thread.runId.slice(0, 8)} />
                 <ContextDetail label={t('scope')} value={scopeLabel(thread.request, t)} />
+                <ContextDetail
+                  label={t('agent')}
+                  value={
+                    thread.request.provider === 'codex'
+                      ? 'Codex'
+                      : thread.request.provider === 'claude' ? 'Claude' : '—'
+                  }
+                />
+                <ContextDetail label={t('effort')} value={thread.request.effort ?? '—'} />
+                <ContextDetail
+                  label={t('fastMode')}
+                  value={
+                    thread.request.fastMode === undefined
+                      ? '—'
+                      : thread.request.fastMode ? t('enabled') : t('disabled')
+                  }
+                />
                 <ContextDetail label={t('projects')} value={String(thread.projectCount)} />
                 <ContextDetail label={t('sessions')} value={String(thread.sessionCount)} />
                 <ContextDetail label={t('candidates')} value={String(thread.candidateCount)} />

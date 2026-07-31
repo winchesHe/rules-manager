@@ -124,6 +124,9 @@ void (async () => {
     await runRulesGenerate({
       ...options,
       runId: request.runId,
+      provider: request.provider,
+      effort: request.effort,
+      fastMode: request.fastMode,
       signal: abortController.signal,
       onEvidence: (bundles) => {
         const snapshot: EvidenceSnapshot = {
