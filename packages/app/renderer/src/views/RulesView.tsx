@@ -1454,6 +1454,7 @@ function GeneratedRulesIndexPage({
                             ? new Set(visibleCandidates.map((candidate) => candidate.id))
                             : new Set())
                         }}
+                        slot="selection"
                       />
                     </Table.Column>
                     <Table.Column isRowHeader>{tr('overview.columns.rule')}</Table.Column>
@@ -1477,6 +1478,7 @@ function GeneratedRulesIndexPage({
                                 return next
                               })
                             }}
+                            slot="selection"
                           />
                         </Table.Cell>
                         <Table.Cell className="max-w-xl"><p className="line-clamp-2">{candidate.rule_text}</p></Table.Cell>

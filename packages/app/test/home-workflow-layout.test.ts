@@ -218,6 +218,7 @@ describe('home workflow layout', () => {
     expect(generatedPage).toContain("tr('generated.bulkAccept')")
     expect(generatedPage).toContain("tr('generated.bulkReject')")
     expect(generatedPage).toContain('setSelectedIds(new Set())')
+    expect(generatedPage.match(/slot="selection"/g)).toHaveLength(2)
   })
 
   it('Recent activity 直接按 Session updated_at 收集，不依赖 Scan History', () => {

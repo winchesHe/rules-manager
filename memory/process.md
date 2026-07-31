@@ -1698,3 +1698,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
   警告。
+
+## 候选规则多选白屏修复（2026-07-31）
+
+- 真实 Electron 进入 Generated Rules 后白屏，DevTools 明确报错：HeroUI Table 内的
+  Checkbox 缺少必需的 slot prop；这不是候选数据、IPC 或批量事务异常。
+- 表头全选与逐行 Checkbox 均补充 `slot="selection"`。App 视图契约新增两处 slot 数量
+  断言，测试先复现失败，再随实现通过，防止后续重构重新引入运行时崩溃。
+- 热重载后的真实 Electron 页面已恢复，Generated Rules 成功展示 79 条草稿候选，控制台
+  无应用错误。App 独立 typecheck 仍被既有跨 workspace `rootDir/include` 配置及既有
+  `RulesSection` 的 `history` 类型错误阻塞，不属于本次改动。
+- 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
+  警告。
