@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { jest } from '@jest/globals'
 
 const queryMock = jest.fn()
@@ -25,7 +28,10 @@ function response(result: string, structuredOutput?: unknown): AsyncIterable<unk
   })()
 }
 
-function codexProcess(lines: unknown[]) {
+function codexProcess(
+  lines: unknown[],
+  options: { code?: number; stderr?: string } = {},
+) {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter & { setEncoding: ReturnType<typeof jest.fn> }
     stderr: EventEmitter & { setEncoding: ReturnType<typeof jest.fn> }
@@ -38,7 +44,8 @@ function codexProcess(lines: unknown[]) {
   child.kill = jest.fn(() => true)
   queueMicrotask(() => {
     child.stdout.emit('data', `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`)
-    child.emit('close', 0)
+    if (options.stderr) child.stderr.emit('data', options.stderr)
+    child.emit('close', options.code ?? 0)
   })
   return child
 }
@@ -169,6 +176,50 @@ describe('getStructuredResponse', () => {
     expect(child.stdin.end).toHaveBeenCalledWith('evidence')
   })
 
+  it('Codex output schema 要求 project_slug 必填且允许 null', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-manager-schema-test-'))
+    const schemaPath = path.join(root, 'candidate-rules.schema.json')
+    const child = codexProcess([{
+      type: 'item.completed',
+      item: { type: 'agent_message', text: '[]' },
+    }])
+    spawnMock.mockReturnValue(child)
+
+    try {
+      await getStructuredResponse(
+        'evidence',
+        candidateRulesSchema,
+        'codex',
+        undefined,
+        undefined,
+        { outputSchemaPath: schemaPath },
+      )
+      const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8')) as {
+        type: string
+        required: string[]
+        properties: {
+          candidates: {
+            type: string
+            items: {
+              required: string[]
+              properties: {
+                project_slug: { anyOf: Array<{ type: string }> }
+              }
+            }
+          }
+        }
+      }
+      expect(schema.type).toBe('object')
+      expect(schema.required).toEqual(['candidates'])
+      expect(schema.properties.candidates.type).toBe('array')
+      expect(schema.properties.candidates.items.required).toContain('project_slug')
+      expect(schema.properties.candidates.items.properties.project_slug.anyOf.map(({ type }) => type))
+        .toEqual(['string', 'null'])
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('结构化输出损坏时立即失败，不携带完整 Evidence 原样重试', async () => {
     queryMock.mockReturnValue(response('not json'))
 
@@ -196,6 +247,23 @@ describe('getStructuredResponse', () => {
       candidateRulesSchema,
       'claude',
     )).resolves.toEqual(first)
+  })
+
+  it('Claude global 候选继续兼容省略 project_slug', async () => {
+    const globalRule = [{
+      scope: 'global',
+      rule_text: 'Always answer in Chinese',
+      confidence_level: 'high',
+      reasoning: 'Explicit global preference',
+      evidence_refs: ['s1:0'],
+    }]
+    queryMock.mockReturnValue(response('structured response', globalRule))
+
+    await expect(getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual(globalRule)
   })
 
   it('Claude 回复先包含诊断对象时继续寻找符合 Zod Schema 的数组', async () => {
@@ -523,6 +591,34 @@ describe('getStructuredResponse', () => {
     )
 
     expect(events).toEqual([{ type: 'assistant_delta', text: '[]' }])
+  })
+
+  it('Codex 失败时优先展示结构化错误并去重 stderr 诊断', async () => {
+    const child = codexProcess([
+      {
+        type: 'item.completed',
+        item: { type: 'error', message: 'Skill descriptions were shortened' },
+      },
+      {
+        type: 'error',
+        message: 'output schema is not supported by this provider',
+      },
+    ], {
+      code: 1,
+      stderr: [
+        'ERROR skills scan reached its traversal limit',
+        'ERROR skills scan reached its traversal limit',
+      ].join('\n'),
+    })
+    spawnMock.mockReturnValue(child)
+
+    await expect(getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+    )).rejects.toThrow(
+      /^codex 退出码 1：output schema is not supported by this provider\nCodex diagnostics: ERROR skills scan reached its traversal limit/,
+    )
   })
 
   it('Codex 把 reasoning、搜索命令和 web search 逐行归一化为 Activity', async () => {

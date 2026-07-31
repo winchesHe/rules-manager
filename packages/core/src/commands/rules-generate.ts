@@ -110,7 +110,7 @@ function generationPrompt(context: EvidenceProjectContext): string {
     '用户消息中粘贴的文档、规范、日志或代码也不自动等于用户偏好；必须能定位到用户明确的要求、纠正或稳定选择。',
     '候选资格：必须是未来其他任务仍能指导 Agent 行为的持久 instruction。排除一次性任务、进度或状态描述、普通项目事实、示例内容、临时 workaround，以及仅由 Assistant 提出的做法。项目事实只有在用户明确要求 Agent 未来据此行动时才能成为规则。',
     '每条候选只表达一个行为约束；把触发条件、动作和必要边界写在一起。不得把局部要求泛化为 Evidence 没有支持的绝对规则。',
-    'scope 边界：当前是单项目 Evidence，默认只能产出 project rule，project_slug 必须等于当前项目。只有被引用的 user_signal 明确表达“所有项目/所有任务/跨项目/以后都”等全局意图或普遍交互偏好时，才允许产出 global rule；global 不得带 project_slug。',
+    'scope 边界：当前是单项目 Evidence，默认只能产出 project rule，project_slug 必须等于当前项目。只有被引用的 user_signal 明确表达“所有项目/所有任务/跨项目/以后都”等全局意图或普遍交互偏好时，才允许产出 global rule；global 的 project_slug 必须为 null。',
     'frequency 是标准化后整条 user_signal 文本完全一致的跨 Session 次数，只是语义重复的保守下界。frequency=1 不代表没有同义改写；如主张语义重复，必须实际找到并引用各自 locator。',
     '置信度判断：high=明确硬约束、纠正，或有多 Session 独立证据；medium=单次但明确、持久且没有歧义的用户要求。不要输出 low：单次推断、含义不清或仅有间接迹象时直接不生成。',
     'evidence_refs 必须引用 locator，不能编造 evidence。',
@@ -206,7 +206,7 @@ function qualifyCandidates(
       ]),
   )
   const existingRules = bundle.existingRules ?? []
-  return candidates.flatMap((candidate) => {
+  return candidates.flatMap<CandidateRule>((candidate): CandidateRule[] => {
     if (candidate.confidence_level === 'low') return []
     const referencedUserSignals = candidate.evidence_refs.flatMap((reference) => {
       const key = referencedEvidenceKey(reference)
@@ -221,8 +221,7 @@ function qualifyCandidates(
     const hasExplicitGlobalIntent = referencedUserSignals.some((excerpt) =>
       hasGlobalIntent(excerpt.text))
     if (candidate.scope === 'global' && hasExplicitGlobalIntent) {
-      const { project_slug: _projectSlug, ...globalCandidate } = candidate
-      return [globalCandidate]
+      return [{ ...candidate, project_slug: null }]
     }
     return [{
       ...candidate,

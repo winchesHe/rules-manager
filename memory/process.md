@@ -1625,3 +1625,24 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：App 14 suites / 93 tests、Core 25 suites / 263 tests、skipped=0，
   Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Codex 严格 Schema 与错误诊断修复（2026-07-31）
+
+- 真实 Codex 批量生成的 10/10 失败并非 Skills traversal 导致。Codex JSONL stdout
+  已返回 `invalid_json_schema` 400，但旧 `callCodex` 忽略 `item.type=error` 和顶层
+  error，只在非零退出时展示 stderr，导致 Chat 被重复的 Skills 告警淹没。
+- `callCodex` 现在优先展示顶层 fatal error；只有没有 fatal event 时才使用 item error。
+  stderr diagnostics 按去除时间戳后的内容去重，最多保留 3 行 / 2,000 字符。
+- 自定义 Provider 使用严格 Structured Outputs：根 Schema 必须是 object，且 properties
+  中每个字段都必须进入 required。Codex Schema 因此包装为 `{ candidates: [...] }`，
+  并只在 Codex 适配层递归补齐 required；`project_slug` 使用 `string | null`。业务 Schema
+  继续兼容 Claude 省略 global `project_slug`，资格校验后统一显式返回 null。
+- 本机 `twitter-user-posts/cache` 有约 538 MB / 8,855 文件，触发 Codex 0.146 Skills
+  traversal diagnostic；短请求和修复后的规则生成均证明它是非致命告警，因此不移动、
+  不删除 Skill 或缓存数据。
+- 真实 `rules-manager` Codex dry-run 完整读取 2,810 excerpts / 3 batches，成功生成 8 条
+  候选，`projectFailures` 为空且没有写库。计划与逐步验证见
+  `docs/plans/codex-error-diagnostics.md`。
+- 最终验收：Core 25 suites / 266 tests、App 14 suites / 93 tests、skipped=0，
+  Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。

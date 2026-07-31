@@ -9,7 +9,7 @@ import { isRunCancelledError, RunCancelledError, throwIfAborted } from './abort.
 
 export const candidateRulesSchema = z.array(z.object({
   scope: z.enum(['global', 'project']),
-  project_slug: z.string().min(1).optional(),
+  project_slug: z.string().min(1).nullable().optional(),
   rule_text: z.string().min(1),
   confidence_level: z.enum(['low', 'medium', 'high']),
   reasoning: z.string().min(1),
@@ -385,6 +385,8 @@ function callCodex(
     let finalOutput = ''
     let streamedText = false
     let stderr = ''
+    const fatalCodexErrors: string[] = []
+    const itemCodexErrors: string[] = []
     let settled = false
     let killTimer: ReturnType<typeof setTimeout> | undefined
     const activitySignatures = new Map<string, string>()
@@ -409,6 +411,14 @@ function callCodex(
       const item = event.item && typeof event.item === 'object'
         ? event.item as Record<string, unknown>
         : undefined
+      if (item?.type === 'error' && typeof item.message === 'string') {
+        const message = item.message.trim()
+        if (message && !itemCodexErrors.includes(message)) itemCodexErrors.push(message)
+      }
+      const fatalError = codexFatalErrorMessage(event)
+      if (fatalError && !fatalCodexErrors.includes(fatalError)) {
+        fatalCodexErrors.push(fatalError)
+      }
       const activity = normalizeCodexActivity(event)
       if (activity && activitySignatures.get(activity.id) !== JSON.stringify(activity)) {
         activitySignatures.set(activity.id, JSON.stringify(activity))
@@ -460,7 +470,11 @@ function callCodex(
       if (requestOptions.signal?.aborted) {
         finish(new RunCancelledError())
       } else if (code !== 0) {
-        finish(new Error(`codex 退出码 ${code ?? 'unknown'}：${stderr.trim()}`))
+        finish(new Error(formatCodexFailure(
+          code,
+          fatalCodexErrors.length > 0 ? fatalCodexErrors : itemCodexErrors,
+          stderr,
+        )))
       } else if (!finalOutput.trim()) {
         finish(new Error('codex 未返回最终 assistant message'))
       } else {
@@ -470,6 +484,48 @@ function callCodex(
     requestOptions.signal?.addEventListener('abort', abort, { once: true })
     child.stdin.end(prompt)
   })
+}
+
+function codexFatalErrorMessage(
+  event: Record<string, unknown>,
+): string | undefined {
+  if (event.type !== 'error') return undefined
+  if (typeof event.message === 'string') return event.message.trim() || undefined
+  if (event.error && typeof event.error === 'object') {
+    const error = event.error as Record<string, unknown>
+    if (typeof error.message === 'string') return error.message.trim() || undefined
+  }
+  return undefined
+}
+
+function formatCodexFailure(
+  code: number | null,
+  structuredErrors: string[],
+  stderr: string,
+): string {
+  const primary = structuredErrors.join('\n')
+  const diagnostics = summarizeCodexDiagnostics(stderr)
+  const detail = [
+    primary,
+    diagnostics ? `Codex diagnostics: ${diagnostics}` : '',
+  ].filter(Boolean).join('\n')
+  return `codex 退出码 ${code ?? 'unknown'}${detail ? `：${detail}` : ''}`
+}
+
+function summarizeCodexDiagnostics(stderr: string): string {
+  const unique = new Map<string, string>()
+  for (const rawLine of stderr.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line) continue
+    const key = line.replace(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s+/,
+      '',
+    )
+    if (!unique.has(key)) unique.set(key, line)
+    if (unique.size >= 3) break
+  }
+  const summary = [...unique.values()].join('\n')
+  return summary.length > 2_000 ? `${summary.slice(0, 1_997)}...` : summary
 }
 
 function extractJson(output: string): unknown {
@@ -559,7 +615,11 @@ export async function getStructuredResponse<T>(
     } else {
       fs.mkdirSync(path.dirname(outputSchemaPath), { recursive: true })
     }
-    fs.writeFileSync(outputSchemaPath, `${JSON.stringify(outputSchema, null, 2)}\n`, {
+    fs.writeFileSync(outputSchemaPath, `${JSON.stringify(
+      codexOutputSchema(outputSchema),
+      null,
+      2,
+    )}\n`, {
       encoding: 'utf8',
       mode: 0o600,
     })
@@ -587,7 +647,14 @@ export async function getStructuredResponse<T>(
         if (provider === 'claude') {
           return extractClaudeStructuredOutput(rawOutput, schema)
         }
-        return schema.parse(extractJson(rawOutput))
+        const parsed = extractJson(rawOutput)
+        const unwrapped = parsed
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && 'candidates' in parsed
+          ? (parsed as { candidates: unknown }).candidates
+          : parsed
+        return schema.parse(unwrapped)
       } catch (error) {
         if (isRunCancelledError(error) || options.signal?.aborted) {
           throw new RunCancelledError()
@@ -683,4 +750,35 @@ function providerJsonSchema<T>(schema: z.ZodType<T>): Record<string, unknown> {
   const generated = z.toJSONSchema(schema) as Record<string, unknown>
   const { $schema: _metaSchema, ...portable } = generated
   return portable
+}
+
+function codexOutputSchema(
+  candidatesSchema: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: {
+      candidates: strictCodexSchema(candidatesSchema),
+    },
+    required: ['candidates'],
+    additionalProperties: false,
+  }
+}
+
+function strictCodexSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(strictCodexSchema)
+  if (!value || typeof value !== 'object') return value
+  const record = value as Record<string, unknown>
+  const result = Object.fromEntries(
+    Object.entries(record).map(([key, child]) => [key, strictCodexSchema(child)]),
+  ) as Record<string, unknown>
+  if (
+    result.type === 'object'
+    && result.properties
+    && typeof result.properties === 'object'
+    && !Array.isArray(result.properties)
+  ) {
+    result.required = Object.keys(result.properties as Record<string, unknown>)
+  }
+  return result
 }
