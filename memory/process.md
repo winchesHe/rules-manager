@@ -1711,3 +1711,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
   警告。
+
+## 候选规则多选控件可见性修复（2026-08-01）
+
+- 用户复验发现候选表虽然不再白屏，但选择列仍为空。真实 Electron 截图与可访问性树均
+  证实 Table 只渲染了空 Cell，没有 checkbox 控件。
+- 根因是 HeroUI 3.2.2 的 `Checkbox` 为复合组件：Root 只提供 Field/状态，不会自动绘制
+  控件。表头和逐行选择现在均显式渲染 `Checkbox.Content → Checkbox.Control →
+  Checkbox.Indicator`，同时继续保留 Table 要求的 `slot="selection"`。
+- App 视图契约先新增三层复合组件的两处数量断言并确认失败，再完成实现。真实 Electron
+  浅色页面已看到表头与逐行 Checkbox；勾选首行后显示绿色勾选、表头半选态，以及“已选
+  1 条 / 清空选择 / 批量接受 / 批量拒绝”工具栏。
+- 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
+  警告。

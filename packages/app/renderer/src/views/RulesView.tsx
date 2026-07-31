@@ -1455,7 +1455,13 @@ function GeneratedRulesIndexPage({
                             : new Set())
                         }}
                         slot="selection"
-                      />
+                      >
+                        <Checkbox.Content>
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox.Content>
+                      </Checkbox>
                     </Table.Column>
                     <Table.Column isRowHeader>{tr('overview.columns.rule')}</Table.Column>
                     <Table.Column>{tr('overview.columns.scope')}</Table.Column>
@@ -1479,7 +1485,13 @@ function GeneratedRulesIndexPage({
                               })
                             }}
                             slot="selection"
-                          />
+                          >
+                            <Checkbox.Content>
+                              <Checkbox.Control>
+                                <Checkbox.Indicator />
+                              </Checkbox.Control>
+                            </Checkbox.Content>
+                          </Checkbox>
                         </Table.Cell>
                         <Table.Cell className="max-w-xl"><p className="line-clamp-2">{candidate.rule_text}</p></Table.Cell>
                         <Table.Cell className="text-muted">{candidate.project_slug ?? candidate.scope}</Table.Cell>

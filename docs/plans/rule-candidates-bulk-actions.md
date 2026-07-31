@@ -19,7 +19,8 @@
 - 单一改动：增加表头/逐行 Checkbox 和局部选择状态。
 - 观察点：表头支持全选与半选，切换状态/批次后选择清空。
 - 验证方式：App 视图契约与 production build；HeroUI Table 内的 Checkbox 必须显式使用
-  `slot="selection"`，并在真实 Electron 页面验证无运行时白屏。
+  `slot="selection"`，且 HeroUI v3 复合组件必须包含 `Content / Control / Indicator` 才会
+  绘制可见控件；在真实 Electron 页面验证无运行时白屏、控件可见并能唤起批量工具栏。
 
 ## Step 3：批量操作工具栏
 
