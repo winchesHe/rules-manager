@@ -1459,3 +1459,28 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 255 tests、App 12 suites / 84 tests、Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Rules Evidence 资格与既有规则去重（2026-07-31）
+
+- Rules Evidence 不再把 Codex 注入的 `# AGENTS.md instructions ... <INSTRUCTIONS>`
+  当作用户对话。注入正文及其绝对路径 `@file` 引用会被提取为只存在于本次临时
+  Context 的 Existing rule baseline；环境、权限、skills 和 plugin catalog 等
+  平台上下文直接排除。
+- Evidence excerpt 增加 `user_signal / assistant_context` 资格。默认仍保留完整
+  user / assistant 对话供 Agent 理解，但 frequency 只统计跨 Session 的真实用户
+  表述，Assistant frequency 固定为 0，Assistant 复述不能独立建立规则。
+- 每个 Project Context 单独写 `baseline.md`，manifest 只记录其路径、大小和来源数。
+  Prompt 要求先读取 Baseline 并排除语义等价项，同时允许真实用户提出与 Baseline
+  冲突的纠正；Baseline 不是 Evidence，也不写入 Chat 或数据库正文。
+- Provider 返回后增加本地强校验：Candidate 必须引用当前 bundle 中至少一条
+  `user_signal` locator；Assistant-only、伪造 locator 和与 Baseline 明显等价的
+  Candidate 在 Project response 与数据库持久化前统一过滤。
+- 最近 7 天真实 `agent-workspace` 对账：32 个选中 Session 中 31 个可读，形成
+  417 条 user signal、1,919 条 assistant context 和 2 个 Baseline source；
+  Evidence 中不再包含 AGENTS 注入，中文回复与 RTK 规则均进入 Baseline。
+- 全历史 Claude 压力验证完成 310 个 Session 收集，形成 35,110 excerpts /
+  36 batches，没有出现大 Prompt、retry 或 too-long；Provider 长时间未返回最终
+  结构化结果后手动取消 dry-run，没有写数据库。
+- 回归验收：Core 25 suites / 258 tests、App 12 suites / 84 tests、Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。

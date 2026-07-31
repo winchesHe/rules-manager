@@ -66,6 +66,75 @@ describe('buildEvidenceBundle', () => {
     expect(bundle.excerpts.every((excerpt) => excerpt.frequency === 2)).toBe(true)
   })
 
+  it('过滤平台注入指令并将其转为既有规则 Baseline', () => {
+    const referencedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-existing-rules-'))
+    const referencedPath = path.join(referencedDir, 'RTK.md')
+    fs.writeFileSync(referencedPath, '所有 shell 命令前加 rtk 前缀。')
+    try {
+      const bundle = buildEvidenceBundle('demo', [{
+        sessionId: 's1',
+        agent: 'codex',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              '<recommended_plugins>',
+              'Injected plugin catalog',
+              '</recommended_plugins>',
+              '# AGENTS.md instructions for /workspace/demo',
+              '<INSTRUCTIONS>',
+              'always respond in 中文。',
+              `@${referencedPath}`,
+              '</INSTRUCTIONS>',
+              '<environment_context>',
+              '<cwd>/workspace/demo</cwd>',
+              '</environment_context>',
+            ].join('\n'),
+          },
+          { role: 'user', content: '以后测试失败时先告诉我具体失败项。' },
+          { role: 'assistant', content: '收到，以后测试失败时先告诉你具体失败项。' },
+        ],
+      }], { full: true })
+
+      expect(bundle.excerpts).toHaveLength(2)
+      expect(bundle.excerpts.map((excerpt) => excerpt.evidenceKind)).toEqual([
+        'user_signal',
+        'assistant_context',
+      ])
+      expect(bundle.excerpts[1].frequency).toBe(0)
+      expect(JSON.stringify(bundle.excerpts)).not.toContain('always respond in 中文')
+      expect(bundle.existingRules).toEqual(expect.arrayContaining([
+        expect.stringContaining('always respond in 中文'),
+        expect.stringContaining('所有 shell 命令前加 rtk 前缀'),
+      ]))
+    } finally {
+      fs.rmSync(referencedDir, { recursive: true, force: true })
+    }
+  })
+
+  it('Assistant 复述不参与 frequency，只有真实用户表述构成跨 session 信号', () => {
+    const bundle = buildEvidenceBundle('demo', [
+      {
+        sessionId: 's1',
+        agent: 'claude',
+        messages: [
+          { role: 'user', content: '必须先运行测试' },
+          { role: 'assistant', content: '必须先运行测试' },
+        ],
+      },
+      {
+        sessionId: 's2',
+        agent: 'codex',
+        messages: [{ role: 'assistant', content: '必须先运行测试' }],
+      },
+    ], { full: true })
+
+    const userExcerpt = bundle.excerpts.find((excerpt) => excerpt.role === 'user')
+    const assistantExcerpts = bundle.excerpts.filter((excerpt) => excerpt.role === 'assistant')
+    expect(userExcerpt?.frequency).toBe(1)
+    expect(assistantExcerpts.every((excerpt) => excerpt.frequency === 0)).toBe(true)
+  })
+
   it('排除 Rules Generation 自己创建的 Provider Session，避免 Evidence 自我回灌', () => {
     const bundle = buildEvidenceBundle('demo', [
       {

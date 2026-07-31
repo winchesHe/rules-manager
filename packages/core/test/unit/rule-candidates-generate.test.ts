@@ -11,9 +11,11 @@ const evidence: EvidenceBundle[] = [{
   projectSlug: 'demo',
   sourceSessions: ['s1'],
   roundCount: 1,
+  existingRules: [],
   excerpts: [{
     locator: { sessionId: 's1', agent: 'claude', messageIndex: 0 },
     role: 'user',
+    evidenceKind: 'user_signal',
     text: 'Always run tests',
     tools: [],
     frequency: 1,
@@ -119,6 +121,9 @@ describe('runRulesGenerate', () => {
     expect(prompt).toContain('优先使用 Glob 和 Grep')
     expect(prompt).toContain('禁止依次或完整读取全部 batch')
     expect(prompt).toContain('只对命中的相关位置使用 Read')
+    expect(prompt).toContain('user_signal')
+    expect(prompt).toContain('assistant_context')
+    expect(prompt).toContain('baseline')
     expect(prompt).not.toContain('读取 manifest.batches 列出的全部文件')
     expect(prompt).not.toContain('完成全部 batch 阅读')
     expect(prompt).not.toContain('Always run tests')
@@ -126,6 +131,59 @@ describe('runRulesGenerate', () => {
       maxTurns: 32,
       tools: ['Read', 'Grep', 'Glob'],
     }))
+  })
+
+  it('只保留真实用户证据支持且不与既有规则重复的候选', async () => {
+    const qualifiedEvidence: EvidenceBundle[] = [{
+      ...evidence[0],
+      roundCount: 2,
+      existingRules: ['Always run tests before coding.'],
+      excerpts: [
+        evidence[0].excerpts[0],
+        {
+          locator: { sessionId: 's1', agent: 'claude', messageIndex: 1 },
+          role: 'assistant',
+          evidenceKind: 'assistant_context',
+          text: 'Always use Chinese',
+          tools: [],
+          frequency: 0,
+        },
+      ],
+    }]
+    const candidates = [
+      {
+        ...generated[0],
+        rule_text: 'Always run tests before coding.',
+      },
+      {
+        ...generated[0],
+        rule_text: 'Always use Chinese',
+        evidence_refs: ['s1:1'],
+      },
+      {
+        ...generated[0],
+        rule_text: 'Explain the failing test before changing code.',
+      },
+      {
+        ...generated[0],
+        rule_text: 'Invented rule',
+        evidence_refs: ['missing:9'],
+      },
+    ]
+
+    await runRulesGenerate({ homeDir: home }, {
+      extract: async () => qualifiedEvidence,
+      generate: async () => candidates,
+    })
+
+    const db = initDatabase(home)
+    const rows = db.prepare('SELECT rule_text FROM rule_candidates ORDER BY rule_text').all() as Array<{ rule_text: string }>
+    db.close()
+    expect(rows).toEqual([
+      { rule_text: 'Explain the failing test before changing code.' },
+    ])
+    expect(output.join('\n')).not.toContain('Always use Chinese')
+    expect(output.join('\n')).not.toContain('Invented rule')
   })
 
   it('把指定 session 范围传给 evidence 提取', async () => {
@@ -205,7 +263,12 @@ describe('runRulesGenerate', () => {
       },
       {
         extract: async () => [evidence[0], secondEvidence],
-        generate: async () => generated,
+        generate: jest.fn<() => Promise<typeof generated>>()
+          .mockResolvedValueOnce(generated)
+          .mockResolvedValueOnce([{
+            ...generated[0],
+            evidence_refs: ['s2:0'],
+          }]),
       },
     )
 
@@ -231,7 +294,7 @@ describe('runRulesGenerate', () => {
           scope: 'project',
           confidence: 'high',
           reasoning: 'Explicit requirement',
-          evidenceRefs: ['s1:0'],
+          evidenceRefs: ['s2:0'],
         }],
       },
     ])
@@ -283,7 +346,10 @@ describe('runRulesGenerate', () => {
     const generate = jest.fn<() => Promise<typeof generated>>()
       .mockResolvedValueOnce(generated)
       .mockRejectedValueOnce(new Error('invalid structured output'))
-      .mockResolvedValueOnce(generated)
+      .mockResolvedValueOnce([{
+        ...generated[0],
+        evidence_refs: ['s3:0'],
+      }])
 
     await expect(runRulesGenerate(
       {

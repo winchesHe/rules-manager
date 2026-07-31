@@ -11,15 +11,18 @@ const bundle: EvidenceBundle = {
   projectSlug: '../unsafe/project',
   sourceSessions: ['s1'],
   roundCount: 2,
+  existingRules: ['always respond in 中文。', '所有 shell 命令前加 rtk 前缀。'],
   excerpts: [{
     locator: { sessionId: 's1', agent: 'claude', messageIndex: 0 },
     role: 'user',
+    evidenceKind: 'user_signal',
     text: '第一条完整 Evidence\n包含换行',
     tools: [],
     frequency: 1,
   }, {
     locator: { sessionId: 's1', agent: 'claude', messageIndex: 1 },
     role: 'assistant',
+    evidenceKind: 'assistant_context',
     text: '第二条完整 Evidence',
     tools: [{ tool: 'Read', summary: '调用工具' }],
     frequency: 1,
@@ -45,6 +48,7 @@ describe('EvidenceContext', () => {
         projectSlug: string
         excerptCount: number
         batches: Array<{ path: string }>
+        baseline: { path: string }
       }
       expect(manifest.projectSlug).toBe('../unsafe/project')
       expect(manifest.excerptCount).toBe(2)
@@ -54,6 +58,15 @@ describe('EvidenceContext', () => {
       expect(content).toContain('第一条完整 Evidence\n包含换行')
       expect(content).toContain('第二条完整 Evidence')
       expect(content).toContain('"messageIndex":0')
+      expect(content).toContain('evidence_kind: user_signal')
+      expect(content).toContain('evidence_kind: assistant_context')
+      const baseline = fs.readFileSync(
+        path.join(project.directory, manifest.baseline.path),
+        'utf8',
+      )
+      expect(baseline).toContain('always respond in 中文')
+      expect(baseline).toContain('所有 shell 命令前加 rtk 前缀')
+      expect(content).not.toContain('always respond in 中文')
 
       context.cleanup()
       expect(fs.existsSync(context.rootDir)).toBe(false)

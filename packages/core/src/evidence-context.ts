@@ -11,6 +11,7 @@ export interface EvidenceProjectContext {
   projectSlug: string
   directory: string
   manifestPath: string
+  baselinePath: string
   outputSchemaPath: string
   batchCount: number
 }
@@ -133,6 +134,13 @@ function writeProjectContext(
       bytes: Buffer.byteLength(content, 'utf8'),
     }
   })
+  const baselinePath = path.join(directory, 'baseline.md')
+  const existingRules = bundle.existingRules ?? []
+  const baselineContent = renderBaseline(existingRules)
+  fs.writeFileSync(baselinePath, baselineContent, {
+    encoding: 'utf8',
+    mode: 0o600,
+  })
   const manifestPath = path.join(directory, 'manifest.json')
   fs.writeFileSync(manifestPath, `${JSON.stringify({
     version: 1,
@@ -140,6 +148,11 @@ function writeProjectContext(
     sessionCount: bundle.sourceSessions.length,
     roundCount: bundle.roundCount,
     excerptCount: bundle.excerpts.length,
+    baseline: {
+      path: path.basename(baselinePath),
+      bytes: Buffer.byteLength(baselineContent, 'utf8'),
+      ruleSourceCount: existingRules.length,
+    },
     batches: batchRows,
   }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
 
@@ -147,9 +160,27 @@ function writeProjectContext(
     projectSlug: bundle.projectSlug,
     directory,
     manifestPath,
+    baselinePath,
     outputSchemaPath: path.join(directory, 'candidate-rules.schema.json'),
     batchCount: batchRows.length,
   }
+}
+
+function renderBaseline(existingRules: string[]): string {
+  if (existingRules.length === 0) return '# Existing rule baseline\n\nNo existing rules discovered.\n'
+  return [
+    '# Existing rule baseline',
+    '',
+    'The following content is an existing rule source. It is not Evidence.',
+    'Do not emit semantically equivalent candidates. A real user correction that conflicts with it may still be proposed.',
+    '',
+    ...existingRules.flatMap((rule, index) => [
+      `## Rule source ${index + 1}`,
+      '',
+      rule,
+      '',
+    ]),
+  ].join('\n')
 }
 
 function partitionExcerpts(
@@ -180,6 +211,7 @@ function renderExcerpt(excerpt: EvidenceExcerpt): string {
     '<evidence>',
     `locator: ${JSON.stringify(excerpt.locator)}`,
     `role: ${excerpt.role}`,
+    `evidence_kind: ${excerpt.evidenceKind ?? (excerpt.role === 'user' ? 'user_signal' : 'assistant_context')}`,
     `frequency: ${excerpt.frequency}`,
     `tools: ${JSON.stringify(excerpt.tools)}`,
     'text:',

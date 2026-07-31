@@ -25,6 +25,8 @@ export interface EvidenceTool {
   summary: string
 }
 
+export type EvidenceKind = 'user_signal' | 'assistant_context'
+
 export interface EvidenceExcerpt {
   locator: {
     sessionId: string
@@ -33,6 +35,7 @@ export interface EvidenceExcerpt {
     timestamp?: string
   }
   role: 'user' | 'assistant'
+  evidenceKind?: EvidenceKind
   text: string
   tools: EvidenceTool[]
   frequency: number
@@ -42,6 +45,7 @@ export interface EvidenceBundle {
   projectSlug: string
   sourceSessions: string[]
   roundCount: number
+  existingRules?: string[]
   excerpts: EvidenceExcerpt[]
 }
 
@@ -81,6 +85,8 @@ const PRIORITY_KEYWORDS = [
   '必须', '不许', '禁止', '不要', '始终', '总是', '纠正', '应该', '建议', '偏好',
   'must', 'never', 'always', "don't", 'do not', 'should', 'prefer', 'fix', 'error',
 ]
+const MAX_REFERENCED_RULE_BYTES = 256 * 1024
+const MAX_REFERENCED_RULE_DEPTH = 3
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -158,6 +164,61 @@ function isInternalRulesGenerationSession(session: RawEvidenceSession): boolean 
   })
 }
 
+function isPlatformContextOnly(text: string): boolean {
+  const normalized = text.trimStart()
+  return [
+    '<environment_context>',
+    '<app-context>',
+    '<permissions instructions>',
+    '<skills_instructions>',
+    '<plugins_instructions>',
+    '<recommended_plugins>',
+  ].some((prefix) => normalized.startsWith(prefix))
+}
+
+function readReferencedRules(
+  content: string,
+  seen = new Set<string>(),
+  depth = 0,
+): string[] {
+  if (depth >= MAX_REFERENCED_RULE_DEPTH) return []
+  const rules: string[] = []
+  for (const match of content.matchAll(/^@((?:\/)[^\s，。；;]+)/gm)) {
+    const filePath = match[1].replace(/[。,.]+$/u, '')
+    if (seen.has(filePath)) continue
+    seen.add(filePath)
+    try {
+      const stat = fs.statSync(filePath)
+      if (!stat.isFile() || stat.size > MAX_REFERENCED_RULE_BYTES) continue
+      const referenced = fs.readFileSync(filePath, 'utf8').trim()
+      if (!referenced) continue
+      rules.push(referenced)
+      rules.push(...readReferencedRules(referenced, seen, depth + 1))
+    } catch {
+      // Missing or unreadable referenced instructions must not block Evidence collection.
+    }
+  }
+  return rules
+}
+
+function extractInjectedRuleBaseline(text: string): string[] | undefined {
+  const normalized = text.trimStart()
+  const agentsHeader = normalized.search(
+    /(?:^|\n)# (?:AGENTS|CLAUDE)\.md instructions for /,
+  )
+  if (agentsHeader < 0) {
+    return isPlatformContextOnly(normalized) ? [] : undefined
+  }
+  if (agentsHeader > 0 && !isPlatformContextOnly(normalized)) return undefined
+  const instructions = [...normalized.matchAll(/<INSTRUCTIONS>\s*([\s\S]*?)\s*<\/INSTRUCTIONS>/g)]
+    .map((match) => match[1].trim())
+    .filter(Boolean)
+  return instructions.flatMap((content) => [
+    content,
+    ...readReferencedRules(content),
+  ])
+}
+
 export function buildEvidenceBundle(
   projectSlug: string,
   sessions: RawEvidenceSession[],
@@ -171,6 +232,7 @@ export function buildEvidenceBundle(
   }
 
   const excerpts: EvidenceExcerpt[] = []
+  const existingRules: string[] = []
   let roundCount = 0
   const sourceSessions = sessions.filter(
     (session) => !isInternalRulesGenerationSession(session),
@@ -188,10 +250,17 @@ export function buildEvidenceBundle(
         return left.messageIndex - right.messageIndex
       })
     const selected = rounds === Number.POSITIVE_INFINITY ? normalized : normalized.slice(-rounds)
-    roundCount += selected.length
     for (const item of selected) {
       const { text, tools } = extractContent(item.message.content)
       if (!text.trim() && tools.length === 0) continue
+      if (item.role === 'user') {
+        const baseline = extractInjectedRuleBaseline(text)
+        if (baseline !== undefined) {
+          existingRules.push(...baseline)
+          continue
+        }
+      }
+      roundCount++
       excerpts.push({
         locator: {
           sessionId: session.sessionId,
@@ -200,15 +269,17 @@ export function buildEvidenceBundle(
           ...(typeof item.message.timestamp === 'string' ? { timestamp: item.message.timestamp } : {}),
         },
         role: item.role,
+        evidenceKind: item.role === 'user' ? 'user_signal' : 'assistant_context',
         text: text.trim(),
         tools,
-        frequency: 1,
+        frequency: item.role === 'user' ? 1 : 0,
       })
     }
   }
 
   const frequencies = new Map<string, Set<string>>()
   for (const excerpt of excerpts) {
+    if (excerpt.evidenceKind !== 'user_signal') continue
     const key = normalizeText(excerpt.text)
     if (!key) continue
     const sessionsForText = frequencies.get(key) ?? new Set<string>()
@@ -216,7 +287,9 @@ export function buildEvidenceBundle(
     frequencies.set(key, sessionsForText)
   }
   for (const excerpt of excerpts) {
-    excerpt.frequency = frequencies.get(normalizeText(excerpt.text))?.size ?? 1
+    excerpt.frequency = excerpt.evidenceKind === 'user_signal'
+      ? frequencies.get(normalizeText(excerpt.text))?.size ?? 1
+      : 0
   }
   excerpts.sort((left, right) => priority(right.text) - priority(left.text))
 
@@ -224,6 +297,7 @@ export function buildEvidenceBundle(
     projectSlug,
     sourceSessions: sourceSessions.map((session) => session.sessionId),
     roundCount,
+    existingRules: [...new Set(existingRules)],
     excerpts,
   }
 }
