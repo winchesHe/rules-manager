@@ -159,6 +159,7 @@ describe('home workflow layout', () => {
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
     const viteSource = fs.readFileSync(path.join(appRoot, 'electron.vite.config.ts'), 'utf8')
     expect(ipcSource).toContain("ipcMain.handle('sessions.preview'")
+    expect(ipcSource).toContain("ipcMain.handle('sessions.evidenceContext'")
     expect(ipcSource).toContain('runSessionPreviewWorker(sessionId)')
     expect(viteSource).toContain("'session-preview-worker'")
   })
@@ -184,6 +185,20 @@ describe('home workflow layout', () => {
     expect(source).toContain('<Select')
     expect(source).toContain('filterCandidatesByRun')
     expect(appSource).toContain('onOpenGeneratedRules={(runId)')
+  })
+
+  it('候选审核直接展示来源 Session 的 Evidence 命中上下文，不展示 locator JSON', () => {
+    const source = read('views/RulesView.tsx')
+    const reviewPage = source.slice(
+      source.indexOf('function ReviewRulePage'),
+      source.indexOf('function PublishRulesPage'),
+    )
+
+    expect(reviewPage).toContain('<EvidenceSourceContexts evidence={evidence}')
+    expect(reviewPage).toContain("'sessions.evidenceContext'")
+    expect(reviewPage).toContain('data-evidence-source-contexts')
+    expect(reviewPage).toContain("tr('review.evidenceHit')")
+    expect(reviewPage).not.toContain("tr('fields.evidenceReferences')")
   })
 
   it('Recent activity 直接按 Session updated_at 收集，不依赖 Scan History', () => {

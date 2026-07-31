@@ -63,11 +63,15 @@ import type {
   RunCancelResult,
   RuleCandidate,
   RuleStatus,
+  SessionEvidenceContext,
   SessionPreview,
 } from '../types'
 import {
   filterCandidatesByRun,
+  parseCandidateEvidence,
   selectableGenerationRuns,
+  type CandidateEvidence,
+  type EvidenceReference,
 } from './rules-view-model'
 
 type RulesPage =
@@ -2850,6 +2854,17 @@ function CandidateDetailsModal({
   onClose: () => void
   projectSlug: string
 }) {
+  const evidence = useMemo(() => {
+    const parsed = parseCandidateEvidence(JSON.stringify({
+      reasoning: candidate.reasoning,
+      evidence_refs: candidate.evidenceRefs,
+    }), '[]')
+    return {
+      ...parsed,
+      sourceSessions: [...new Set(parsed.references.map((reference) => reference.sessionId))],
+    }
+  }, [candidate.evidenceRefs, candidate.reasoning])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -2893,11 +2908,8 @@ function CandidateDetailsModal({
             </span>
             <ConfidenceChip level={candidate.confidence} />
           </div>
-          <Detail label={tr('fields.reasoning')} value={candidate.reasoning} />
-          <Detail
-            label={tr('fields.evidence')}
-            value={candidate.evidenceRefs.join(' · ') || tr('evidence.noReferences')}
-          />
+          <Detail label={tr('fields.reasoning')} value={evidence.reasoning} />
+          <EvidenceSourceContexts evidence={evidence} />
         </Card.Content>
       </Card>
     </div>
@@ -3121,7 +3133,10 @@ function ReviewRulePage({
   onEdit: (ruleText: string) => void
   onUpdate: (status: 'accepted' | 'rejected') => void
 }) {
-  const evidence = useMemo(() => parseEvidence(candidate.evidence_json), [candidate.evidence_json])
+  const evidence = useMemo(
+    () => parseCandidateEvidence(candidate.evidence_json, candidate.source_sessions),
+    [candidate.evidence_json, candidate.source_sessions],
+  )
   const [editing, setEditing] = useState(false)
   const [draftText, setDraftText] = useState(candidate.rule_text)
 
@@ -3191,9 +3206,11 @@ function ReviewRulePage({
             <Card.Title className="text-base">{tr('review.evidenceSummary')}</Card.Title>
           </Card.Header>
           <Card.Content className="grid gap-4 p-6 text-sm">
-            <Detail label={tr('fields.reasoning')} value={evidence.reasoning} />
-            <Detail label={tr('fields.evidenceReferences')} value={evidence.references.join(' · ') || '—'} />
-            <Detail label={tr('fields.sourceSessions')} value={evidence.sessions.join(' · ') || '—'} />
+            <Detail
+              label={tr('fields.reasoning')}
+              value={evidence.parseError ? tr('errors.parseEvidence') : evidence.reasoning}
+            />
+            <EvidenceSourceContexts evidence={evidence} />
           </Card.Content>
         </Card>
         {candidate.status === 'draft' && (
@@ -3217,6 +3234,160 @@ function ReviewRulePage({
       </div>
     </>
   )
+}
+
+type EvidenceContextLoad =
+  | { status: 'loading' }
+  | { status: 'loaded'; context: SessionEvidenceContext }
+  | { status: 'error'; message: string }
+
+function EvidenceSourceContexts({ evidence }: { evidence: CandidateEvidence }) {
+  const [loads, setLoads] = useState<Record<string, EvidenceContextLoad>>({})
+
+  useEffect(() => {
+    let current = true
+    const initial = Object.fromEntries(
+      evidence.references.map((reference) => [evidenceReferenceKey(reference), { status: 'loading' }]),
+    ) as Record<string, EvidenceContextLoad>
+    setLoads(initial)
+    for (const reference of evidence.references) {
+      const key = evidenceReferenceKey(reference)
+      void window.api.invoke<SessionEvidenceContext>('sessions.evidenceContext', {
+        sessionId: reference.sessionId,
+        messageIndex: reference.messageIndex,
+      }).then((context) => {
+        if (current) {
+          setLoads((previous) => ({ ...previous, [key]: { status: 'loaded', context } }))
+        }
+      }).catch((reason: unknown) => {
+        if (current) {
+          setLoads((previous) => ({
+            ...previous,
+            [key]: {
+              status: 'error',
+              message: reason instanceof Error ? reason.message : String(reason),
+            },
+          }))
+        }
+      })
+    }
+    return () => {
+      current = false
+    }
+  }, [evidence.references])
+
+  return (
+    <section className="grid gap-3" data-evidence-source-contexts>
+      <div>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
+          {tr('review.sourceContext')}
+        </h3>
+        <p className="mt-1 text-xs leading-5 text-muted">{tr('review.sourceContextDescription')}</p>
+      </div>
+      {evidence.references.length > 0 ? evidence.references.map((reference) => (
+        <EvidenceSourceContext
+          key={evidenceReferenceKey(reference)}
+          load={loads[evidenceReferenceKey(reference)] ?? { status: 'loading' }}
+          reference={reference}
+        />
+      )) : (
+        <div className="rounded-xl border border-dashed border-border bg-background px-4 py-4">
+          <p className="text-sm text-muted">{tr('review.noSourceContext')}</p>
+          {evidence.sourceSessions.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {evidence.sourceSessions.map((sessionId) => (
+                <Chip key={sessionId} size="sm" variant="soft">{sessionId}</Chip>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {evidence.invalidReferenceCount > 0 && (
+        <p className="text-xs text-warning">
+          {tr('review.invalidReferences', { count: evidence.invalidReferenceCount })}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function EvidenceSourceContext({
+  reference,
+  load,
+}: {
+  reference: EvidenceReference
+  load: EvidenceContextLoad
+}) {
+  const agent = load.status === 'loaded' ? load.context.agent : reference.agent
+  return (
+    <article className="overflow-hidden rounded-xl border border-border bg-background">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {agent && <Chip size="sm" variant="soft">{agent}</Chip>}
+            {reference.timestamp && (
+              <span className="text-xs text-muted">{formatEvidenceTimestamp(reference.timestamp)}</span>
+            )}
+          </div>
+          <p className="mt-2 break-all font-mono text-xs text-foreground">{reference.sessionId}</p>
+        </div>
+        <span className="text-xs text-muted">{tr('review.messageIndex', { index: reference.messageIndex })}</span>
+      </header>
+      {load.status === 'loading' ? (
+        <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted">
+          <Spinner size="sm" />
+          {tr('review.loadingContext')}
+        </div>
+      ) : load.status === 'error' ? (
+        <div className="px-4 py-4">
+          <p className="text-sm font-medium text-danger">{tr('review.contextUnavailable')}</p>
+          <p className="mt-1 break-words text-xs leading-5 text-muted">{load.message}</p>
+        </div>
+      ) : (
+        <ol className="divide-y divide-border">
+          {load.context.messages.map((message) => (
+            <li
+              className={`grid gap-2 px-4 py-3 ${message.matched ? 'border-l-2 border-l-primary bg-primary/5' : ''}`}
+              key={message.messageIndex}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted">
+                  {tr(`review.roles.${message.role}`)}
+                </span>
+                {message.matched && (
+                  <Chip color="accent" size="sm" variant="soft">{tr('review.evidenceHit')}</Chip>
+                )}
+              </div>
+              {message.text && (
+                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
+                  {message.text}
+                </p>
+              )}
+              {message.tools.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {message.tools.map((tool, index) => (
+                    <Chip key={`${tool.tool}-${index}`} size="sm" variant="soft">
+                      {tool.tool} · {tool.summary}
+                    </Chip>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </article>
+  )
+}
+
+function evidenceReferenceKey(reference: EvidenceReference): string {
+  return `${reference.sessionId}:${reference.messageIndex}`
+}
+
+function formatEvidenceTimestamp(value: string): string {
+  const normalized = /^\d+$/.test(value) ? Number(value) : value
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? value : formatDateTime(date, currentLocale())
 }
 
 function OutputRulesPage({ onBack }: { onBack: () => void }) {
@@ -3862,29 +4033,4 @@ function failureMessage(value: unknown): string {
   if (!value || typeof value !== 'object') return tr('errors.generationFailed')
   const message = (value as { message?: unknown }).message
   return typeof message === 'string' && message ? message : tr('errors.generationFailed')
-}
-
-function parseEvidence(value: string): {
-  reasoning: string
-  references: string[]
-  sessions: string[]
-} {
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>
-    const bundle =
-      parsed.bundle && typeof parsed.bundle === 'object'
-        ? parsed.bundle as Record<string, unknown>
-        : parsed
-    return {
-      reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '—',
-      references: Array.isArray(parsed.evidence_refs)
-        ? parsed.evidence_refs.map(String)
-        : [],
-      sessions: Array.isArray(bundle.sourceSessions)
-        ? bundle.sourceSessions.map(String)
-        : [],
-    }
-  } catch {
-    return { reasoning: tr('errors.parseEvidence'), references: [], sessions: [] }
-  }
 }

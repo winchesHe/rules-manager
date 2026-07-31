@@ -333,7 +333,19 @@
   "review": {
     "title": "审核候选规则",
     "editLabel": "编辑候选规则",
-    "evidenceSummary": "Evidence 摘要"
+    "evidenceSummary": "Evidence 摘要",
+    "sourceContext": "来源会话与上下文",
+    "sourceContextDescription": "从本地源会话按需读取的脱敏窗口；高亮消息是生成该规则时引用的 Evidence。",
+    "noSourceContext": "这条历史候选没有可定位的 Evidence 上下文。",
+    "invalidReferences": "有 {{count}} 条历史 Evidence 引用无法识别。",
+    "messageIndex": "消息 #{{index}}",
+    "loadingContext": "正在读取来源上下文…",
+    "contextUnavailable": "来源上下文不可用",
+    "evidenceHit": "Evidence 命中",
+    "roles": {
+      "user": "用户",
+      "assistant": "Assistant"
+    }
   },
   "publish": {
     "title": "发布已接受规则",

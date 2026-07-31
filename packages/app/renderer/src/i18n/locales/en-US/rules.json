@@ -333,7 +333,19 @@
   "review": {
     "title": "Review candidate",
     "editLabel": "Edit rule candidate",
-    "evidenceSummary": "Evidence summary"
+    "evidenceSummary": "Evidence summary",
+    "sourceContext": "Source sessions and context",
+    "sourceContextDescription": "A redacted window loaded on demand from the local source session. The highlighted message is the Evidence cited for this rule.",
+    "noSourceContext": "This historical candidate has no locatable Evidence context.",
+    "invalidReferences": "{{count}} historical Evidence reference could not be recognized.",
+    "messageIndex": "Message #{{index}}",
+    "loadingContext": "Loading source context…",
+    "contextUnavailable": "Source context unavailable",
+    "evidenceHit": "Evidence hit",
+    "roles": {
+      "user": "User",
+      "assistant": "Assistant"
+    }
   },
   "publish": {
     "title": "Publish accepted rules",

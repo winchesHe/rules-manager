@@ -1,7 +1,13 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { buildEvidenceBundle, extractEvidence, readSessionPreview } from '../../src/evidence'
+import Database from 'better-sqlite3'
+import {
+  buildEvidenceBundle,
+  extractEvidence,
+  readSessionEvidenceContext,
+  readSessionPreview,
+} from '../../src/evidence'
 import { initDatabase } from '../../src/db'
 import { resolveWorkspace } from '../../src/workspace'
 
@@ -407,6 +413,126 @@ describe('readSessionPreview', () => {
       expect(JSON.stringify(preview)).not.toContain('super-secret')
       expect(JSON.stringify(preview)).not.toContain('do-not-show')
       expect(JSON.stringify(preview)).not.toContain('raw tool output')
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('按 Evidence 原始消息索引返回命中前后的脱敏窗口', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-evidence-context-'))
+    const workspace = resolveWorkspace(home)
+    fs.mkdirSync(workspace.workspaceDir, { recursive: true })
+    const sourcePath = path.join(home, 'context.jsonl')
+    fs.writeFileSync(
+      sourcePath,
+      [
+        JSON.stringify({
+          type: 'response_item',
+          payload: { type: 'message', role: 'user', content: '先看列表' },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: 'token=super-secret 开发时必须只启动一个 Electron 实例',
+          },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: { type: 'message', role: 'assistant', content: '我会修复启动逻辑' },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: { type: 'function_call', name: 'shell', arguments: 'password=hidden' },
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: { type: 'function_call_output', output: 'raw tool output' },
+        }),
+      ].join('\n'),
+    )
+    const db = initDatabase(home)
+    db.prepare(`
+      INSERT INTO sessions (
+        id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+        status, first_seen_at, last_seen_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'context-session', 'codex', sourcePath, '/tmp/context-link', 'demo', 'hash',
+      '2026-07-31', 'updated', '2026-07-31', '2026-07-31',
+    )
+    db.close()
+
+    try {
+      const context = await readSessionEvidenceContext(
+        'context-session',
+        1,
+        { before: 1, after: 2 },
+        home,
+      )
+      expect(context.messages.map((message) => message.messageIndex)).toEqual([0, 1, 2, 3])
+      expect(context.messages.map((message) => message.matched)).toEqual([false, true, false, false])
+      expect(JSON.stringify(context)).toContain('token=[REDACTED]')
+      expect(JSON.stringify(context)).toContain('"tool":"shell"')
+      expect(JSON.stringify(context)).not.toContain('super-secret')
+      expect(JSON.stringify(context)).not.toContain('hidden')
+      expect(JSON.stringify(context)).not.toContain('raw tool output')
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('OpenCode SQLite 引用使用与生成时一致的消息索引', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-opencode-context-'))
+    const workspace = resolveWorkspace(home)
+    fs.mkdirSync(workspace.workspaceDir, { recursive: true })
+    const sourcePath = path.join(home, 'opencode.db')
+    const sourceDb = new Database(sourcePath)
+    sourceDb.exec(`
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE part (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+    `)
+    const insertMessage = sourceDb.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)',
+    )
+    const insertPart = sourceDb.prepare(
+      'INSERT INTO part (id, message_id, data) VALUES (?, ?, ?)',
+    )
+    insertMessage.run('m1', 'opencode-session', 1, JSON.stringify({ role: 'user', time: { created: 1 } }))
+    insertPart.run('p1', 'm1', JSON.stringify({ text: '第一条消息' }))
+    insertMessage.run('m2', 'opencode-session', 2, JSON.stringify({ role: 'user', time: { created: 2 } }))
+    insertPart.run('p2', 'm2', JSON.stringify({ text: '必须保留命中上下文' }))
+    insertMessage.run('m3', 'opencode-session', 3, JSON.stringify({ role: 'assistant', time: { created: 3 } }))
+    insertPart.run('p3', 'm3', JSON.stringify({ text: '收到' }))
+    sourceDb.close()
+
+    const db = initDatabase(home)
+    db.prepare(`
+      INSERT INTO sessions (
+        id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+        status, first_seen_at, last_seen_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'opencode-session', 'opencode', sourcePath, '/tmp/opencode-link', 'demo', 'hash',
+      '2026-07-31', 'updated', '2026-07-31', '2026-07-31',
+    )
+    db.close()
+
+    try {
+      const context = await readSessionEvidenceContext('opencode-session', 1, {}, home)
+      expect(context.agent).toBe('opencode')
+      expect(context.messages.find((message) => message.matched)?.text)
+        .toBe('必须保留命中上下文')
     } finally {
       fs.rmSync(home, { recursive: true, force: true })
     }

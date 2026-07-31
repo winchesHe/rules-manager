@@ -62,6 +62,23 @@ export interface SessionPreview {
   messages: SessionPreviewMessage[]
 }
 
+export interface SessionEvidenceContextMessage extends SessionPreviewMessage {
+  messageIndex: number
+  matched: boolean
+}
+
+export interface SessionEvidenceContext {
+  sessionId: string
+  agent: string
+  messageIndex: number
+  messages: SessionEvidenceContextMessage[]
+}
+
+export interface SessionEvidenceContextOptions {
+  before?: number
+  after?: number
+}
+
 export interface EvidenceOptions {
   homeDir?: string
   projectSlug?: string
@@ -442,10 +459,13 @@ function readOpenCodeSessionDirect(dbPath: string, sessionId: string): RawEviden
   }
 }
 
-export async function readSessionPreview(
+async function loadStoredSessionMessages(
   sessionId: string,
   homeDir?: string,
-): Promise<SessionPreview> {
+): Promise<{
+  session: Pick<StoredSession, 'id' | 'agent' | 'source_path'>
+  rawMessages: RawEvidenceMessage[]
+}> {
   if (!sessionId.trim()) throw new Error('session id 不能为空')
 
   const db = new Database(resolveWorkspace(homeDir).dbPath, {
@@ -467,7 +487,13 @@ export async function readSessionPreview(
   const rawMessages = session.agent === 'opencode'
     ? readOpenCodeSessionDirect(session.source_path, session.id)
     : await readSessionMessages(session.id, session.agent, session.source_path, homeDir)
-  const messages = rawMessages
+  return { session, rawMessages }
+}
+
+function previewMessagesWithSourceIndex(
+  rawMessages: RawEvidenceMessage[],
+): Array<SessionPreviewMessage & { messageIndex: number }> {
+  return rawMessages
     .map((message, sourceIndex) => ({
       message,
       sourceIndex,
@@ -489,23 +515,77 @@ export async function readSessionPreview(
       }
       return left.sourceIndex - right.sourceIndex
     })
-    .flatMap<SessionPreviewMessage>((item) => {
+    .flatMap<SessionPreviewMessage & { messageIndex: number }>((item) => {
       const { text, tools } = extractContent(item.message.content)
       const trimmedText = text.trim()
       if (!trimmedText && tools.length === 0) return []
       return [{
         role: item.role,
         text: trimmedText,
+        messageIndex: item.sourceIndex,
         ...(typeof item.message.timestamp === 'string'
           ? { timestamp: item.message.timestamp }
           : {}),
         tools,
       }]
     })
+}
+
+export async function readSessionPreview(
+  sessionId: string,
+  homeDir?: string,
+): Promise<SessionPreview> {
+  const { session, rawMessages } = await loadStoredSessionMessages(sessionId, homeDir)
+  const messages = previewMessagesWithSourceIndex(rawMessages)
+    .map(({ messageIndex: _messageIndex, ...message }) => message)
 
   return {
     sessionId: session.id,
     agent: session.agent,
+    messages,
+  }
+}
+
+export async function readSessionEvidenceContext(
+  sessionId: string,
+  messageIndex: number,
+  options: SessionEvidenceContextOptions = {},
+  homeDir?: string,
+): Promise<SessionEvidenceContext> {
+  if (!Number.isInteger(messageIndex) || messageIndex < 0) {
+    throw new Error('messageIndex 必须是非负整数')
+  }
+  const before = options.before ?? 2
+  const after = options.after ?? 2
+  if (!Number.isInteger(before) || before < 0 || before > 10) {
+    throw new Error('before 必须是 0 到 10 的整数')
+  }
+  if (!Number.isInteger(after) || after < 0 || after > 10) {
+    throw new Error('after 必须是 0 到 10 的整数')
+  }
+
+  const { session, rawMessages } = await loadStoredSessionMessages(sessionId, homeDir)
+  const visibleMessages = previewMessagesWithSourceIndex(rawMessages)
+  const matchedPosition = visibleMessages.findIndex(
+    (message) => message.messageIndex === messageIndex,
+  )
+  if (matchedPosition < 0) {
+    throw new Error(`session ${sessionId} 中找不到 Evidence 消息 ${messageIndex}`)
+  }
+  const messages = visibleMessages
+    .slice(
+      Math.max(0, matchedPosition - before),
+      Math.min(visibleMessages.length, matchedPosition + after + 1),
+    )
+    .map((message) => ({
+      ...message,
+      matched: message.messageIndex === messageIndex,
+    }))
+
+  return {
+    sessionId: session.id,
+    agent: session.agent,
+    messageIndex,
     messages,
   }
 }

@@ -20,7 +20,10 @@ import {
   type LlmProvider,
 } from '../../core/src/config.js'
 import { runRulesOutput } from '../../core/src/commands/rules-output.js'
-import type { SessionPreview } from '../../core/src/evidence.js'
+import type {
+  SessionEvidenceContext,
+  SessionPreview,
+} from '../../core/src/evidence.js'
 import {
   isAgentName as isGlobalInstructionAgent,
   listGlobalInstructionSources,
@@ -88,6 +91,20 @@ export function registerIpcHandlers(): void {
     }
     if (!isDatabaseReady()) throw new Error('database is not ready')
     return runSessionPreviewWorker(sessionId)
+  })
+  ipcMain.handle('sessions.evidenceContext', (_event, value: unknown) => {
+    if (!value || typeof value !== 'object') {
+      throw new Error('evidence locator is required')
+    }
+    const locator = value as Record<string, unknown>
+    if (typeof locator.sessionId !== 'string' || !locator.sessionId.trim()) {
+      throw new Error('session id is required')
+    }
+    if (!Number.isInteger(locator.messageIndex) || Number(locator.messageIndex) < 0) {
+      throw new Error('message index must be a non-negative integer')
+    }
+    if (!isDatabaseReady()) throw new Error('database is not ready')
+    return runSessionEvidenceContextWorker(locator.sessionId, Number(locator.messageIndex))
   })
   ipcMain.handle('chat.list', () => chatStore.listThreads())
   ipcMain.handle('chat.read', (_event, threadId: unknown) => {
@@ -319,6 +336,48 @@ function runSessionPreviewWorker(sessionId: string): Promise<SessionPreview> {
     worker.once('exit', (code) => {
       if (!settled) {
         reject(new Error(`Session preview worker exited before completion (${code})`))
+      }
+    })
+  })
+}
+
+function runSessionEvidenceContextWorker(
+  sessionId: string,
+  messageIndex: number,
+): Promise<SessionEvidenceContext> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(join(import.meta.dirname, 'session-preview-worker.js'), {
+      workerData: { sessionId, messageIndex },
+    })
+    let settled = false
+
+    worker.once('message', (message: unknown) => {
+      settled = true
+      if (
+        message
+        && typeof message === 'object'
+        && 'type' in message
+        && message.type === 'done'
+        && 'context' in message
+      ) {
+        resolve(message.context as SessionEvidenceContext)
+        return
+      }
+      const errorMessage = message
+        && typeof message === 'object'
+        && 'message' in message
+        && typeof message.message === 'string'
+        ? message.message
+        : 'Session evidence worker returned an invalid response'
+      reject(new Error(errorMessage))
+    })
+    worker.once('error', (error) => {
+      settled = true
+      reject(error)
+    })
+    worker.once('exit', (code) => {
+      if (!settled) {
+        reject(new Error(`Session evidence worker exited before completion (${code})`))
       }
     })
   })

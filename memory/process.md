@@ -1646,3 +1646,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 266 tests、App 14 suites / 93 tests、skipped=0，
   Core/App production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## 候选规则来源会话上下文（2026-07-31）
+
+- 候选审核页与生成过程中的候选详情不再直接展示 Evidence locator JSON；改为来源
+  Session 卡片，展示 Agent、时间、Session ID，以及命中消息前后各两条脱敏上下文，
+  命中消息使用独立强调状态。
+- `evidence_json` 只保存 reasoning 与 locator，来源列表实际位于候选记录独立的
+  `source_sessions` 字段；Renderer 现在分别解析两者，修复了旧页面“来源会话 —”的
+  数据读取错误，并兼容历史 `session:index` locator。
+- 新增 `sessions.evidenceContext` IPC，复用 Session Preview Worker 从既有
+  `source_path` 按需读取固定窗口。上下文不写入 DB / Chat；仍统一脱敏 secret，只返回
+  工具名与摘要，不返回工具参数和 tool output。单条源文件缺失或历史 locator 无法识别
+  时局部降级，不阻塞候选审核。
+- Core 保留原始消息索引到预览消息的映射，并为 Codex JSONL 与 OpenCode SQLite 分别
+  覆盖精确命中测试。本机真实候选 locator 通过 production Worker 验证：返回 5 条窗口，
+  且只命中 locator 指定的消息索引。
+- 设计与逐步验收记录见 `docs/plans/rule-evidence-context.md`；最终验收：Core 25 suites /
+  268 tests、App 14 suites / 96 tests、skipped=0，Core/App production build 与
+  `git diff --check` 全通过。Core build 仍只有既有 `tsdown define` 警告。

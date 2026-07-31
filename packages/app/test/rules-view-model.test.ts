@@ -2,6 +2,8 @@ import { describe, expect, it } from '@jest/globals'
 import type { RuleCandidate } from '../renderer/src/types'
 import {
   filterCandidatesByRun,
+  parseCandidateEvidence,
+  parseEvidenceReference,
   selectableGenerationRuns,
 } from '../renderer/src/views/rules-view-model'
 
@@ -52,5 +54,40 @@ describe('Rules generation batch view model', () => {
     }]
 
     expect(selectableGenerationRuns(history)).toEqual([history[0]])
+  })
+
+  it('解析结构化 Evidence locator，并兼容旧版 session:index 引用', () => {
+    expect(parseEvidenceReference(JSON.stringify({
+      sessionId: 'ses_123',
+      agent: 'opencode',
+      messageIndex: 115,
+      timestamp: '1785210816521',
+    }))).toEqual({
+      raw: '{"sessionId":"ses_123","agent":"opencode","messageIndex":115,"timestamp":"1785210816521"}',
+      sessionId: 'ses_123',
+      agent: 'opencode',
+      messageIndex: 115,
+      timestamp: '1785210816521',
+    })
+    expect(parseEvidenceReference('legacy-session:7')).toEqual({
+      raw: 'legacy-session:7',
+      sessionId: 'legacy-session',
+      messageIndex: 7,
+    })
+    expect(parseEvidenceReference('not-a-locator')).toBeNull()
+  })
+
+  it('从 candidate 独立的 source_sessions 字段读取来源会话', () => {
+    const parsed = parseCandidateEvidence(
+      JSON.stringify({
+        reasoning: '用户明确提出硬性要求。',
+        evidence_refs: ['session-a:2'],
+      }),
+      JSON.stringify(['session-a', 'session-b']),
+    )
+
+    expect(parsed.reasoning).toBe('用户明确提出硬性要求。')
+    expect(parsed.references).toHaveLength(1)
+    expect(parsed.sourceSessions).toEqual(['session-a', 'session-b'])
   })
 })

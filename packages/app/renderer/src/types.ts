@@ -41,6 +41,18 @@ export interface SessionPreview {
   messages: SessionPreviewMessage[]
 }
 
+export interface SessionEvidenceContextMessage extends SessionPreviewMessage {
+  messageIndex: number
+  matched: boolean
+}
+
+export interface SessionEvidenceContext {
+  sessionId: string
+  agent: string
+  messageIndex: number
+  messages: SessionEvidenceContextMessage[]
+}
+
 export type ScanPhase = 'discovering' | 'processing' | 'done' | 'skipped' | 'error'
 export type RunState =
   | 'idle'
