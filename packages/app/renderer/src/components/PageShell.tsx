@@ -13,8 +13,8 @@ const widthClasses: Record<PageWidth, string> = {
 }
 
 const densityClasses: Record<PageDensity, string> = {
-  comfortable: 'space-y-7',
-  compact: 'space-y-6',
+  comfortable: 'grid gap-7',
+  compact: 'grid gap-6',
 }
 
 const paddingClasses: Record<PagePadding, string> = {

@@ -1573,3 +1573,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   三档均无横向溢出；1920 PageShell 保持 1296px，每页仍只有一个 Primary Action。
 - 最终验收：App 14 suites / 91 tests、Core 25 suites / 260 tests、skipped=0，
   Core/App production build 与 `git diff --check` 全通过。
+
+## PageShell 一级区块间距修正（2026-07-31）
+
+- 修复 PageHeader 与后续主工作区视觉贴合：根因是 PageShell 使用 `space-y-*` 管理
+  一级区块，同时 PageHeader 允许页面传入 margin class，父级间距可能被子级样式覆盖。
+- PageShell 的 compact / comfortable 密度改为父级 `grid gap-6 / gap-7`。一级区块距离
+  现在由布局 Primitive 独占，页面和子组件不再需要补临时 `mt-* / mb-*`。
+- Primitive SSR 测试先因仍输出 `space-y-6` 按预期失败，改为 grid gap 后与布局契约
+  29/29 通过；DESIGN 同步规定 PageShell 一级区块只能使用不可被子级覆盖的父级 gap。
+- 真实 Electron 在 1024×768、1440×900、1920×1080 三档测得 Rules Dashboard
+  Header 到主区均为 24px，Generate 均为 28px；两页无横向溢出，Pane 折叠保持正确。
+- 最终验收：App 14 suites / 91 tests、Core 25 suites / 260 tests、skipped=0，
+  Core/App production build 与 `git diff --check` 全通过。

@@ -65,6 +65,8 @@ describe('page layout primitives', () => {
     expect(html).toContain('data-scroll-owner="page"')
     expect(html).toContain('max-w-[81rem]')
     expect(html).toContain('px-[clamp(0.5rem,1vw,1rem)]')
+    expect(html).toContain('grid gap-6')
+    expect(html).not.toContain('space-y-6')
   })
 
   it('SupportingPaneLayout preserves main-before-pane order and semantic width', () => {

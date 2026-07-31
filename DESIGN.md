@@ -42,7 +42,8 @@
 | 页面内边距 | `p-8` ~ `p-12`（响应式） |
 | 卡片网格间距 | `gap-4` |
 | 侧边栏内边距 | `px-4 py-6` |
-| 组件间垂直间距 | `space-y-4` / `space-y-6` |
+| 普通组件内部垂直间距 | `space-y-4` / `space-y-6` |
+| PageShell 一级区块间距 | `grid gap-6` / `grid gap-7` |
 
 ## 布局（方案 A）
 
@@ -110,6 +111,8 @@ Don’t：为了填满屏幕把普通页面拉成 `fluid`，或在同一页并�
 
 - 页面密度只有 `comfortable` 和 `compact` 两档。Task 默认 comfortable；Dashboard
   的 KPI 与状态栏可以 compact。同类区块必须保持同一档，禁止单块临时缩 padding。
+- PageShell 一级区块必须由父级 `grid gap` 提供间距，禁止用可被子组件 margin 覆盖的
+  `space-y`；PageHeader 等子组件不得负责与下一个一级区块之间的距离。
 - Dashboard 一级区块优先使用 flat section + divider；Card 只表达可独立操作或明确
   边界，禁止用大 Card 填补留白，也禁止 Card 套 Card。
 - Dashboard 的指标必须服务于当前主任务。待审核数、已接受数等任务指标应进入主工作区
