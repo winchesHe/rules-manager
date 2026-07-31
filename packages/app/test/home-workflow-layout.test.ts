@@ -335,15 +335,34 @@ describe('home workflow layout', () => {
     expect(source).toContain('model,')
     expect(source).toContain('effort,')
     expect(source).toContain('fastMode,')
-    expect(source).toContain('data-layout="generation-launcher"')
-    expect(source).toContain('grid-cols-[minmax(0,1fr)_22rem]')
-    expect(source).toContain('max-[1100px]:grid-cols-1')
+    expect(source).toContain("import { PageShell } from '../components/PageShell'")
+    expect(source).toContain("import { SupportingPaneLayout } from '../components/SupportingPaneLayout'")
+    expect(source).toContain('archetype="task"')
+    expect(source).toContain('paneWidth="lg"')
     expect(source).toContain('data-generation-action="true"')
     expect(source).not.toContain('grid min-h-[34rem] p-0')
     expect(chatSource).toContain("label={t('agent')}")
     expect(chatSource).toContain("label={t('model')}")
     expect(chatSource).toContain("label={t('effort')}")
     expect(chatSource).toContain("label={t('fastMode')}")
+  })
+
+  it('Rules Dashboard 使用限宽页面壳、指标带与语义辅助栏', () => {
+    const source = read('views/RulesView.tsx')
+    const dashboard = source.slice(
+      source.indexOf('function RulesDashboardPage'),
+      source.indexOf('function AgentInstructionsIndexPage'),
+    )
+
+    expect(source).toContain("import { MetricStrip } from '../components/MetricStrip'")
+    expect(source).toContain("import { PageSection } from '../components/PageSection'")
+    expect(dashboard).toContain('<PageShell')
+    expect(dashboard).toContain('archetype="dashboard"')
+    expect(dashboard).toContain('width="wide"')
+    expect(dashboard).toContain('<MetricStrip')
+    expect(dashboard).toContain('<SupportingPaneLayout')
+    expect(dashboard).toContain('paneWidth="md"')
+    expect(dashboard).not.toContain('grid-cols-[minmax(0,1fr)_19rem]')
   })
 
   it('Scan 运行可取消，取消后继续展示最近一次完成结果', () => {

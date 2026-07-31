@@ -1539,3 +1539,23 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   production build 与 `git diff --check` 全通过。App 独立 `tsc --noEmit` 仍受既有
   monorepo `rootDir` / JSON include 配置及 `RulesSection` 的 `history` 类型问题影响；
   production build 不受影响。
+
+## 页面布局系统与 Rules 样板迁移（2026-07-31）
+
+- `DESIGN.md` 建立 collection / dashboard / task / workspace 四种页面原型，以及
+  narrow / wide / fluid 页面宽度、sm / md / lg 辅助栏、密度、Surface、滚动与主操作
+  决策规则；普通产品页默认限宽，fluid 只用于宽度确实承载更多信息的 Workspace。
+- 新增 PageShell、SupportingPaneLayout、MetricStrip、PageSection 页面级 Primitives。
+  PageShell 统一宽度、页面内边距、密度与滚动语义；SupportingPaneLayout 通过
+  container query 统一主辅栏折叠，并保持 DOM 中主区在前、辅助栏在后。
+- Rules 总览迁为 `dashboard + wide + md pane`，仍保持 Header → 4 KPI → 待办主区
+  + 右侧健康状态 / 最近生成 → 项目入口；Generate 迁为 `task + wide + lg pane`，
+  Evidence 在左，本次运行参数与提交动作在右，业务状态、文案与交互未改。
+- 反向验证中临时移除 Rules Dashboard 的 PageShell，布局契约按预期失败 1 条；
+  恢复后布局契约与真实 SSR Primitive 测试 29/29 通过。
+- 1024×768、1440×900、1920×1080 的真实 Electron 几何验证均无横向溢出；
+  1024 下 Pane 下沉，1440 / 1920 下 Pane 在右，1920 PageShell 为 1296px，
+  两页均只有一个 Primary Action。
+- 最终验收：App 14 suites / 91 tests、Core 25 suites / 260 tests、skipped=0，
+  Core/App production build 与 `git diff --check` 全通过。App 独立 typecheck 的既有
+  monorepo `rootDir` / JSON include 与 `RulesSection history` 问题仍不在本轮范围。

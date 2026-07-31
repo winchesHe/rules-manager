@@ -33,7 +33,11 @@ import {
   X,
 } from 'lucide-react'
 import { afterNextPaint } from '../async'
+import { MetricStrip } from '../components/MetricStrip'
 import { PageHeader } from '../components/PageHeader'
+import { PageSection } from '../components/PageSection'
+import { PageShell } from '../components/PageShell'
+import { SupportingPaneLayout } from '../components/SupportingPaneLayout'
 import { EmptyRules, ViewError, ViewLoading } from '../components/ViewStates'
 import { currentLocale, i18n } from '../i18n'
 import {
@@ -955,8 +959,95 @@ function RulesDashboardPage({
   const missing = sources.find((source) => source.source.status !== 'present')
   const latest = history[0]
   const acceptedCount = candidates.filter((candidate) => candidate.status === 'accepted').length
+  const metrics = [
+    {
+      label: tr('dashboard.metrics.instructions'),
+      note: tr('dashboard.metrics.configured'),
+      value: `${configured.length} / ${sources.length || 5}`,
+    },
+    {
+      label: tr('dashboard.metrics.needsReview'),
+      note: tr('dashboard.metrics.draftRules'),
+      value: String(candidates.length),
+    },
+    {
+      label: tr('dashboard.metrics.accepted'),
+      note: tr('dashboard.metrics.readyPublish'),
+      value: String(acceptedCount),
+    },
+    {
+      label: tr('dashboard.metrics.lastGeneration'),
+      note: latest
+        ? formatDate(latest.startedAt, currentLocale())
+        : tr('dashboard.metrics.noRuns'),
+      value: latest ? generationRunTitle(latest.status) : tr('status.none'),
+    },
+  ]
+  const supportingPane = (
+    <div className="grid content-start gap-7">
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium text-foreground">{tr('dashboard.instructionHealth')}</h2>
+          <Button onPress={() => onSectionChange('agents')} size="sm" variant="ghost">{tr('actions.manage')}</Button>
+        </div>
+        <div className="border-t border-border">
+          <button
+            className="flex w-full items-center justify-between gap-3 border-b border-border py-3 text-left"
+            onClick={() => onSectionChange('agents')}
+            type="button"
+          >
+            <strong className="text-xs font-medium text-foreground">
+              {configured.map((source) => instructionAgentLabel(source.source.agent)).join(' · ') || tr('dashboard.noAgents')}
+            </strong>
+            <span className="text-xs text-success">{tr('status.ready')}</span>
+          </button>
+          {missing && (
+            <button
+              className="flex w-full items-center justify-between gap-3 border-b border-border py-3 text-left"
+              onClick={() => onOpenAgent(missing.source.agent)}
+              type="button"
+            >
+              <strong className="text-xs font-medium text-foreground">{instructionAgentLabel(missing.source.agent)}</strong>
+              <span className="text-xs text-warning">{tr('status.setupRequired')}</span>
+            </button>
+          )}
+        </div>
+      </section>
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium text-foreground">{tr('dashboard.latestGeneration')}</h2>
+          <Button onPress={() => onSectionChange('history')} size="sm" variant="ghost">{tr('actions.history')}</Button>
+        </div>
+        {latest ? (
+          <button
+            className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-y border-border py-3 text-left"
+            onClick={() => {
+              if (latest.id === generation?.runId && generation?.runId) onOpenRun()
+              else onOpenHistory(latest)
+            }}
+            type="button"
+          >
+            <span className="min-w-0">
+              <strong className="block truncate text-xs font-medium text-foreground">{generationHistoryScopeLabel(latest)}</strong>
+              <span className="mt-1 block text-xs text-muted">
+                {latest.evidence
+                  ? tr('dashboard.latestSummary', {
+                      projects: latest.evidence.projectCount,
+                      sessions: latest.evidence.totalSessions,
+                    })
+                  : tr('dashboard.candidateSummary', { count: latest.candidateCount })}
+              </span>
+            </span>
+            <Chip color={generationStateColor(latest.status)} size="sm" variant="soft">{generationRunTitle(latest.status)}</Chip>
+          </button>
+        ) : (
+          <p className="border-y border-border py-4 text-xs text-muted">{tr('dashboard.noGenerations')}</p>
+        )}
+      </section>
+    </div>
+  )
   return (
-    <>
+    <PageShell archetype="dashboard" density="compact" width="wide">
       <PageHeader
         actions={
           <Button className="gap-2 bg-primary text-primary-foreground" onPress={onGenerate}>
@@ -966,47 +1057,30 @@ function RulesDashboardPage({
             {isActiveGeneration(generation) ? tr('actions.viewGeneration') : tr('actions.startGenerate')}
           </Button>
         }
+        className="mb-0"
         description={tr('overview.description')}
         title={tr('title')}
       />
       {actionError && <div className="mb-4"><ErrorAlert message={actionError} title={tr('errors.overview')} /></div>}
-      <section
-        aria-label={tr('title')}
-        className="mb-7 grid grid-cols-4 border-y border-border max-lg:grid-cols-2"
-      >
-        {[
-          [tr('dashboard.metrics.instructions'), `${configured.length} / ${sources.length || 5}`, tr('dashboard.metrics.configured')],
-          [tr('dashboard.metrics.needsReview'), String(candidates.length), tr('dashboard.metrics.draftRules')],
-          [tr('dashboard.metrics.accepted'), String(acceptedCount), tr('dashboard.metrics.readyPublish')],
-          [tr('dashboard.metrics.lastGeneration'), latest ? generationRunTitle(latest.status) : tr('status.none'), latest ? formatDate(latest.startedAt, currentLocale()) : tr('dashboard.metrics.noRuns')],
-        ].map(([label, value, note], index) => (
-          <div
-            className={`px-5 py-4 ${index > 0 ? 'border-l border-border' : ''} max-lg:[&:nth-child(3)]:border-l-0 max-lg:[&:nth-child(n+3)]:border-t`}
-            key={label}
-          >
-            <span className="block text-xs font-medium text-muted">{label}</span>
-            <strong className="mt-1 flex items-baseline gap-2 text-lg font-semibold text-foreground">
-              {value}
-              <small className="text-xs font-normal text-muted">{note}</small>
-            </strong>
-          </div>
-        ))}
-      </section>
+      <MetricStrip ariaLabel={tr('title')} items={metrics} />
       {loading ? (
         <ViewLoading label={tr('errors.overview')} />
       ) : (
         <>
-          <div className="grid grid-cols-[minmax(0,1fr)_19rem] gap-8 max-lg:grid-cols-1">
-            <section>
-              <div className="mb-3 flex items-end justify-between gap-3 border-b border-border pb-3">
-                <div>
-                  <h2 className="text-lg font-medium text-foreground">{tr('dashboard.attention')}</h2>
-                  <p className="mt-1 text-sm text-muted">{tr('dashboard.attentionDescription')}</p>
-                </div>
+          <SupportingPaneLayout
+            pane={supportingPane}
+            paneLabel={tr('dashboard.instructionHealth')}
+            paneWidth="md"
+          >
+            <PageSection
+              action={(
                 <Button onPress={() => onSectionChange('generated')} size="sm" variant="ghost">
                   {tr('actions.openGenerated')}
                 </Button>
-              </div>
+              )}
+              description={tr('dashboard.attentionDescription')}
+              title={tr('dashboard.attention')}
+            >
               {candidates.length === 0 ? (
                 <div className="border-b border-border py-10 text-center text-sm text-muted">{tr('dashboard.emptyReview')}</div>
               ) : (
@@ -1027,69 +1101,8 @@ function RulesDashboardPage({
                   </button>
                 ))
               )}
-            </section>
-            <aside className="grid content-start gap-7">
-              <section>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-medium text-foreground">{tr('dashboard.instructionHealth')}</h2>
-                  <Button onPress={() => onSectionChange('agents')} size="sm" variant="ghost">{tr('actions.manage')}</Button>
-                </div>
-                <div className="border-t border-border">
-                  <button
-                    className="flex w-full items-center justify-between gap-3 border-b border-border py-3 text-left"
-                    onClick={() => onSectionChange('agents')}
-                    type="button"
-                  >
-                    <strong className="text-xs font-medium text-foreground">
-                      {configured.map((source) => instructionAgentLabel(source.source.agent)).join(' · ') || tr('dashboard.noAgents')}
-                    </strong>
-                    <span className="text-xs text-success">{tr('status.ready')}</span>
-                  </button>
-                  {missing && (
-                    <button
-                      className="flex w-full items-center justify-between gap-3 border-b border-border py-3 text-left"
-                      onClick={() => onOpenAgent(missing.source.agent)}
-                      type="button"
-                    >
-                      <strong className="text-xs font-medium text-foreground">{instructionAgentLabel(missing.source.agent)}</strong>
-                      <span className="text-xs text-warning">{tr('status.setupRequired')}</span>
-                    </button>
-                  )}
-                </div>
-              </section>
-              <section>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-medium text-foreground">{tr('dashboard.latestGeneration')}</h2>
-                  <Button onPress={() => onSectionChange('history')} size="sm" variant="ghost">{tr('actions.history')}</Button>
-                </div>
-                {latest ? (
-                  <button
-                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-y border-border py-3 text-left"
-                    onClick={() => {
-                      if (latest.id === generation?.runId && generation?.runId) onOpenRun()
-                      else onOpenHistory(latest)
-                    }}
-                    type="button"
-                  >
-                    <span className="min-w-0">
-                      <strong className="block truncate text-xs font-medium text-foreground">{generationHistoryScopeLabel(latest)}</strong>
-                      <span className="mt-1 block text-xs text-muted">
-                        {latest.evidence
-                          ? tr('dashboard.latestSummary', {
-                              projects: latest.evidence.projectCount,
-                              sessions: latest.evidence.totalSessions,
-                            })
-                          : tr('dashboard.candidateSummary', { count: latest.candidateCount })}
-                      </span>
-                    </span>
-                    <Chip color={generationStateColor(latest.status)} size="sm" variant="soft">{generationRunTitle(latest.status)}</Chip>
-                  </button>
-                ) : (
-                  <p className="border-y border-border py-4 text-xs text-muted">{tr('dashboard.noGenerations')}</p>
-                )}
-              </section>
-            </aside>
-          </div>
+            </PageSection>
+          </SupportingPaneLayout>
           <div className="mt-7 flex items-center justify-between gap-4 border-y border-border px-1 py-4">
             <span>
               <strong className="block text-sm font-medium text-foreground">{tr('dashboard.projectRulesTitle')}</strong>
@@ -1099,7 +1112,7 @@ function RulesDashboardPage({
           </div>
         </>
       )}
-    </>
+    </PageShell>
   )
 }
 
@@ -1682,18 +1695,20 @@ function GenerateRulesPage({
       : tr('generate.scopeRecent', { count: projects.length })
 
   return (
-    <>
-      <BackButton label={tr('actions.back')} onPress={onBack} />
-      <PageHeader
-        description={tr('generate.description')}
-        title={tr('generate.title')}
-      />
+    <PageShell archetype="task" width="wide">
+      <div>
+        <BackButton label={tr('actions.back')} onPress={onBack} />
+        <PageHeader
+          className="mb-0"
+          description={tr('generate.description')}
+          title={tr('generate.title')}
+        />
+      </div>
       {error && <div className="mb-4"><ErrorAlert message={error} title={tr('errors.generate')} /></div>}
-      <section
-        className="mx-auto w-full max-w-6xl"
-        data-layout="generation-launcher"
+      <SupportingPaneLayout
+        paneLabel={tr('generate.runConfiguration')}
+        paneWidth="lg"
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_22rem] items-start gap-6 max-[1100px]:grid-cols-1">
           <article className="min-w-0">
             <div className="mb-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
@@ -1773,7 +1788,7 @@ function GenerateRulesPage({
             </div>
           </article>
 
-          <aside className="sticky top-6 overflow-hidden rounded-xl border border-border bg-surface max-[1100px]:static">
+          <div className="overflow-hidden rounded-xl border border-border bg-surface @min-[64rem]:sticky @min-[64rem]:top-6">
             <div className="px-4 py-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
                 {tr('generate.configurationEyebrow')}
@@ -1904,10 +1919,9 @@ function GenerateRulesPage({
                 {starting ? tr('actions.starting') : tr('actions.continueChat')}
               </Button>
             </div>
-          </aside>
-        </div>
-      </section>
-    </>
+          </div>
+      </SupportingPaneLayout>
+    </PageShell>
   )
 }
 

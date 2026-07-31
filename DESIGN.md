@@ -62,6 +62,79 @@
 - 工作区 `flex-1`，同系暗色稍亮背景
 - 侧边栏 settings 贴底（`mt-auto`）
 
+## 页面布局系统
+
+全局侧边栏属于 App Shell；页面 Grid 只管理工作区内的内容。新增页面必须先选择一种
+页面原型和一个宽度档，再组合业务组件，禁止从任意 `max-w-*`、裸 `rem` 辅助栏或
+临时 breakpoint 开始设计。
+
+### 宽度档
+
+| 档位 | 最大宽度 | 适用 | 禁用 |
+|---|---:|---|---|
+| `narrow` | 54rem / 864px | 设置、表单、阅读型详情 | Dashboard、数据表格 |
+| `wide` | 81rem / 1296px | 默认产品页、Dashboard、Collection、Task | 无理由的横向画布 |
+| `fluid` | 工作区可用宽度 | Chat、流式 Run、大型横向数据工作区 | 普通 Dashboard、表单、阅读页 |
+
+- `wide` 是普通页面默认值；只有“窗口更宽会展示更多有用信息”时才允许 `fluid`。
+- Page Header、指标、正文和辅助栏必须共享同一个 `PageShell` 左右边界。
+- 全出血背景可以突破内容边界，但其中的内容仍须回到同一 Grid。
+- 页面横向 padding 由 `PageShell` 统一提供；View 不重复计算 App 侧边栏后的宽度。
+
+### 页面原型决策表
+
+| 原型 | 适用 / 禁用 | 区域顺序 | 宽度与滚动 | 响应式与主操作 |
+|---|---|---|---|---|
+| `collection` | Scan、Projects、规则列表；不用于对象详情 | Header → toolbar → 单一 collection | `wide`；页面滚动，长列表自身可虚拟滚动 | 窄容器精简列；主操作在 Header，最多一个 |
+| `dashboard` | 状态概览与待办入口；不用于高密度全宽报表 | Header → ≤4 KPI → 唯一主工作区 + 辅助栏 → ≤1 个低频入口 | `wide`；页面滚动；辅助栏 `md` | 辅助栏下沉到主区之后；主操作在 Header |
+| `task` | Generate、Review、Settings、任务型详情；不用于多对象浏览 | Header → 任务主体 + 可选配置栏 → 就近提交 | `narrow` 或 `wide`；页面滚动；配置栏 `lg` | 配置栏下沉且保持 DOM 后置；提交靠近配置摘要 |
+| `workspace` | Chat、流式 Generation Run；不用于普通内容页 | 持久导航 → 主工作区 → 上下文 Pane | `fluid`；固定 viewport，各 Pane 独立滚动 | 窄屏拆页、隐藏或转 Sheet，不能机械堆叠长导航 |
+
+Do：先确定用户当前唯一主任务，再选择能表达主次关系的原型。  
+Don’t：为了填满屏幕把普通页面拉成 `fluid`，或在同一页并列多个同权主工作区。
+
+### 主辅栏语义
+
+| 档位 | 宽度 | 用途 |
+|---|---:|---|
+| `sm` | 18rem | 简短元数据、运行上下文 |
+| `md` | 20rem | Dashboard 健康状态、最近活动 |
+| `lg` | 22rem | 表单配置、需要完整控件的运行参数 |
+
+- 主栏固定为 `minmax(0, 1fr)`；辅助栏只承载支持主任务的信息或配置。
+- 主辅栏默认 gap 为 2rem；页面只能选择语义档，禁止写裸 `18rem / 20rem / 22rem`。
+- 折叠由 `SupportingPaneLayout` 统一控制；DOM 中主区在前、辅助栏在后。
+- 同权内容才允许等宽分栏；列表—详情是 Workspace，不套固定窄辅助栏。
+
+### 密度、Surface 与滚动
+
+- 页面密度只有 `comfortable` 和 `compact` 两档。Task 默认 comfortable；Dashboard
+  的 KPI 与状态栏可以 compact。同类区块必须保持同一档，禁止单块临时缩 padding。
+- Dashboard 一级区块优先使用 flat section + divider；Card 只表达可独立操作或明确
+  边界，禁止用大 Card 填补留白，也禁止 Card 套 Card。
+- 普通页面的滚动归 `PageShell` 外层页面；Workspace 才能接管 viewport，并明确每个
+  Pane 的滚动归属。
+- 页面最多一个 Primary Action。次级导航或管理入口使用 ghost，提交动作放在其结果
+  或配置上下文附近。
+
+### 页面级 Primitives
+
+- `PageShell`：唯一拥有页面原型、宽度、密度、页面滚动和顶层对齐线。
+- `PageHeader`：唯一 H1、单行描述和最多一个 Primary Action。
+- `SupportingPaneLayout`：唯一拥有主辅 Grid、语义栏宽和折叠顺序。
+- `MetricStrip`：最多 4 个 KPI，统一分隔与两列降级。
+- `PageSection`：统一 section title、description 与一个次级 action。
+
+Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局。确实需要第五种原型时，
+必须同时补充本节决策表、对应 Primitive 行为和布局契约测试。
+
+参考：
+
+- [Atlassian Grid](https://atlassian.design/foundations/grid-beta/applying-grid/)
+- [Primer Layout](https://primer.style/product/getting-started/foundations/layout/)
+- [Primer PageLayout](https://primer.style/product/components/page-layout/)
+- [Material canonical layouts](https://m3.material.io/foundations/layout/canonical-examples/overview)
+
 ## 首页信息架构
 
 三个主界面统一使用渐进展示，禁止把“列表定位”和“对象操作”同时塞进左右分栏：
