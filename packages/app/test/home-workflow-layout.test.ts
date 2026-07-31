@@ -347,21 +347,23 @@ describe('home workflow layout', () => {
     expect(chatSource).toContain("label={t('fastMode')}")
   })
 
-  it('Rules Dashboard 使用限宽页面壳、指标带与语义辅助栏', () => {
+  it('Rules Dashboard 使用任务摘要和统一状态辅助栏', () => {
     const source = read('views/RulesView.tsx')
     const dashboard = source.slice(
       source.indexOf('function RulesDashboardPage'),
       source.indexOf('function AgentInstructionsIndexPage'),
     )
 
-    expect(source).toContain("import { MetricStrip } from '../components/MetricStrip'")
     expect(source).toContain("import { PageSection } from '../components/PageSection'")
     expect(dashboard).toContain('<PageShell')
     expect(dashboard).toContain('archetype="dashboard"')
     expect(dashboard).toContain('width="wide"')
-    expect(dashboard).toContain('<MetricStrip')
     expect(dashboard).toContain('<SupportingPaneLayout')
     expect(dashboard).toContain('paneWidth="md"')
+    expect(dashboard).toContain('data-dashboard-summary="true"')
+    expect(dashboard).toContain('data-dashboard-status-pane="true"')
+    expect(dashboard).not.toContain('<MetricStrip')
+    expect(dashboard).not.toContain('mt-7 flex items-center justify-between gap-4 border-y')
     expect(dashboard).not.toContain('grid-cols-[minmax(0,1fr)_19rem]')
   })
 

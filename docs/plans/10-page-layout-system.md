@@ -47,3 +47,13 @@
   窄屏 Pane 下沉；每页只有一个 Primary Action。
 - 验证方式：保存两页 1920 截图；Core / App 全量测试、两个 production build 与
   `git diff --check` 全通过。
+
+## Step 6 · 收敛 Rules Dashboard 信息层级
+
+移除脱离任务上下文的顶层 KPI 带，把待审核与已接受数量并入审核主区；将 Agent 健康、
+最近生成和项目入口合并为一个辅助状态面板。
+
+- 观察点：首屏唯一主视觉是审核队列，右栏形成完整的支持面板，不再有横跨页面的孤立
+  项目入口。
+- 验证方式：布局契约断言主区摘要与统一状态面板存在、Dashboard 不再渲染 MetricStrip；
+  三档真实窗口继续满足 Pane 折叠与无横向溢出。

@@ -112,6 +112,9 @@ Don’t：为了填满屏幕把普通页面拉成 `fluid`，或在同一页并�
   的 KPI 与状态栏可以 compact。同类区块必须保持同一档，禁止单块临时缩 padding。
 - Dashboard 一级区块优先使用 flat section + divider；Card 只表达可独立操作或明确
   边界，禁止用大 Card 填补留白，也禁止 Card 套 Card。
+- Dashboard 的指标必须服务于当前主任务。待审核数、已接受数等任务指标应进入主工作区
+  的摘要，不应为了凑齐四项单独占据整行；Agent 健康、最近运行、项目入口等支持信息应
+  合并为一个辅助状态面板，避免多个孤立小区块。
 - 普通页面的滚动归 `PageShell` 外层页面；Workspace 才能接管 viewport，并明确每个
   Pane 的滚动归属。
 - 页面最多一个 Primary Action。次级导航或管理入口使用 ghost，提交动作放在其结果

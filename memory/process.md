@@ -1559,3 +1559,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：App 14 suites / 91 tests、Core 25 suites / 260 tests、skipped=0，
   Core/App production build 与 `git diff --check` 全通过。App 独立 typecheck 的既有
   monorepo `rootDir` / JSON include 与 `RulesSection history` 问题仍不在本轮范围。
+
+## Rules Dashboard 信息层级重组（2026-07-31）
+
+- 在既有 `dashboard + wide + md pane` 布局系统内重组总览页，不新增另一套页面组件：
+  移除脱离任务上下文的四项顶层 KPI 带，把待审核与已接受数量收进审核主区摘要。
+- “需要你处理”成为唯一主工作区，继续展示前四条待审核规则与原有审核入口；Agent
+  健康、最近生成和项目规则入口合并为一个右侧状态面板，项目入口不再孤立横跨页面。
+- DESIGN 补充 Dashboard 指标归属规则：任务指标就近进入主工作区，支持信息合并到
+  辅助状态面板，避免为了凑指标数量占据整行或堆叠孤立小区块。
+- 布局契约先因缺少 `data-dashboard-summary` 按预期失败，完成重组后与 Primitive SSR
+  测试 29/29 通过。1024×768 下 Pane 下沉，1440×900 与 1920×1080 下 Pane 在右，
+  三档均无横向溢出；1920 PageShell 保持 1296px，每页仍只有一个 Primary Action。
+- 最终验收：App 14 suites / 91 tests、Core 25 suites / 260 tests、skipped=0，
+  Core/App production build 与 `git diff --check` 全通过。

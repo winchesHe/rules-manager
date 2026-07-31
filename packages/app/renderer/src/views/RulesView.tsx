@@ -33,7 +33,6 @@ import {
   X,
 } from 'lucide-react'
 import { afterNextPaint } from '../async'
-import { MetricStrip } from '../components/MetricStrip'
 import { PageHeader } from '../components/PageHeader'
 import { PageSection } from '../components/PageSection'
 import { PageShell } from '../components/PageShell'
@@ -42,7 +41,6 @@ import { EmptyRules, ViewError, ViewLoading } from '../components/ViewStates'
 import { currentLocale, i18n } from '../i18n'
 import {
   formatBytes as formatLocalizedBytes,
-  formatDate,
   formatDateTime,
 } from '../i18n/format'
 import type {
@@ -959,34 +957,13 @@ function RulesDashboardPage({
   const missing = sources.find((source) => source.source.status !== 'present')
   const latest = history[0]
   const acceptedCount = candidates.filter((candidate) => candidate.status === 'accepted').length
-  const metrics = [
-    {
-      label: tr('dashboard.metrics.instructions'),
-      note: tr('dashboard.metrics.configured'),
-      value: `${configured.length} / ${sources.length || 5}`,
-    },
-    {
-      label: tr('dashboard.metrics.needsReview'),
-      note: tr('dashboard.metrics.draftRules'),
-      value: String(candidates.length),
-    },
-    {
-      label: tr('dashboard.metrics.accepted'),
-      note: tr('dashboard.metrics.readyPublish'),
-      value: String(acceptedCount),
-    },
-    {
-      label: tr('dashboard.metrics.lastGeneration'),
-      note: latest
-        ? formatDate(latest.startedAt, currentLocale())
-        : tr('dashboard.metrics.noRuns'),
-      value: latest ? generationRunTitle(latest.status) : tr('status.none'),
-    },
-  ]
   const supportingPane = (
-    <div className="grid content-start gap-7">
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-3">
+    <div
+      className="overflow-hidden rounded-xl border border-border bg-surface"
+      data-dashboard-status-pane="true"
+    >
+      <section className="p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-foreground">{tr('dashboard.instructionHealth')}</h2>
           <Button onPress={() => onSectionChange('agents')} size="sm" variant="ghost">{tr('actions.manage')}</Button>
         </div>
@@ -1013,8 +990,8 @@ function RulesDashboardPage({
           )}
         </div>
       </section>
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-3">
+      <section className="border-t border-border p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-foreground">{tr('dashboard.latestGeneration')}</h2>
           <Button onPress={() => onSectionChange('history')} size="sm" variant="ghost">{tr('actions.history')}</Button>
         </div>
@@ -1044,6 +1021,20 @@ function RulesDashboardPage({
           <p className="border-y border-border py-4 text-xs text-muted">{tr('dashboard.noGenerations')}</p>
         )}
       </section>
+      <section className="border-t border-border p-5">
+        <strong className="block text-sm font-medium text-foreground">{tr('dashboard.projectRulesTitle')}</strong>
+        <span className="mt-1 block text-xs text-muted">
+          {tr('dashboard.projectsAvailable', { count: projects.length })}
+        </span>
+        <Button
+          className="mt-3 w-full justify-between"
+          onPress={() => onOpenProjectRules?.()}
+          size="sm"
+          variant="ghost"
+        >
+          {tr('actions.openProjects')}
+        </Button>
+      </section>
     </div>
   )
   return (
@@ -1062,27 +1053,41 @@ function RulesDashboardPage({
         title={tr('title')}
       />
       {actionError && <div className="mb-4"><ErrorAlert message={actionError} title={tr('errors.overview')} /></div>}
-      <MetricStrip ariaLabel={tr('title')} items={metrics} />
       {loading ? (
         <ViewLoading label={tr('errors.overview')} />
       ) : (
-        <>
-          <SupportingPaneLayout
-            pane={supportingPane}
-            paneLabel={tr('dashboard.instructionHealth')}
-            paneWidth="md"
+        <SupportingPaneLayout
+          pane={supportingPane}
+          paneLabel={tr('dashboard.instructionHealth')}
+          paneWidth="md"
+        >
+          <PageSection
+            action={(
+              <Button onPress={() => onSectionChange('generated')} size="sm" variant="ghost">
+                {tr('actions.openGenerated')}
+              </Button>
+            )}
+            description={tr('dashboard.attentionDescription')}
+            title={tr('dashboard.attention')}
           >
-            <PageSection
-              action={(
-                <Button onPress={() => onSectionChange('generated')} size="sm" variant="ghost">
-                  {tr('actions.openGenerated')}
-                </Button>
-              )}
-              description={tr('dashboard.attentionDescription')}
-              title={tr('dashboard.attention')}
+            <div
+              className="grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-surface"
+              data-dashboard-summary="true"
             >
+              <div className="bg-primary-soft px-5 py-4">
+                <span className="block text-xs font-medium text-primary">{tr('dashboard.metrics.needsReview')}</span>
+                <strong className="mt-2 block text-3xl font-semibold text-foreground">{candidates.length}</strong>
+                <span className="mt-1 block text-xs text-muted">{tr('dashboard.metrics.draftRules')}</span>
+              </div>
+              <div className="border-l border-border px-5 py-4">
+                <span className="block text-xs font-medium text-muted">{tr('dashboard.metrics.accepted')}</span>
+                <strong className="mt-2 block text-3xl font-semibold text-foreground">{acceptedCount}</strong>
+                <span className="mt-1 block text-xs text-muted">{tr('dashboard.metrics.readyPublish')}</span>
+              </div>
+            </div>
+            <div className="mt-4 border-t border-border">
               {candidates.length === 0 ? (
-                <div className="border-b border-border py-10 text-center text-sm text-muted">{tr('dashboard.emptyReview')}</div>
+                <div className="py-10 text-center text-sm text-muted">{tr('dashboard.emptyReview')}</div>
               ) : (
                 candidates.slice(0, 4).map((candidate) => (
                   <button
@@ -1101,16 +1106,9 @@ function RulesDashboardPage({
                   </button>
                 ))
               )}
-            </PageSection>
-          </SupportingPaneLayout>
-          <div className="mt-7 flex items-center justify-between gap-4 border-y border-border px-1 py-4">
-            <span>
-              <strong className="block text-sm font-medium text-foreground">{tr('dashboard.projectRulesTitle')}</strong>
-              <span className="mt-1 block text-xs text-muted">{tr('dashboard.projectsAvailable', { count: projects.length })}</span>
-            </span>
-            <Button onPress={() => onOpenProjectRules?.()} variant="ghost">{tr('actions.openProjects')}</Button>
-          </div>
-        </>
+            </div>
+          </PageSection>
+        </SupportingPaneLayout>
       )}
     </PageShell>
   )
