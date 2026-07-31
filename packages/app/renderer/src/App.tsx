@@ -32,7 +32,6 @@ const rulesNavigation: Array<{ id: RulesSection; labelKey: string }> = [
   { id: 'overview', labelKey: 'rulesOverview' },
   { id: 'agents', labelKey: 'agentInstructions' },
   { id: 'generated', labelKey: 'generatedRules' },
-  { id: 'history', labelKey: 'generationHistory' },
 ]
 
 export function App() {
@@ -42,6 +41,7 @@ export function App() {
   const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null)
   const [selectedProjectTab, setSelectedProjectTab] = useState<'sessions' | 'rules'>('sessions')
   const [selectedRulesProject, setSelectedRulesProject] = useState<string | null>(null)
+  const [selectedRulesRunId, setSelectedRulesRunId] = useState<string | null>(null)
   const [selectedChatThreadId, setSelectedChatThreadId] = useState<string | null>(null)
   const [activeRulesSection, setActiveRulesSection] = useState<RulesSection>('overview')
   const [rulesViewKey, setRulesViewKey] = useState(0)
@@ -192,8 +192,9 @@ export function App() {
             {activeView === 'chat' && (
               <ChatView
                 initialThreadId={selectedChatThreadId}
-                onOpenGeneratedRules={() => {
+                onOpenGeneratedRules={(runId) => {
                   setActiveRulesSection('generated')
+                  setSelectedRulesRunId(runId)
                   setSelectedChatThreadId(null)
                   setActiveView('rules')
                 }}
@@ -202,8 +203,10 @@ export function App() {
             {activeView === 'rules' && (
               <RulesView
                 initialProjectSlug={selectedRulesProject}
+                initialRunId={selectedRulesRunId}
                 key={rulesViewKey}
                 onInitialProjectHandled={() => setSelectedRulesProject(null)}
+                onInitialRunHandled={() => setSelectedRulesRunId(null)}
                 onOpenProjectRules={(slug) => {
                   setSelectedProjectSlug(slug ?? null)
                   setSelectedProjectTab('rules')

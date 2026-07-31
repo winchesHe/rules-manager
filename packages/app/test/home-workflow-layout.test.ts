@@ -165,10 +165,14 @@ describe('home workflow layout', () => {
     expect(appSource).toContain("t('rulesLabel')")
     expect(appSource).toContain("labelKey: 'agentInstructions'")
     expect(appSource).toContain("labelKey: 'generatedRules'")
-    expect(appSource).toContain("labelKey: 'generationHistory'")
+    expect(appSource).not.toContain("labelKey: 'generationHistory'")
     expect(source).toContain("section === 'agents'")
     expect(source).toContain("section === 'generated'")
-    expect(source).toContain("section === 'history'")
+    expect(source).not.toContain("section === 'history'")
+    expect(source).toContain('selectedRunId')
+    expect(source).toContain('<Select')
+    expect(source).toContain('filterCandidatesByRun')
+    expect(appSource).toContain('onOpenGeneratedRules={(runId)')
   })
 
   it('Recent activity 直接按 Session updated_at 收集，不依赖 Scan History', () => {

@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Card, Chip, Spinner, Table } from '@heroui/react'
+import {
+  Alert,
+  Button,
+  Card,
+  Chip,
+  ListBox,
+  Select,
+  Spinner,
+  Table,
+} from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
   Activity,
@@ -49,16 +58,19 @@ import type {
   RuleStatus,
   SessionPreview,
 } from '../types'
+import {
+  filterCandidatesByRun,
+  selectableGenerationRuns,
+} from './rules-view-model'
 
 type RulesPage =
   | 'overview'
   | 'agent'
   | 'generate'
   | 'run'
-  | 'history'
   | 'review'
   | 'output'
-export type RulesSection = 'overview' | 'agents' | 'generated' | 'history'
+export type RulesSection = 'overview' | 'agents' | 'generated'
 type GenerateMode = GenerationMode
 type GenerationPhaseKey = 'evidence' | 'generate' | 'validate' | 'save'
 
@@ -105,6 +117,8 @@ function tr(
 export function RulesView({
   initialProjectSlug,
   onInitialProjectHandled,
+  initialRunId,
+  onInitialRunHandled,
   onOpenChat,
   onOpenProjectRules,
   onSectionChange,
@@ -112,6 +126,8 @@ export function RulesView({
 }: {
   initialProjectSlug?: string | null
   onInitialProjectHandled?: () => void
+  initialRunId?: string | null
+  onInitialRunHandled?: () => void
   onOpenChat: (threadId: string) => void
   onOpenProjectRules?: (slug?: string) => void
   onSectionChange: (section: RulesSection) => void
@@ -120,7 +136,12 @@ export function RulesView({
   useTranslation('rules')
   const [page, setPage] = useState<RulesPage>('overview')
   const [status, setStatus] = useState<RuleStatus>('draft')
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<RuleCandidate[]>([])
+  const [generationHistory, setGenerationHistory] =
+    useState<GenerationHistoryEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const [selectedCandidate, setSelectedCandidate] = useState<RuleCandidate | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -130,8 +151,6 @@ export function RulesView({
   const [generation, setGeneration] = useState<GenerationStatus | null>(null)
   const [selectedInstructionAgent, setSelectedInstructionAgent] =
     useState<GlobalInstructionAgent | null>(null)
-  const [selectedHistory, setSelectedHistory] =
-    useState<GenerationHistoryEntry | null>(null)
   const [queueRefresh, setQueueRefresh] = useState(0)
   const mounted = useRef(true)
   const previousSection = useRef(section)
@@ -142,10 +161,10 @@ export function RulesView({
     setPage('overview')
     setSelectedCandidate(null)
     setSelectedInstructionAgent(null)
-    setSelectedHistory(null)
     setActionError(null)
     if (section === 'overview') setStatus('draft')
-  }, [section])
+    if (section === 'generated' && !initialRunId) setSelectedRunId(null)
+  }, [initialRunId, section])
 
   useEffect(() => {
     mounted.current = true
@@ -240,6 +259,36 @@ export function RulesView({
     setPage('generate')
     onInitialProjectHandled?.()
   }, [initialProjectSlug, onInitialProjectHandled])
+
+  useEffect(() => {
+    if (!initialRunId) return
+    setSelectedRunId(initialRunId)
+    setStatus('draft')
+    onInitialRunHandled?.()
+  }, [initialRunId, onInitialRunHandled])
+
+  useEffect(() => {
+    let current = true
+    setHistoryLoading(true)
+    setHistoryError(null)
+    void afterNextPaint(() =>
+      window.api.invoke<GenerationHistoryEntry[]>('rules.generate.history'),
+    )
+      .then((rows) => {
+        if (current) setGenerationHistory(rows)
+      })
+      .catch((reason: unknown) => {
+        if (current) {
+          setHistoryError(reason instanceof Error ? reason.message : String(reason))
+        }
+      })
+      .finally(() => {
+        if (current) setHistoryLoading(false)
+      })
+    return () => {
+      current = false
+    }
+  }, [queueRefresh])
 
   useEffect(() => {
     if (page !== 'overview') return
@@ -360,22 +409,10 @@ export function RulesView({
         onCancel={() => void cancelGeneration()}
         onReview={() => {
           setStatus('draft')
+          setSelectedRunId(generation.runId ?? null)
           onSectionChange('generated')
           setPage('overview')
         }}
-      />
-    )
-  }
-  if (page === 'history' && selectedHistory) {
-    return (
-      <HistoricalGenerationPage
-        entry={selectedHistory}
-        onBack={() => {
-          setSelectedHistory(null)
-          setPage('overview')
-        }}
-        onPublish={() => setPage('output')}
-        onReview={openReview}
       />
     )
   }
@@ -419,6 +456,9 @@ export function RulesView({
       candidates={candidates}
       error={error}
       generation={generation}
+      generationHistory={generationHistory}
+      historyError={historyError}
+      historyLoading={historyLoading}
       loading={loading}
       onGenerate={() => {
         setActionError(null)
@@ -441,9 +481,11 @@ export function RulesView({
         if (generation?.runId) onOpenChat(generation.runId)
       }}
       onReview={openReview}
+      onRunChange={setSelectedRunId}
       onSectionChange={onSectionChange}
       onStatusChange={setStatus}
       section={section}
+      selectedRunId={selectedRunId}
       status={status}
     />
   )
@@ -454,6 +496,9 @@ function RulesOverviewPage({
   candidates,
   error,
   generation,
+  generationHistory,
+  historyError,
+  historyLoading,
   loading,
   onGenerate,
   onOpenAgent,
@@ -462,15 +507,20 @@ function RulesOverviewPage({
   onOpenProjectRules,
   onOpenRun,
   onReview,
+  onRunChange,
   onSectionChange,
   onStatusChange,
   section,
+  selectedRunId,
   status,
 }: {
   actionError: string | null
   candidates: RuleCandidate[]
   error: string | null
   generation: GenerationStatus | null
+  generationHistory: GenerationHistoryEntry[]
+  historyError: string | null
+  historyLoading: boolean
   loading: boolean
   onGenerate: () => void
   onOpenAgent: (agent: GlobalInstructionAgent) => void
@@ -479,14 +529,15 @@ function RulesOverviewPage({
   onOpenProjectRules?: (slug?: string) => void
   onOpenRun: () => void
   onReview: (candidate: RuleCandidate) => void
+  onRunChange: (runId: string | null) => void
   onSectionChange: (section: RulesSection) => void
   onStatusChange: (status: RuleStatus) => void
   section: RulesSection
+  selectedRunId: string | null
   status: RuleStatus
 }) {
   const [sources, setSources] = useState<GlobalInstructionReadResult[]>([])
   const [projects, setProjects] = useState<Project[]>([])
-  const [generationHistory, setGenerationHistory] = useState<GenerationHistoryEntry[]>([])
   const [overviewLoading, setOverviewLoading] = useState(true)
   const [overviewError, setOverviewError] = useState<string | null>(null)
 
@@ -496,10 +547,9 @@ function RulesOverviewPage({
       Promise.all([
         window.api.invoke<GlobalInstructionListResult>('rules.instructions.list'),
         window.api.invoke<Project[]>('projects.list'),
-        window.api.invoke<GenerationHistoryEntry[]>('rules.generate.history'),
       ]),
     )
-      .then(async ([instructionResult, projectRows, historyRows]) => {
+      .then(async ([instructionResult, projectRows]) => {
         const instructionRows = await Promise.all(
           instructionResult.sources.map((source) =>
             window.api.invoke<GlobalInstructionReadResult>(
@@ -511,7 +561,6 @@ function RulesOverviewPage({
         if (!current) return
         setSources(instructionRows)
         setProjects(projectRows)
-        setGenerationHistory(historyRows)
       })
       .catch((reason: unknown) => {
         if (current) {
@@ -543,24 +592,17 @@ function RulesOverviewPage({
         actionError={actionError}
         candidates={candidates}
         error={error}
+        history={generationHistory}
+        historyError={historyError}
+        historyLoading={historyLoading}
         loading={loading}
+        onOpenHistory={onOpenHistory}
         onOpenOutput={onOpenOutput}
         onReview={onReview}
+        onRunChange={onRunChange}
         onStatusChange={onStatusChange}
+        selectedRunId={selectedRunId}
         status={status}
-      />
-    )
-  }
-
-  if (section === 'history') {
-    return (
-      <GenerationHistoryIndexPage
-        actionError={actionError ?? overviewError}
-        generation={generation}
-        history={generationHistory}
-        loading={overviewLoading}
-        onOpenHistory={onOpenHistory}
-        onOpenRun={onOpenRun}
       />
     )
   }
@@ -572,7 +614,7 @@ function RulesOverviewPage({
         candidates={candidates}
         generation={generation}
         history={generationHistory}
-        loading={loading || overviewLoading}
+        loading={loading || overviewLoading || historyLoading}
         onGenerate={onGenerate}
         onOpenAgent={onOpenAgent}
         onOpenHistory={onOpenHistory}
@@ -1115,34 +1157,114 @@ function GeneratedRulesIndexPage({
   actionError,
   candidates,
   error,
+  history,
+  historyError,
+  historyLoading,
   loading,
+  onOpenHistory,
   onOpenOutput,
   onReview,
+  onRunChange,
   onStatusChange,
+  selectedRunId,
   status,
 }: {
   actionError: string | null
   candidates: RuleCandidate[]
   error: string | null
+  history: GenerationHistoryEntry[]
+  historyError: string | null
+  historyLoading: boolean
   loading: boolean
+  onOpenHistory: (entry: GenerationHistoryEntry) => void
   onOpenOutput: () => void
   onReview: (candidate: RuleCandidate) => void
+  onRunChange: (runId: string | null) => void
   onStatusChange: (status: RuleStatus) => void
+  selectedRunId: string | null
   status: RuleStatus
 }) {
+  const runs = selectableGenerationRuns(history)
+  const selectedRun = runs.find((entry) => entry.id === selectedRunId)
+  const visibleCandidates = filterCandidatesByRun(candidates, selectedRunId)
+  const loadError = actionError ?? error ?? historyError
   return (
     <>
-      {(actionError || error) && (
+      {loadError && (
         <div className="mb-4">
-          <ErrorAlert message={actionError ?? error ?? ''} title={tr('errors.generated')} />
+          <ErrorAlert message={loadError} title={tr('errors.generated')} />
         </div>
       )}
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
         <div>
           <h2 className="text-lg font-medium text-foreground">{tr('generated.candidates')}</h2>
           <p className="mt-1 text-sm text-muted">{tr('generated.publishDescription')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <Button className="gap-2" onPress={onOpenOutput} size="sm" variant="ghost">
+          <FileOutput aria-hidden="true" size={16} />
+          {tr('generated.publishAccepted')}
+        </Button>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <Select
+            aria-label={tr('generated.batchLabel')}
+            className="w-[min(28rem,100%)]"
+            isDisabled={historyLoading}
+            onSelectionChange={(key) => {
+              const value = String(key)
+              onRunChange(value === 'all' ? null : value)
+            }}
+            selectedKey={selectedRunId ?? 'all'}
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item
+                  id="all"
+                  textValue={status === 'draft'
+                    ? tr('generated.allPending')
+                    : tr('generated.allRuns')}
+                >
+                  {status === 'draft'
+                    ? tr('generated.allPending')
+                    : tr('generated.allRuns')}
+                </ListBox.Item>
+                {runs.map((entry) => (
+                  <ListBox.Item
+                    id={entry.id}
+                    key={entry.id}
+                    textValue={generationBatchLabel(entry)}
+                  >
+                    {generationBatchLabel(entry)}
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <Chip size="sm" variant="soft">
+            {tr('generated.visibleCount', { count: visibleCandidates.length })}
+          </Chip>
+          {selectedRun && (
+            <Button
+              className="gap-2"
+              onPress={() => onOpenHistory(selectedRun)}
+              size="sm"
+              variant="ghost"
+            >
+              <Activity aria-hidden="true" size={16} />
+              {tr('generated.viewRun')}
+            </Button>
+          )}
+        </div>
+        <div
+          aria-label={tr('overview.ruleStatusLabel')}
+          className="flex flex-wrap items-center gap-2"
+        >
           {statuses.map((item) => (
             <Button
               aria-pressed={status === item.value}
@@ -1154,17 +1276,13 @@ function GeneratedRulesIndexPage({
               {tr(item.labelKey)}
             </Button>
           ))}
-          <Button className="gap-2" onPress={onOpenOutput} size="sm" variant="ghost">
-            <FileOutput aria-hidden="true" size={16} />
-            {tr('generated.publishAccepted')}
-          </Button>
         </div>
       </div>
       <Card className="min-h-64 border border-border bg-surface shadow-none">
         <Card.Content className="p-0">
-          {loading ? (
+          {loading || historyLoading ? (
             <ViewLoading label={tr('overview.loadingRules', { status: tr(`status.${status}`) })} />
-          ) : candidates.length === 0 ? (
+          ) : visibleCandidates.length === 0 ? (
             <EmptyRules />
           ) : (
             <Table className="rounded-none bg-transparent shadow-none">
@@ -1177,7 +1295,7 @@ function GeneratedRulesIndexPage({
                     <Table.Column>{tr('overview.columns.actions')}</Table.Column>
                   </Table.Header>
                   <Table.Body>
-                    {candidates.map((candidate) => (
+                    {visibleCandidates.map((candidate) => (
                       <Table.Row id={candidate.id} key={candidate.id}>
                         <Table.Cell className="max-w-xl"><p className="line-clamp-2">{candidate.rule_text}</p></Table.Cell>
                         <Table.Cell className="text-muted">{candidate.project_slug ?? candidate.scope}</Table.Cell>
@@ -3357,6 +3475,14 @@ function generationHistoryScopeLabel(entry: GenerationHistoryEntry): string {
     return tr('scope.selected', { count: entry.request.projects.length })
   }
   return tr('scope.recent')
+}
+
+function generationBatchLabel(entry: GenerationHistoryEntry): string {
+  return [
+    generationHistoryScopeLabel(entry),
+    formatDateTime(entry.startedAt, currentLocale()),
+    tr('history.candidateCount', { count: entry.candidateCount }),
+  ].join(' · ')
 }
 
 function generationRunMeta(generation: GenerationStatus): string {

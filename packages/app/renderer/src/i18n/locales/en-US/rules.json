@@ -152,7 +152,13 @@
     "description": "Review, edit, accept, reject, and publish generated guidance.",
     "candidates": "Rule candidates",
     "publishDescription": "Publishing writes accepted global rules only to selected Agents.",
-    "publishAccepted": "Publish accepted"
+    "publishAccepted": "Publish accepted",
+    "batchLabel": "Generation batch",
+    "allPending": "All pending",
+    "allRuns": "All generation batches",
+    "visibleCount_one": "{{count}} visible",
+    "visibleCount_other": "{{count}} visible",
+    "viewRun": "View generation"
   },
   "history": {
     "title": "Generation history",

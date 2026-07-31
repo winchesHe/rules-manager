@@ -152,7 +152,13 @@
     "description": "审核、编辑、接受、拒绝并发布生成的指引。",
     "candidates": "候选规则",
     "publishDescription": "发布只会把已接受的全局规则写入所选 Agent。",
-    "publishAccepted": "发布已接受规则"
+    "publishAccepted": "发布已接受规则",
+    "batchLabel": "生成批次",
+    "allPending": "全部待审核",
+    "allRuns": "全部生成批次",
+    "visibleCount_one": "当前 {{count}} 条",
+    "visibleCount_other": "当前 {{count}} 条",
+    "viewRun": "查看生成过程"
   },
   "history": {
     "title": "生成历史",

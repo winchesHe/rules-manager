@@ -36,7 +36,7 @@ export function ChatView({
   onOpenGeneratedRules,
 }: {
   initialThreadId?: string | null
-  onOpenGeneratedRules: () => void
+  onOpenGeneratedRules: (runId: string) => void
 }) {
   const { t } = useTranslation('chat')
   const [threads, setThreads] = useState<ChatThreadSummary[]>([])
@@ -206,7 +206,10 @@ export function ChatView({
             <p className="mt-1 text-sm text-muted">{t('description')}</p>
           </div>
           {thread?.status === 'completed' && thread.candidateCount > 0 && (
-            <Button className="gap-2 bg-primary text-primary-foreground" onPress={onOpenGeneratedRules}>
+            <Button
+              className="gap-2 bg-primary text-primary-foreground"
+              onPress={() => onOpenGeneratedRules(thread.runId)}
+            >
               {t('openGeneratedRules')}
               <ChevronRight aria-hidden="true" size={17} />
             </Button>

@@ -1484,3 +1484,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 回归验收：Core 25 suites / 258 tests、App 12 suites / 84 tests、Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
+
+## Rules 生成批次切换（2026-07-31）
+
+- Generated Rules 合并生成历史，不再提供独立的 Generation History 子导航。
+  顶部生成批次选择器以 `runId` 过滤候选；未选择批次时展示当前状态下的全部候选。
+- 生成批次与 draft / accepted / rejected 是两个正交筛选维度。直接进入 Rules
+  默认“全部待审核”；从 Chat 的“打开生成的规则”进入时携带当前 `runId`，
+  自动定位对应生成批次。
+- 已选择批次时提供“查看生成过程”，回到对应 Chat Thread；真实窗口验证了
+  Chat → Rules → Chat → Rules 往返后仍定位同一批次，并展示该批次的 51 条候选。
+- 发布语义保持累计 accepted，不按当前批次截断，避免 Agent 文件覆盖写入时丢失
+  其他批次已经接受的规则。
+- Rules 批次过滤拆为独立纯模块并增加单元测试；布局契约测试覆盖历史子导航移除、
+  Chat 传递 `runId` 与 Rules 初始批次定位。
+- 最终验收：Core 25 suites / 258 tests、App 13 suites / 86 tests、Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有
+  `tsdown define` 警告。
