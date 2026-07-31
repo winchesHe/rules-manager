@@ -198,6 +198,8 @@ describe('home workflow layout', () => {
     expect(reviewPage).toContain("'sessions.evidenceContext'")
     expect(reviewPage).toContain('data-evidence-source-contexts')
     expect(reviewPage).toContain("tr('review.evidenceHit')")
+    expect(reviewPage).toContain("tr('review.existingRuleBaseline')")
+    expect(reviewPage).toContain('load.context.eligibility')
     expect(reviewPage).not.toContain("tr('fields.evidenceReferences')")
   })
 

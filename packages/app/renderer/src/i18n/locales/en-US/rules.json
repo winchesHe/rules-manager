@@ -335,13 +335,17 @@
     "editLabel": "Edit rule candidate",
     "evidenceSummary": "Evidence summary",
     "sourceContext": "Source sessions and context",
-    "sourceContextDescription": "A redacted window loaded on demand from the local source session. The highlighted message is the Evidence cited for this rule.",
+    "sourceContextDescription": "A redacted window loaded on demand from the local source session. The highlighted message is the stored historical reference; its eligibility label shows whether it participates in current candidate calculation.",
     "noSourceContext": "This historical candidate has no locatable Evidence context.",
     "invalidReferences": "{{count}} historical Evidence reference could not be recognized.",
     "messageIndex": "Message #{{index}}",
     "loadingContext": "Loading source context…",
     "contextUnavailable": "Source context unavailable",
     "evidenceHit": "Evidence hit",
+    "existingRuleBaseline": "Existing rule baseline · excluded",
+    "existingRuleBaselineDescription": "This AGENTS / CLAUDE rule was injected when the session started. It is used only for existing-rule deduplication and is excluded from candidate calculation.",
+    "excludedPlatformContext": "Platform context · excluded",
+    "platformContextDescription": "This platform-injected runtime context is excluded from candidate calculation.",
     "roles": {
       "user": "User",
       "assistant": "Assistant"

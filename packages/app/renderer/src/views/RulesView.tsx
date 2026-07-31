@@ -3344,18 +3344,39 @@ function EvidenceSourceContext({
           <p className="mt-1 break-words text-xs leading-5 text-muted">{load.message}</p>
         </div>
       ) : (
-        <ol className="divide-y divide-border">
+        <>
+          {load.context.eligibility !== 'eligible' && (
+            <div className="border-b border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+              {load.context.eligibility === 'existing_rule_baseline'
+                ? tr('review.existingRuleBaselineDescription')
+                : tr('review.platformContextDescription')}
+            </div>
+          )}
+          <ol className="divide-y divide-border">
           {load.context.messages.map((message) => (
             <li
-              className={`grid gap-2 px-4 py-3 ${message.matched ? 'border-l-2 border-l-primary bg-primary/5' : ''}`}
+              className={`grid gap-2 px-4 py-3 ${evidenceMessageClass(
+                message.matched,
+                load.context.eligibility,
+              )}`}
               key={message.messageIndex}
             >
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-muted">
                   {tr(`review.roles.${message.role}`)}
                 </span>
-                {message.matched && (
+                {message.matched && load.context.eligibility === 'eligible' && (
                   <Chip color="accent" size="sm" variant="soft">{tr('review.evidenceHit')}</Chip>
+                )}
+                {message.matched && load.context.eligibility === 'existing_rule_baseline' && (
+                  <Chip color="warning" size="sm" variant="soft">
+                    {tr('review.existingRuleBaseline')}
+                  </Chip>
+                )}
+                {message.matched && load.context.eligibility === 'platform_context' && (
+                  <Chip color="warning" size="sm" variant="soft">
+                    {tr('review.excludedPlatformContext')}
+                  </Chip>
                 )}
               </div>
               {message.text && (
@@ -3374,10 +3395,21 @@ function EvidenceSourceContext({
               )}
             </li>
           ))}
-        </ol>
+          </ol>
+        </>
       )}
     </article>
   )
+}
+
+function evidenceMessageClass(
+  matched: boolean,
+  eligibility: SessionEvidenceContext['eligibility'],
+): string {
+  if (!matched) return ''
+  return eligibility === 'eligible'
+    ? 'border-l-2 border-l-primary bg-primary/5'
+    : 'border-l-2 border-l-warning bg-warning/5'
 }
 
 function evidenceReferenceKey(reference: EvidenceReference): string {

@@ -509,7 +509,9 @@ describe('readSessionPreview', () => {
       'INSERT INTO part (id, message_id, data) VALUES (?, ?, ?)',
     )
     insertMessage.run('m1', 'opencode-session', 1, JSON.stringify({ role: 'user', time: { created: 1 } }))
-    insertPart.run('p1', 'm1', JSON.stringify({ text: '第一条消息' }))
+    insertPart.run('p1', 'm1', JSON.stringify({
+      text: '# AGENTS.md instructions for /tmp/demo\n\n<INSTRUCTIONS>\n必须保留命中上下文\n</INSTRUCTIONS>',
+    }))
     insertMessage.run('m2', 'opencode-session', 2, JSON.stringify({ role: 'user', time: { created: 2 } }))
     insertPart.run('p2', 'm2', JSON.stringify({ text: '必须保留命中上下文' }))
     insertMessage.run('m3', 'opencode-session', 3, JSON.stringify({ role: 'assistant', time: { created: 3 } }))
@@ -529,8 +531,11 @@ describe('readSessionPreview', () => {
     db.close()
 
     try {
+      const baseline = await readSessionEvidenceContext('opencode-session', 0, {}, home)
+      expect(baseline.eligibility).toBe('existing_rule_baseline')
       const context = await readSessionEvidenceContext('opencode-session', 1, {}, home)
       expect(context.agent).toBe('opencode')
+      expect(context.eligibility).toBe('eligible')
       expect(context.messages.find((message) => message.matched)?.text)
         .toBe('必须保留命中上下文')
     } finally {

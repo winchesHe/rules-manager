@@ -50,6 +50,7 @@ export interface SessionEvidenceContext {
   sessionId: string
   agent: string
   messageIndex: number
+  eligibility: 'eligible' | 'existing_rule_baseline' | 'platform_context'
   messages: SessionEvidenceContextMessage[]
 }
 

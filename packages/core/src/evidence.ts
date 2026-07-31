@@ -71,8 +71,14 @@ export interface SessionEvidenceContext {
   sessionId: string
   agent: string
   messageIndex: number
+  eligibility: EvidenceEligibility
   messages: SessionEvidenceContextMessage[]
 }
+
+export type EvidenceEligibility =
+  | 'eligible'
+  | 'existing_rule_baseline'
+  | 'platform_context'
 
 export interface SessionEvidenceContextOptions {
   before?: number
@@ -234,6 +240,15 @@ function extractInjectedRuleBaseline(text: string): string[] | undefined {
     content,
     ...readReferencedRules(content),
   ])
+}
+
+function evidenceEligibility(message: RawEvidenceMessage): EvidenceEligibility {
+  if (roleOf(message) !== 'user') return 'eligible'
+  const { text } = extractContent(message.content)
+  if (extractInjectedRuleBaseline(text) === undefined) return 'eligible'
+  return /(?:^|\n)# (?:AGENTS|CLAUDE)\.md instructions for /.test(text.trimStart())
+    ? 'existing_rule_baseline'
+    : 'platform_context'
 }
 
 export function buildEvidenceBundle(
@@ -565,6 +580,10 @@ export async function readSessionEvidenceContext(
   }
 
   const { session, rawMessages } = await loadStoredSessionMessages(sessionId, homeDir)
+  const matchedRawMessage = rawMessages[messageIndex]
+  if (!matchedRawMessage) {
+    throw new Error(`session ${sessionId} 中找不到 Evidence 消息 ${messageIndex}`)
+  }
   const visibleMessages = previewMessagesWithSourceIndex(rawMessages)
   const matchedPosition = visibleMessages.findIndex(
     (message) => message.messageIndex === messageIndex,
@@ -586,6 +605,7 @@ export async function readSessionEvidenceContext(
     sessionId: session.id,
     agent: session.agent,
     messageIndex,
+    eligibility: evidenceEligibility(matchedRawMessage),
     messages,
   }
 }

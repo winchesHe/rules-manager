@@ -335,13 +335,17 @@
     "editLabel": "编辑候选规则",
     "evidenceSummary": "Evidence 摘要",
     "sourceContext": "来源会话与上下文",
-    "sourceContextDescription": "从本地源会话按需读取的脱敏窗口；高亮消息是生成该规则时引用的 Evidence。",
+    "sourceContextDescription": "从本地源会话按需读取的脱敏窗口；高亮消息是历史候选保存的引用位置，资格标签说明它是否参与当前规则计算。",
     "noSourceContext": "这条历史候选没有可定位的 Evidence 上下文。",
     "invalidReferences": "有 {{count}} 条历史 Evidence 引用无法识别。",
     "messageIndex": "消息 #{{index}}",
     "loadingContext": "正在读取来源上下文…",
     "contextUnavailable": "来源上下文不可用",
     "evidenceHit": "Evidence 命中",
+    "existingRuleBaseline": "已有规则基线 · 已排除",
+    "existingRuleBaselineDescription": "这是会话启动时注入的 AGENTS / CLAUDE 规则，只用于已有规则去重，不参与候选规则计算。",
+    "excludedPlatformContext": "平台上下文 · 已排除",
+    "platformContextDescription": "这是平台注入的运行上下文，不参与候选规则计算。",
     "roles": {
       "user": "用户",
       "assistant": "Assistant"

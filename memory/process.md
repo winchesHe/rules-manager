@@ -1665,3 +1665,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 设计与逐步验收记录见 `docs/plans/rule-evidence-context.md`；最终验收：Core 25 suites /
   268 tests、App 14 suites / 96 tests、skipped=0，Core/App production build 与
   `git diff --check` 全通过。Core build 仍只有既有 `tsdown define` 警告。
+
+## 历史 Evidence locator 资格标识（2026-07-31）
+
+- 用户在来源查看器中发现 10:01 旧 Run 保存的 locator 指向 AGENTS.md 注入消息。该 Run
+  早于 18:03 的 Rules 生成质量修复；当前 `buildEvidenceBundle` 已把 AGENTS / CLAUDE
+  注入转入 `existingRules` baseline 并 `continue`，不会进入 excerpts，候选资格校验也只
+  接受真实 user signal。
+- 来源查看器原先只验证 locator 能否定位，错误地统一标成“Evidence 命中”。按需上下文
+  现在返回 `eligible / existing_rule_baseline / platform_context`，Renderer 只有对
+  `eligible` 显示 Evidence 命中；规则基线和平台上下文使用黄色“已排除”状态并解释其
+  不参与当前候选计算。
+- 不删除或改写历史候选。真实旧 locator `019f96ef-...#0` 经 production Worker 验证返回
+  `existing_rule_baseline`，同时 OpenCode SQLite 单测覆盖 baseline 与普通用户消息在同一
+  Session 内的资格区分。计划见 `docs/plans/rule-evidence-baseline-eligibility.md`。
+- 最终验收：Core 25 suites / 268 tests、App 14 suites / 96 tests、skipped=0，Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
+  警告。
