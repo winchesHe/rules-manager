@@ -14,6 +14,7 @@ import {
 
 type GenerationRunOptions = {
   provider?: LlmProvider
+  model?: string | null
   effort?: LlmEffort
   fastMode?: boolean
 }

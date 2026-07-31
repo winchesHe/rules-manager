@@ -217,7 +217,12 @@
     "agentOptions": "Agent options",
     "agentOptionsDescription": "These options apply only to this generation and do not change your Settings defaults.",
     "agent": "Agent",
+    "agentDescription": "Choose the provider that runs this generation.",
+    "model": "Model",
+    "modelDescription": "The model list follows the selected Agent.",
+    "providerDefaultModel": "Use provider default model",
     "effort": "Reasoning Effort",
+    "effortDescription": "Control the reasoning depth for this run.",
     "fastMode": "Fast Mode",
     "fastModeDescription": "Use the faster service tier for this run.",
     "efforts": {

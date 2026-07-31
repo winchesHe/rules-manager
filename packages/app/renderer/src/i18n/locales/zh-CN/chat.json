@@ -25,6 +25,8 @@
   "run": "任务",
   "scope": "范围",
   "agent": "Agent",
+  "model": "Model",
+  "providerDefaultModel": "Provider 默认",
   "effort": "Reasoning Effort",
   "fastMode": "Fast Mode",
   "enabled": "开启",

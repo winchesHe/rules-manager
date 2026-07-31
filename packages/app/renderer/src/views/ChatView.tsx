@@ -305,6 +305,10 @@ export function ChatView({
                       : thread.request.provider === 'claude' ? 'Claude' : '—'
                   }
                 />
+                <ContextDetail
+                  label={t('model')}
+                  value={thread.request.model ?? t('providerDefaultModel')}
+                />
                 <ContextDetail label={t('effort')} value={thread.request.effort ?? '—'} />
                 <ContextDetail
                   label={t('fastMode')}

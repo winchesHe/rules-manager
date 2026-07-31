@@ -53,7 +53,7 @@ export interface RulesGenerateOptions {
   project?: string
   projectSlugs?: string[]
   provider?: LlmProvider
-  model?: string
+  model?: string | null
   effort?: LlmEffort
   fastMode?: boolean
   rounds?: number
@@ -266,11 +266,13 @@ export async function runRulesGenerate(
 ): Promise<void> {
   const config = loadLlmConfig(opts.homeDir)
   const provider = opts.provider ?? config.provider
-  const model = opts.model ?? (
-    opts.provider === undefined || opts.provider === config.provider
-      ? config.model
-      : undefined
-  )
+  const model = opts.model === null
+    ? undefined
+    : opts.model ?? (
+        opts.provider === undefined || opts.provider === config.provider
+          ? config.model
+          : undefined
+      )
   const effort = opts.effort ?? config.effort
   const fastMode = opts.fastMode ?? config.fastMode ?? false
   throwIfAborted(opts.signal)

@@ -25,6 +25,8 @@
   "run": "Run",
   "scope": "Scope",
   "agent": "Agent",
+  "model": "Model",
+  "providerDefaultModel": "Provider default",
   "effort": "Reasoning Effort",
   "fastMode": "Fast Mode",
   "enabled": "On",

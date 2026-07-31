@@ -57,6 +57,7 @@ import type {
   ProjectGenerationCandidate,
   LlmConfig,
   ProviderId,
+  ProviderSnapshot,
   RunCancelResult,
   RuleCandidate,
   RuleStatus,
@@ -123,6 +124,8 @@ const generationEfforts: LlmConfig['effort'][] = [
   'xhigh',
   'max',
 ]
+
+const DEFAULT_MODEL_KEY = '__provider_default__'
 
 function tr(
   key: string,
@@ -1562,7 +1565,12 @@ function GenerateRulesPage({
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [config, setConfig] = useState<LlmConfig | null>(null)
+  const [providerSnapshot, setProviderSnapshot] = useState<ProviderSnapshot>({
+    entries: [],
+    refreshing: false,
+  })
   const [provider, setProvider] = useState<ProviderId>('claude')
+  const [model, setModel] = useState<string | null>(null)
   const [effort, setEffort] = useState<LlmConfig['effort']>('medium')
   const [fastMode, setFastMode] = useState(false)
 
@@ -1583,12 +1591,24 @@ function GenerateRulesPage({
 
   useEffect(() => {
     let current = true
-    void window.api
-      .invoke<LlmConfig>('settings.load')
-      .then((value) => {
+    const onProvidersUpdated = (value: unknown) => {
+      if (current && value && typeof value === 'object') {
+        setProviderSnapshot(value as ProviderSnapshot)
+      }
+    }
+    window.api.onEvent('settings.providers.updated', onProvidersUpdated)
+    void afterNextPaint(() =>
+      Promise.all([
+        window.api.invoke<LlmConfig>('settings.load'),
+        window.api.invoke<ProviderSnapshot>('settings.providers.snapshot'),
+      ]),
+    )
+      .then(([value, snapshot]) => {
         if (!current) return
         setConfig(value)
+        setProviderSnapshot(snapshot)
         setProvider(value.provider)
+        setModel(value.model ?? null)
         setEffort(value.effort)
         setFastMode(value.fastMode ?? false)
       })
@@ -1599,8 +1619,28 @@ function GenerateRulesPage({
       })
     return () => {
       current = false
+      window.api.offEvent('settings.providers.updated', onProvidersUpdated)
     }
   }, [onError])
+
+  const availableModels = useMemo(() => {
+    const models =
+      providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []
+    const byId = new Map(models.map((item) => [item.id, item]))
+    if (provider === config?.provider && config.model && !byId.has(config.model)) {
+      byId.set(config.model, {
+        id: config.model,
+        label: config.model,
+        source: 'custom',
+      })
+    }
+    return [...byId.values()]
+  }, [config, provider, providerSnapshot])
+
+  function selectProvider(nextProvider: ProviderId): void {
+    setProvider(nextProvider)
+    setModel(nextProvider === config?.provider ? config.model ?? null : null)
+  }
 
   function toggleProject(slug: string): void {
     setSelectedProjects((current) =>
@@ -1620,6 +1660,7 @@ function GenerateRulesPage({
           mode,
           projects: mode === 'projects' ? selectedProjects : undefined,
           provider,
+          model,
           effort,
           fastMode,
         } satisfies Partial<GenerationRequest>),
@@ -1747,74 +1788,113 @@ function GenerateRulesPage({
                   </div>
                 )}
 
-                <div className="grid gap-4 rounded-xl border border-border bg-surface p-4">
-                  <div>
+                <div className="overflow-hidden rounded-xl border border-border bg-surface">
+                  <div className="p-4">
                     <h2 className="text-sm font-medium text-foreground">{tr('generate.agentOptions')}</h2>
                     <p className="mt-1 text-sm text-muted">{tr('generate.agentOptionsDescription')}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-                    <label className="grid gap-2 text-sm text-muted">
-                      {tr('generate.agent')}
-                      <Select
-                        aria-label={tr('generate.agent')}
-                        isDisabled={starting || !config}
-                        onSelectionChange={(key) => setProvider(String(key) as ProviderId)}
-                        selectedKey={provider}
-                      >
-                        <Select.Trigger>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            {generationProviders
-                              .filter((item) => config?.providers?.[item.id]?.enabled !== false)
-                              .map((item) => (
-                                <ListBox.Item id={item.id} key={item.id} textValue={item.label}>
-                                  {item.label}
-                                </ListBox.Item>
-                              ))}
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                    </label>
-                    <label className="grid gap-2 text-sm text-muted">
-                      {tr('generate.effort')}
-                      <Select
-                        aria-label={tr('generate.effort')}
-                        isDisabled={starting || !config}
-                        onSelectionChange={(key) =>
-                          setEffort(String(key) as LlmConfig['effort'])
-                        }
-                        selectedKey={effort}
-                      >
-                        <Select.Trigger>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            {generationEfforts.map((item) => (
-                              <ListBox.Item
-                                id={item}
-                                key={item}
-                                textValue={tr(`generate.efforts.${item}`)}
-                              >
-                                {tr(`generate.efforts.${item}`)}
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{tr('generate.agent')}</p>
+                      <p className="mt-1 text-xs text-muted">{tr('generate.agentDescription')}</p>
+                    </div>
+                    <Select
+                      aria-label={tr('generate.agent')}
+                      isDisabled={starting || !config}
+                      onSelectionChange={(key) => selectProvider(String(key) as ProviderId)}
+                      selectedKey={provider}
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {generationProviders
+                            .filter((item) => config?.providers?.[item.id]?.enabled !== false)
+                            .map((item) => (
+                              <ListBox.Item id={item.id} key={item.id} textValue={item.label}>
+                                {item.label}
                               </ListBox.Item>
                             ))}
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
-                    </label>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                   </div>
-                  <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{tr('generate.model')}</p>
+                      <p className="mt-1 text-xs text-muted">{tr('generate.modelDescription')}</p>
+                    </div>
+                    <Select
+                      aria-label={tr('generate.model')}
+                      isDisabled={starting || !config}
+                      onSelectionChange={(key) =>
+                        setModel(String(key) === DEFAULT_MODEL_KEY ? null : String(key))
+                      }
+                      selectedKey={model ?? DEFAULT_MODEL_KEY}
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item
+                            id={DEFAULT_MODEL_KEY}
+                            textValue={tr('generate.providerDefaultModel')}
+                          >
+                            {tr('generate.providerDefaultModel')}
+                          </ListBox.Item>
+                          {availableModels.map((item) => (
+                            <ListBox.Item id={item.id} key={item.id} textValue={item.label}>
+                              {item.label}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{tr('generate.effort')}</p>
+                      <p className="mt-1 text-xs text-muted">{tr('generate.effortDescription')}</p>
+                    </div>
+                    <Select
+                      aria-label={tr('generate.effort')}
+                      isDisabled={starting || !config}
+                      onSelectionChange={(key) =>
+                        setEffort(String(key) as LlmConfig['effort'])
+                      }
+                      selectedKey={effort}
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {generationEfforts.map((item) => (
+                            <ListBox.Item
+                              id={item}
+                              key={item}
+                              textValue={tr(`generate.efforts.${item}`)}
+                            >
+                              {tr(`generate.efforts.${item}`)}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] items-center gap-6 border-t border-border px-4 py-3.5 max-sm:grid-cols-1 max-sm:gap-2">
                     <div>
                       <p className="text-sm font-medium text-foreground">{tr('generate.fastMode')}</p>
-                      <p className="mt-1 text-sm text-muted">{tr('generate.fastModeDescription')}</p>
+                      <p className="mt-1 text-xs text-muted">{tr('generate.fastModeDescription')}</p>
                     </div>
                     <Switch
                       aria-label={tr('generate.fastMode')}
+                      className="justify-self-end max-sm:justify-self-start"
                       isDisabled={starting || !config}
                       isSelected={fastMode}
                       onChange={setFastMode}

@@ -65,6 +65,7 @@ describe('GenerationController', () => {
       mode: 'changed7d',
       projects: [],
       provider: 'codex',
+      model: 'gpt-5.4',
       effort: 'high',
       fastMode: true,
     }

@@ -217,7 +217,12 @@
     "agentOptions": "Agent 配置",
     "agentOptionsDescription": "这些选项只用于本次生成，不会修改 Settings 中的默认值。",
     "agent": "Agent",
+    "agentDescription": "选择执行本次生成的 Provider。",
+    "model": "Model",
+    "modelDescription": "Model 列表会随 Agent 切换。",
+    "providerDefaultModel": "使用 Provider 默认 Model",
     "effort": "Reasoning Effort",
+    "effortDescription": "控制本次任务的推理深度。",
     "fastMode": "Fast Mode",
     "fastModeDescription": "使用更快的服务层执行本次任务。",
     "efforts": {

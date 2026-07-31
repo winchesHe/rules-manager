@@ -165,6 +165,37 @@ describe('runRulesGenerate', () => {
     )
   })
 
+  it('显式选择 Provider 默认 Model 时不回退到 Settings Model', async () => {
+    fs.writeFileSync(
+      path.join(resolveWorkspace(home).workspaceDir, 'config.json'),
+      JSON.stringify({
+        provider: 'claude',
+        model: 'configured-sonnet',
+        effort: 'medium',
+      }),
+    )
+    const generate = jest.fn(async (..._args: unknown[]) => generated)
+
+    await runRulesGenerate({
+      homeDir: home,
+      provider: 'claude',
+      model: null,
+      dryRun: true,
+    }, {
+      extract: async () => evidence,
+      generate,
+    })
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.any(String),
+      'claude',
+      undefined,
+      'medium',
+      false,
+      expect.any(Object),
+    )
+  })
+
   it('只保留真实用户证据支持且不与既有规则重复的候选', async () => {
     const qualifiedEvidence: EvidenceBundle[] = [{
       ...evidence[0],

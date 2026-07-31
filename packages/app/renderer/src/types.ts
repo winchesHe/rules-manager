@@ -189,6 +189,7 @@ export interface GenerationRequest {
   mode: GenerationMode
   projects: string[]
   provider?: ProviderId
+  model?: string | null
   effort?: LlmConfig['effort']
   fastMode?: boolean
 }

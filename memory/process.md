@@ -1502,20 +1502,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。
 
-## Generation 运行级 Agent 配置（2026-07-31）
+## Generation 运行级 Agent 配置（2026-07-31，Model / 布局补充）
 
-- Generate 发起页新增 Agent（Claude / Codex）、Reasoning Effort 与 Fast Mode
-  选择器；初始值读取 Settings，禁用的 Provider 不进入可选列表，本次选择不会改写
-  全局默认配置。
-- Generation Request 扩展为携带 `provider / effort / fastMode`，IPC 会补齐旧调用
-  缺失的默认值并拒绝非法或已禁用 Provider；Worker 将三个字段显式传给
+- Generate 发起页新增 Agent（Claude / Codex）、Model、Reasoning Effort 与
+  Fast Mode 选择器；初始值读取 Settings，Model catalog 随 Agent 切换并监听
+  Provider 刷新，禁用的 Provider 不进入可选列表，本次选择不会改写全局默认配置。
+- 四个配置项统一使用“左侧说明、右侧控件”的横向行布局，窄屏才降为上下排列。
+- Generation Request 扩展为携带 `provider / model / effort / fastMode`，IPC 会补齐
+  旧调用缺失的默认值并拒绝非法或已禁用 Provider；Worker 将四个字段显式传给
   `runRulesGenerate`，运行元数据与 FS-first Chat Thread 同步保存本次配置快照。
-- Chat Context 展示本次 Run 的 Agent、Effort 与 Fast Mode；旧 Thread 没有这些
+- Chat Context 展示本次 Run 的 Agent、Model、Effort 与 Fast Mode；旧 Thread 没有这些
   字段时显示不可用，不伪装成当前默认值。
 - 修正跨 Provider 的默认 model 污染：当 Run 显式从全局默认 Provider 切换到另一
-  Provider 且未指定 model 时，不再沿用原 Provider 的顶层默认 model。
+  Provider 且未指定 model 时，不再沿用原 Provider 的顶层默认 model；显式选择
+  “Provider 默认 Model”使用 `null` 语义，也不会回退到 Settings Model。
 - 计划与验收记录见 `docs/plans/09-generation-agent-options.md`。回归覆盖 Controller
   传参、ChatStore 恢复、Renderer 布局契约和 Core Provider 参数覆盖。
-- 最终验收：Core 25 suites / 259 tests、App 13 suites / 86 tests、Core/App
+- 最终验收：Core 25 suites / 260 tests、App 13 suites / 86 tests、Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有
   `tsdown define` 警告。

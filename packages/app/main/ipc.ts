@@ -373,6 +373,7 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
       mode: 'recent',
       projects: [],
       provider: config.provider,
+      model: config.model ?? null,
       effort: config.effort,
       fastMode: config.fastMode ?? false,
     }
@@ -382,10 +383,14 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
     mode?: unknown
     projects?: unknown
     provider?: unknown
+    model?: unknown
     effort?: unknown
     fastMode?: unknown
   }
   const provider = request.provider ?? config.provider
+  const model = request.model === undefined
+    ? provider === config.provider ? config.model ?? null : null
+    : request.model
   const effort = request.effort ?? config.effort
   const fastMode = request.fastMode ?? config.fastMode ?? false
   if (provider !== 'claude' && provider !== 'codex') {
@@ -393,6 +398,17 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
   }
   if (config.providers?.[provider]?.enabled === false) {
     throw new Error('generation provider is disabled')
+  }
+  if (
+    model !== null
+    && (
+      typeof model !== 'string'
+      || !model.trim()
+      || model.length > 200
+      || /[\u0000-\u001f\u007f]/.test(model)
+    )
+  ) {
+    throw new Error('generation model must be null or a non-empty string')
   }
   if (!isLlmEffort(effort)) {
     throw new Error('generation effort is unsupported')
@@ -402,9 +418,15 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
   }
   const options: {
     provider: LlmProvider
+    model: string | null
     effort: LlmEffort
     fastMode: boolean
-  } = { provider, effort, fastMode }
+  } = {
+    provider,
+    model: typeof model === 'string' ? model.trim() : null,
+    effort,
+    fastMode,
+  }
   if (
     request.mode === 'recent'
     || request.mode === 'changed7d'

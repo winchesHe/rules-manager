@@ -125,6 +125,7 @@ void (async () => {
       ...options,
       runId: request.runId,
       provider: request.provider,
+      model: request.model,
       effort: request.effort,
       fastMode: request.fastMode,
       signal: abortController.signal,
