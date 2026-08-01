@@ -111,6 +111,27 @@ describe('ClaudeChatAdapter', () => {
     expect(calls[0]).not.toHaveProperty('systemPrompt')
   })
 
+  it('Rules turn 使用原生 outputFormat 并返回 structured output', async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const adapter = new ClaudeChatAdapter(({ options }) => {
+      calls.push(options as Record<string, unknown>)
+      return (async function* () {
+        yield {
+          type: 'result', subtype: 'success', session_id: 'claude-rules', result: '',
+          structured_output: [{ rule_text: '始终先验证' }],
+        }
+      })()
+    })
+    const schema = { type: 'array', items: { type: 'object' } }
+    const result = await adapter.start({
+      chatId: 'rules-chat', provider: 'claude', message: 'generate',
+      workingDirectory: '/workspace', config: { effort: 'high', fastMode: false },
+      outputSchema: schema,
+    })
+    expect(calls[0]).toMatchObject({ outputFormat: { type: 'json_schema', schema } })
+    expect(result.structuredOutput).toEqual([{ rule_text: '始终先验证' }])
+  })
+
   it('完整 Tool 内容只按 Native Item ID 分页读取', async () => {
     const adapter = new ClaudeChatAdapter(
       () => (async function* () {})(),

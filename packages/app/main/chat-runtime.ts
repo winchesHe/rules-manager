@@ -10,6 +10,7 @@ export interface NativeTurnRequest {
   message: string
   workingDirectory: string
   config: NativeTurnConfig
+  outputSchema?: Record<string, unknown>
   onEvent?: (event: NativeChatEvent) => void
 }
 
@@ -30,6 +31,7 @@ export interface NativeTurnResult {
   nativeSessionId: string
   content: string
   contextUsage?: { usedTokens: number; maxTokens: number }
+  structuredOutput?: unknown
 }
 
 export interface NativeToolItemReadRequest {

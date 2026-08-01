@@ -1872,3 +1872,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 真实 Electron 完成 Claude App 级 Archive/Restore、重命名、Active/Archived Rail 和删除确认
   Modal 验收；按不可恢复操作边界取消最终删除，原生删除由可控 Adapter 测试验证。
 - 提交信息：`feat: 完善 Chat 历史生命周期`。
+
+## Chat V1 Phase 6：Rules Run 原生 Chat 化（2026-08-02）
+
+- `rules.chat.start` 同步落 v2 Chat/可见用户请求与 run_metadata，随后后台执行 Evidence 与 Native
+  Provider；因此 Renderer 能立即进入 Chat，完成/失败通过 `chat.changed` 刷新持久投影。
+- 生成质量链没有复制：`runRulesGenerate` 新公开其依赖接口，由 Native Controller 注入 generate
+  callback，原有 qualify、Baseline、scope 与事务持久化仍是唯一实现。
+- Rules Provider turn 使用共享 `candidateRulesOutputSchema()`；Claude 读取 SDK
+  `structured_output`，Codex 传 `turn/start.outputSchema` 并按 itemId 分离 commentary/final，最后用
+  `parseCandidateRulesOutput()` 统一校验和解包。
+- Provider 的结构化正文只用于 Candidate pipeline，不写 messages.jsonl；Conversation 保存用户可见
+  请求、工具安全摘要和最终 Artifact 摘要。`rulesArtifact.runId` 是 Generated Rules 审核出口。
+- 自动 Session Context 来自 Evidence sourceSessions；首个生成 turn 注入一次 replace block。多项目
+  内部 turn 复用同一 Native Session，生成完成后的用户消息自然走普通 `chat.send`。
+- 隔离真实 Claude/Codex 均完成 Rules → Native Chat → 普通续聊，两个 Provider 的续聊前后 Native
+  ID 相同；自动化覆盖原生 schema 参数、Codex 多 Agent message 解包和 v2 Artifact 持久化。
+- 提交信息：`feat: 将 Rules Run 迁入原生 Chat`。

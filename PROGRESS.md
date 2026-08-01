@@ -617,3 +617,20 @@ npm test -- --runInBand test/unit/rule-candidates-schema.test.ts test/unit/redac
 - 真实 Electron 对 Phase 4 测试 Chat 完成重命名、Archive、打开永久删除确认但取消、Restore
   和 Rail 收起；未执行不可恢复的真实删除。删除顺序、失败保留和 not-found 幂等由测试覆盖。
 - 提交信息：`feat: 完善 Chat 历史生命周期`。
+
+## Chat V1 Phase 6：Rules Run 原生 Chat 化（2026-08-02）
+
+- Rules 的 Start Generate 改为 `rules.chat.start`：立即创建 `version=2`、`origin=rules`、
+  `intent=rules-generation` 的普通 Chat 并跳转，不再由入口创建只读 Generation Thread。
+- Evidence 提取、Baseline 去重、user_signal 资格、scope 修正、low 过滤及 Candidate 事务持久化
+  继续复用 `runRulesGenerate`；仅把其中 Provider 调用替换为当前 Chat 的 Native Runtime。
+- Claude 使用 Agent SDK `outputFormat=json_schema`，Codex 使用 app-server `turn/start.outputSchema`；
+  两端共享同一 Candidate schema，并把结果再次交给 Zod 与现有资格过滤校验。
+- 多项目生成在同一 Native Session 中顺序执行；自动选择 Evidence 对应 Session Context，首轮
+  注入 replace block。完成后保存 Candidate Artifact 关联与审核入口，后续 Composer 默认普通 Chat。
+- Codex Adapter 按 Agent item ID 聚合 delta，并选择最后一个合法结构化消息，避免 commentary 与
+  final answer 拼接破坏 JSON；结构化原文不写入可见 ChatStore。
+- 隔离工作区真实验证：Claude Session `53ff0490-0d7c-4cd1-a325-e7c22c2a64dc`、Codex Thread
+  `019fbe18-c17b-76a1-885c-0ea1c89e9439` 均完成结构化生成；随后普通消息返回 `CONTINUED` 且
+  Native Session ID 不变。
+- 提交信息：`feat: 将 Rules Run 迁入原生 Chat`。

@@ -329,6 +329,18 @@ export function ChatView({
     }
   }, [refresh])
 
+  useEffect(() => {
+    const onChanged = (value: unknown) => {
+      if (!value || typeof value !== 'object' || !('chatId' in value)) return
+      const chatId = (value as { chatId?: unknown }).chatId
+      if (typeof chatId === 'string' && chatId === selectedIdRef.current) {
+        void refresh(chatId)
+      }
+    }
+    window.api.onEvent('chat.changed', onChanged)
+    return () => window.api.offEvent('chat.changed', onChanged)
+  }, [refresh])
+
   const items = useMemo(() => {
     const persistedIds = new Set(threads.map((item) => item.id))
     return [
@@ -596,6 +608,18 @@ export function ChatView({
             <Button
               className="gap-2 bg-primary text-primary-foreground"
               onPress={() => onOpenGeneratedRules(thread.runId)}
+            >
+              {t('openGeneratedRules')}
+              <ChevronRight aria-hidden="true" size={17} />
+            </Button>
+          )}
+          {thread?.kind === 'native-chat'
+            && thread.origin === 'rules'
+            && thread.rulesArtifact
+            && thread.rulesArtifact.candidateCount > 0 && (
+            <Button
+              className="gap-2 bg-primary text-primary-foreground"
+              onPress={() => onOpenGeneratedRules(thread.rulesArtifact!.runId)}
             >
               {t('openGeneratedRules')}
               <ChevronRight aria-hidden="true" size={17} />

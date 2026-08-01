@@ -35,6 +35,7 @@ interface ActiveCodexTurn {
   threadId: string
   turnId: string | null
   content: string
+  agentMessages: Map<string, string>
   contextUsage?: { usedTokens: number; maxTokens: number }
   resolve: (value: NativeTurnResult) => void
   reject: (error: Error) => void
@@ -207,6 +208,7 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         threadId,
         turnId: null,
         content: '',
+        agentMessages: new Map(),
         resolve,
         reject,
         ...(request.onEvent ? { onEvent: request.onEvent } : {}),
@@ -223,6 +225,7 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         ...(request.config.model ? { model: request.config.model } : {}),
         effort: request.config.effort,
         serviceTier: request.config.fastMode ? 'fast' : null,
+        ...(request.outputSchema ? { outputSchema: request.outputSchema } : {}),
       }))
       const turnId = asString(asRecord(response.turn).id)
       if (turnId && this.active === activeTurn) activeTurn.turnId = turnId
@@ -264,6 +267,11 @@ export class CodexChatAdapter implements ChatProviderAdapter {
     if (method === 'item/agentMessage/delta') {
       if (typeof params.delta === 'string') {
         active.content += params.delta
+        const itemId = asString(params.itemId) ?? `message-${active.agentMessages.size}`
+        active.agentMessages.set(
+          itemId,
+          `${active.agentMessages.get(itemId) ?? ''}${params.delta}`,
+        )
         active.onEvent?.({ type: 'assistant_delta', text: params.delta })
       }
       return
@@ -294,15 +302,31 @@ export class CodexChatAdapter implements ChatProviderAdapter {
     const status = asString(turn.status) ?? 'failed'
     this.active = null
     if (status === 'completed' || status === 'interrupted') {
+      const structuredOutput = [...active.agentMessages.values()]
+        .reverse()
+        .map(parseStructuredOutput)
+        .find((value) => value !== undefined)
+        ?? parseStructuredOutput(active.content)
       active.resolve({
         nativeSessionId: active.threadId,
         content: active.content,
         ...(active.contextUsage ? { contextUsage: active.contextUsage } : {}),
+        ...(structuredOutput !== undefined
+          ? { structuredOutput }
+          : {}),
       })
       return
     }
     const detail = asString(asRecord(turn.error).message)
     active.reject(new Error(detail ?? `Codex turn ${status}`))
+  }
+}
+
+function parseStructuredOutput(content: string): unknown {
+  try {
+    return JSON.parse(content)
+  } catch {
+    return undefined
   }
 }
 

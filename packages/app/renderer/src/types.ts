@@ -402,6 +402,13 @@ export interface NativeChatThreadSummary {
   lastError: string | null
   runId?: string
   intent?: 'chat' | 'rules-generation'
+  rulesArtifact?: {
+    runId: string
+    projectCount: number
+    sessionCount: number
+    candidateCount: number
+    projectResponses: ProjectGenerationResponse[]
+  }
 }
 
 export interface NativeSessionReference {

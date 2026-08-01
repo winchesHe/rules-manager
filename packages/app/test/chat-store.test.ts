@@ -193,6 +193,31 @@ describe('ChatStore', () => {
     expect(fs.existsSync(path.join(chatsDir, 'chat-lifecycle'))).toBe(false)
   })
 
+  it('Native Rules Chat 保存 Candidate Artifact 关联而不退化成 v1 Thread', () => {
+    const { store } = createStore()
+    store.createNativeThread({
+      id: 'rules-native', provider: 'codex', origin: 'rules', title: '生成规则',
+      createdAt: '2026-08-01T01:00:00.000Z', runId: 'rules-native',
+      intent: 'rules-generation', defaultTurnConfig: { effort: 'high', fastMode: true },
+    })
+    store.bindNativeSession('rules-native', 'codex-rules-thread', '2026-08-01T01:00:01.000Z')
+    store.completeNativeRulesRun('rules-native', {
+      runId: 'rules-native', projectCount: 1, sessionCount: 2, candidateCount: 1,
+      projectResponses: [{
+        projectSlug: 'demo', summary: 'Generated 1', status: 'completed',
+        candidates: [{
+          rule: '先运行测试', scope: 'project', confidence: 'high',
+          reasoning: '用户明确要求', evidenceRefs: ['s1:0'],
+        }],
+      }],
+    }, '2026-08-01T01:00:02.000Z')
+    expect(store.readThread('rules-native')).toMatchObject({
+      version: 2, origin: 'rules', intent: 'rules-generation', status: 'ready',
+      nativeSessionId: 'codex-rules-thread',
+      rulesArtifact: { runId: 'rules-native', candidateCount: 1 },
+    })
+  })
+
   it('创建 FS-first Generation Thread 并保存用户可见请求', () => {
     const { chatsDir, store } = createStore()
     store.createGenerationThread({

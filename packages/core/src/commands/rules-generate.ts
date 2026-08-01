@@ -67,7 +67,7 @@ export interface RulesGenerateOptions {
   onProjectResponse?: (response: ProjectGenerationResponse) => void
 }
 
-interface RulesGenerateDeps {
+export interface RulesGenerateDeps {
   extract?: (options: RulesGenerateOptions) => Promise<EvidenceBundle[]>
   generate?: (
     prompt: string,

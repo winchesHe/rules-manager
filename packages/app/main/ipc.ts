@@ -72,6 +72,7 @@ const nativeChatController = new NativeChatController({
   runtime: chatRuntime,
   workingDirectory: workspace.workspaceDir,
   onEvent: broadcastNativeChatEvent,
+  onThreadChanged: broadcastNativeChatChanged,
 })
 const scanController = new ScanController(
   (request) =>
@@ -257,6 +258,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('rules.generate', (_event, request?: unknown) => {
     const generation = validateGenerateRequest(request)
     return generationController.start(generation)
+  })
+  ipcMain.handle('rules.chat.start', (_event, request?: unknown) => {
+    return nativeChatController.startRulesGeneration(validateGenerateRequest(request))
   })
   ipcMain.handle('rules.generate.status', () => generationController.status())
   ipcMain.handle('rules.generate.history', () => {
@@ -755,6 +759,12 @@ function broadcastGenerationEvent(event: GenerationControllerEvent): void {
 
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) window.webContents.send(channel, payload)
+  }
+}
+
+function broadcastNativeChatChanged(chatId: string): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('chat.changed', { chatId })
   }
 }
 

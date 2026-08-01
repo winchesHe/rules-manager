@@ -101,6 +101,13 @@ export interface NativeChatThreadSummary {
   lastError: string | null
   runId?: string
   intent?: 'chat' | 'rules-generation'
+  rulesArtifact?: {
+    runId: string
+    projectCount: number
+    sessionCount: number
+    candidateCount: number
+    projectResponses: ProjectGenerationResponse[]
+  }
 }
 
 export interface NativeChatThread extends NativeChatThreadSummary {
@@ -252,6 +259,25 @@ export class ChatStore {
       nativeState: thread.nativeSessionId ? 'resume-failed' : thread.nativeState,
       updatedAt: at,
       lastError: error,
+    } satisfies NativeChatThreadFile)
+  }
+
+  completeNativeRulesRun(
+    threadId: string,
+    artifact: NonNullable<NativeChatThreadFile['rulesArtifact']>,
+    at: string,
+  ): void {
+    const thread = this.requireNativeThread(threadId)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      status: 'ready',
+      nativeState: thread.nativeSessionId ? 'ready' : thread.nativeState,
+      updatedAt: at,
+      lastError: null,
+      rulesArtifact: {
+        ...artifact,
+        projectResponses: artifact.projectResponses.map(cloneProjectResponse),
+      },
     } satisfies NativeChatThreadFile)
   }
 

@@ -448,11 +448,7 @@ export function RulesView({
         initialProjectSlug={initialProjectSlug}
         onBack={() => setPage('overview')}
         onError={setActionError}
-        onStarted={(status) => {
-          setGeneration(status)
-          if (status.runId) onOpenChat(status.runId)
-          else setActionError(tr('errors.generationFailed'))
-        }}
+        onStarted={onOpenChat}
       />
     )
   }
@@ -1751,7 +1747,7 @@ function GenerateRulesPage({
   error: string | null
   onBack: () => void
   onError: (value: string | null) => void
-  onStarted: (status: GenerationStatus) => void
+  onStarted: (chatId: string) => void
   initialProjectSlug?: string | null
 }) {
   const [mode, setMode] = useState<GenerateMode>(initialProjectSlug ? 'projects' : 'changed7d')
@@ -1852,8 +1848,8 @@ function GenerateRulesPage({
     setStarting(true)
     onError(null)
     try {
-      await afterNextPaint(() =>
-        window.api.invoke<GenerationStartResult>('rules.generate', {
+      const result = await afterNextPaint(() =>
+        window.api.invoke<{ chatId: string; runId: string }>('rules.chat.start', {
           mode,
           projects: mode === 'projects' ? selectedProjects : undefined,
           provider,
@@ -1862,9 +1858,7 @@ function GenerateRulesPage({
           fastMode,
         } satisfies Partial<GenerationRequest>),
       )
-      const status = await window.api.invoke<GenerationStatus>('rules.generate.status')
-      if (status.error) onError(status.error)
-      onStarted(status)
+      onStarted(result.chatId)
     } catch (reason: unknown) {
       onError(reason instanceof Error ? reason.message : String(reason))
     } finally {

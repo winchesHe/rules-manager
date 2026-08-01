@@ -97,6 +97,9 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
       effort: request.config.effort,
       settings: { fastMode: request.config.fastMode },
       ...(request.config.model ? { model: request.config.model } : {}),
+      ...(request.outputSchema
+        ? { outputFormat: { type: 'json_schema', schema: request.outputSchema } }
+        : {}),
       ...(resuming
         ? { resume: request.nativeSessionId }
         : {
@@ -112,6 +115,7 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
     let nativeSessionId = request.nativeSessionId ?? ''
     let resultContent = ''
     let contextUsage: NativeTurnResult['contextUsage']
+    let structuredOutput: unknown
     const toolActivities = new Map<number, NonNullable<ReturnType<typeof safeToolActivity>>>()
     try {
       for await (const value of stream) {
@@ -128,6 +132,9 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
             throw new Error(claudeError(message))
           }
           if (typeof message.result === 'string') resultContent = message.result
+          if (message.structured_output !== undefined) {
+            structuredOutput = message.structured_output
+          }
           contextUsage = claudeContextUsage(message.modelUsage)
           if (contextUsage) request.onEvent?.({ type: 'usage', contextUsage })
         }
@@ -193,6 +200,7 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
       nativeSessionId,
       content: resultContent,
       ...(contextUsage ? { contextUsage } : {}),
+      ...(structuredOutput !== undefined ? { structuredOutput } : {}),
     }
   }
 }

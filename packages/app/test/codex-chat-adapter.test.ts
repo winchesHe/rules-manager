@@ -129,6 +129,43 @@ describe('CodexChatAdapter', () => {
       .toMatchObject({ serviceTier: null })
   })
 
+  it('Rules turn 把 outputSchema 交给原生 turn/start', async () => {
+    const server = fakeServer()
+    const adapter = new CodexChatAdapter(() => server.child)
+    const schema = { type: 'array', items: { type: 'object' } }
+    await adapter.start({
+      chatId: 'rules-chat', provider: 'codex', message: 'generate',
+      workingDirectory: '/fixed-workspace',
+      config: { effort: 'high', fastMode: false }, outputSchema: schema,
+    })
+    expect(server.requests.find((item) => item.method === 'turn/start')?.params)
+      .toMatchObject({ outputSchema: schema })
+  })
+
+  it('Rules turn 从多个 Agent message 中选择最后一个合法结构化结果', async () => {
+    const server = fakeServer(false)
+    const adapter = new CodexChatAdapter(() => server.child)
+    const pending = adapter.start({
+      chatId: 'rules-chat', provider: 'codex', message: 'generate',
+      workingDirectory: '/fixed-workspace', config: { effort: 'high', fastMode: false },
+      outputSchema: { type: 'object' },
+    })
+    while (!server.requests.some((item) => item.method === 'turn/start')) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    await new Promise((resolve) => setImmediate(resolve))
+    server.notify('item/agentMessage/delta', {
+      threadId: 'codex-thread-1', itemId: 'commentary', delta: '{"candidates":[{"rule":"draft"}]}',
+    })
+    server.notify('item/agentMessage/delta', {
+      threadId: 'codex-thread-1', itemId: 'final', delta: '{"candidates":[]}',
+    })
+    server.notify('turn/completed', {
+      threadId: 'codex-thread-1', turn: { id: 'codex-turn-1', status: 'completed' },
+    })
+    await expect(pending).resolves.toMatchObject({ structuredOutput: { candidates: [] } })
+  })
+
   it('运行中 interrupt 发给 app-server 而不删除 thread', async () => {
     const server = fakeServer(false)
     const adapter = new CodexChatAdapter(() => server.child)

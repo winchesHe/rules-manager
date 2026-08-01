@@ -18,6 +18,20 @@ export const candidateRulesSchema = z.array(z.object({
 
 export type CandidateRule = z.infer<typeof candidateRulesSchema>[number]
 
+export function candidateRulesOutputSchema(): Record<string, unknown> {
+  return codexOutputSchema(providerJsonSchema(candidateRulesSchema))
+}
+
+export function parseCandidateRulesOutput(value: unknown): CandidateRule[] {
+  const candidates = value
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && 'candidates' in value
+      ? (value as { candidates: unknown }).candidates
+      : value
+  return candidateRulesSchema.parse(candidates)
+}
+
 export interface LlmRequestOptions {
   fastMode?: boolean
   maxRetries?: number
