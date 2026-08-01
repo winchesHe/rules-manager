@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import Database from 'better-sqlite3'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const tsxCli = path.resolve(projectRoot, '../../node_modules/tsx/dist/cli.mjs')
@@ -13,6 +14,22 @@ function runCli(args: string[], env: NodeJS.ProcessEnv = {}) {
     cwd: projectRoot,
     encoding: 'utf8',
     env: { ...process.env, ...env },
+  })
+}
+
+function runCliAndCloseStdout(args: string[]): Promise<{ code: number | null; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [tsxCli, 'src/cli.ts', ...args], {
+      cwd: projectRoot,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stderr = ''
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk: string) => { stderr += chunk })
+    child.stdout.once('data', () => child.stdout.destroy())
+    child.once('error', reject)
+    child.once('close', (code) => resolve({ code, stderr }))
   })
 }
 
@@ -46,6 +63,46 @@ describe('CLI workspace options', () => {
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('unknown option')
+  })
+
+  it('sessions show 暴露 NDJSON 流式输出选项', () => {
+    const result = runCli(['sessions', 'show', '--help'])
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('--stream')
+    expect(result.stdout).toContain('NDJSON')
+  })
+
+  it('sessions show --stream 的下游提前关闭时正常退出', async () => {
+    const workspaceParent = path.join(tempDir, 'stream-workspace')
+    expect(
+      runCli(['init', '--non-interactive', '--workspace', workspaceParent]).status,
+    ).toBe(0)
+    const workspace = path.join(workspaceParent, '.memory-manager')
+    const sourcePath = path.join(tempDir, 'large-stream.jsonl')
+    const record = `${JSON.stringify({ type: 'message', text: 'x'.repeat(512) })}\n`
+    fs.writeFileSync(sourcePath, record.repeat(20_000))
+    const db = new Database(path.join(workspace, 'memory.db'))
+    db.prepare(`
+      INSERT INTO sessions
+        (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+         status, first_seen_at, last_seen_at)
+      VALUES ('cli-stream', 'codex', ?, ?, 'default', 'hash', '2026-01-01',
+              'new', '2026-01-01', '2026-01-01')
+    `).run(sourcePath, path.join(workspace, 'projects/default/cli-stream.jsonl'))
+    db.close()
+
+    const result = await runCliAndCloseStdout([
+      'sessions',
+      'show',
+      'cli-stream',
+      '--stream',
+      '--workspace',
+      workspaceParent,
+    ])
+
+    expect(result.code).toBe(0)
+    expect(result.stderr).not.toContain('EPIPE')
   })
 
   it('仅指定 workspace 时显示帮助并正常退出', () => {

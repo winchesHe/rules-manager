@@ -53,12 +53,28 @@ describe('sessions show', () => {
     const output = jest.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await runSessionsShow('ses_test', { homeDir: home }, { readOpenCodeMessages })
+    const streamChunks: string[] = []
+    await runSessionsShow(
+      'ses_test',
+      { homeDir: home, stream: true },
+      {
+        readOpenCodeMessages,
+        writeOutput: async (chunk: string) => streamChunks.push(chunk) > 0,
+      },
+    )
 
-    expect(readOpenCodeMessages).toHaveBeenCalledWith({
+    expect(readOpenCodeMessages).toHaveBeenCalledTimes(2)
+    expect(readOpenCodeMessages).toHaveBeenLastCalledWith({
       sessionId: 'ses_test',
       directory: '/repo',
     })
     expect(output).toHaveBeenCalledWith(expect.stringContaining('private prompt'))
+    expect(JSON.parse(streamChunks[0])).toMatchObject({
+      sessionId: 'ses_test',
+      agent: 'opencode',
+      index: 0,
+      record: { info: { role: 'user' } },
+    })
     expect(fileHash(dbPath)).toBe(workspaceHash)
     expect(fileHash(sourcePath)).toBe(sourceHash)
     expect(fs.readdirSync(workspaceDir).filter((name) => name.includes('ses_test'))).toEqual([])
@@ -101,6 +117,148 @@ describe('sessions show', () => {
     expect(output).toHaveBeenCalledWith(expect.stringContaining('"agent": "codex"'))
     expect(fileHash(dbPath)).toBe(workspaceHash)
     expect(fileHash(sourcePath)).toBe(sourceHash)
+  })
+
+  it('以 NDJSON 顺序流式输出 JSONL records', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sourcePath = path.join(home, 'stream-codex.jsonl')
+    fs.writeFileSync(
+      sourcePath,
+      '\uFEFF' + [
+        JSON.stringify({ type: 'first', text: 'one' }),
+        JSON.stringify({ type: 'second', text: 'two' }),
+      ].join('\r\n') + '\r\n',
+    )
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('stream-codex', 'codex', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/stream-codex.jsonl'))
+    workspace.close()
+    const chunks: string[] = []
+
+    await runSessionsShow(
+      'stream-codex',
+      { homeDir: home, stream: true },
+      { writeOutput: async (chunk: string) => chunks.push(chunk) > 0 },
+    )
+
+    expect(chunks).toHaveLength(2)
+    expect(chunks.every((chunk) => chunk.endsWith('\n'))).toBe(true)
+    expect(chunks.map((chunk) => JSON.parse(chunk))).toEqual([
+      {
+        sessionId: 'stream-codex',
+        agent: 'codex',
+        index: 0,
+        record: { type: 'first', text: 'one' },
+      },
+      {
+        sessionId: 'stream-codex',
+        agent: 'codex',
+        index: 1,
+        record: { type: 'second', text: 'two' },
+      },
+    ])
+  })
+
+  it('流式模式允许超过 50 MiB 的 JSONL，并可由下游提前停止', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sourcePath = path.join(home, 'large-codex.jsonl')
+    fs.writeFileSync(sourcePath, `${JSON.stringify({ type: 'first', text: 'available' })}\n`)
+    fs.truncateSync(sourcePath, 50 * 1024 * 1024 + 1)
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('large-codex', 'codex', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/large-codex.jsonl'))
+    workspace.close()
+    const chunks: string[] = []
+
+    await runSessionsShow(
+      'large-codex',
+      { homeDir: home, stream: true },
+      {
+        writeOutput: async (chunk: string) => {
+          chunks.push(chunk)
+          return false
+        },
+      },
+    )
+
+    expect(chunks).toHaveLength(1)
+    expect(JSON.parse(chunks[0])).toMatchObject({
+      sessionId: 'large-codex',
+      index: 0,
+      record: { text: 'available' },
+    })
+    await expect(runSessionsShow('large-codex', { homeDir: home })).rejects.toThrow(
+      '超过 50 MiB',
+    )
+  })
+
+  it('流式 JSONL 保留非法记录的文件与行号诊断', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sourcePath = path.join(home, 'invalid-stream.jsonl')
+    fs.writeFileSync(sourcePath, '{"type":"message"}\nnot-json\n')
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('invalid-stream', 'pi', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/invalid-stream.jsonl'))
+    workspace.close()
+
+    await expect(
+      runSessionsShow(
+        'invalid-stream',
+        { homeDir: home, stream: true },
+        { writeOutput: async () => true },
+      ),
+    ).rejects.toThrow(`${sourcePath}:2`)
+  })
+
+  it('流式输出遇到 EPIPE 时正常结束', async () => {
+    await runInit({ nonInteractive: true, homeDir: home })
+    const { dbPath, workspaceDir } = resolveWorkspace(home)
+    const sourcePath = path.join(home, 'epipe.jsonl')
+    fs.writeFileSync(sourcePath, `${JSON.stringify({ type: 'message' })}\n`)
+    const workspace = new Database(dbPath)
+    workspace
+      .prepare(`
+        INSERT INTO sessions
+          (id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+           status, first_seen_at, last_seen_at)
+        VALUES ('epipe', 'cursor', ?, ?, 'default', 'hash', '2026-01-01',
+                'new', '2026-01-01', '2026-01-01')
+      `)
+      .run(sourcePath, path.join(workspaceDir, 'projects/default/epipe.jsonl'))
+    workspace.close()
+    const brokenPipe = Object.assign(new Error('broken pipe'), { code: 'EPIPE' })
+
+    await expect(
+      runSessionsShow(
+        'epipe',
+        { homeDir: home, stream: true },
+        { writeOutput: async () => { throw brokenPipe } },
+      ),
+    ).resolves.toBeUndefined()
   })
 
   it.each([
@@ -163,8 +321,19 @@ describe('sessions show', () => {
     const output = jest.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await runSessionsShow('copilot-events', { homeDir: home })
+    const streamChunks: string[] = []
+    await runSessionsShow(
+      'copilot-events',
+      { homeDir: home, stream: true },
+      { writeOutput: async (chunk: string) => streamChunks.push(chunk) > 0 },
+    )
 
     expect(output).toHaveBeenCalledWith(expect.stringContaining('copilot event'))
+    expect(JSON.parse(streamChunks[0])).toMatchObject({
+      agent: 'copilot',
+      index: 0,
+      record: { text: 'copilot event' },
+    })
     expect(fileHash(sourcePath)).toBe(sourceHash)
   })
 
@@ -207,9 +376,24 @@ describe('sessions show', () => {
     const output = jest.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await runSessionsShow('copilot-turns', { homeDir: home })
+    const streamChunks: string[] = []
+    await runSessionsShow(
+      'copilot-turns',
+      { homeDir: home, stream: true },
+      { writeOutput: async (chunk: string) => streamChunks.push(chunk) > 0 },
+    )
 
     expect(output).toHaveBeenCalledWith(expect.stringContaining('copilot private prompt'))
     expect(output).toHaveBeenCalledWith(expect.stringContaining('copilot private response'))
+    expect(JSON.parse(streamChunks[0])).toMatchObject({
+      agent: 'copilot',
+      index: 0,
+      record: {
+        turn_index: 0,
+        user_message: 'copilot private prompt',
+        assistant_response: 'copilot private response',
+      },
+    })
     expect(fileHash(sourcePath)).toBe(sourceHash)
     expect(fileHash(storePath)).toBe(storeHash)
   })

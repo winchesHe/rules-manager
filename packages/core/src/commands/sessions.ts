@@ -1,11 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import readline from 'node:readline'
 import Database from 'better-sqlite3'
 import { collectFilesRecursive } from '../adapters/shared.js'
 import { resolveWorkspace } from '../workspace.js'
 
 interface SessionsShowOptions {
   homeDir?: string
+  stream?: boolean
 }
 
 interface OpenCodeReadInput {
@@ -15,6 +17,7 @@ interface OpenCodeReadInput {
 
 interface SessionsShowDeps {
   readOpenCodeMessages?: (input: OpenCodeReadInput) => Promise<unknown>
+  writeOutput?: (chunk: string) => boolean | void | Promise<boolean | void>
 }
 
 interface StoredSessionRow {
@@ -74,7 +77,7 @@ function loadOpenCodeDirectory(sourcePath: string, sessionId: string): string {
   }
 }
 
-function jsonlFiles(sourcePath: string, agent: string): string[] {
+function jsonlFiles(sourcePath: string, agent: string, enforceShowLimit = true): string[] {
   if (!fs.existsSync(sourcePath)) throw new Error(`${agent} session 源不存在：${sourcePath}`)
   const stat = fs.statSync(sourcePath)
   const files = stat.isDirectory()
@@ -82,10 +85,118 @@ function jsonlFiles(sourcePath: string, agent: string): string[] {
     : [sourcePath]
   if (files.length === 0) throw new Error(`${agent} session 没有 JSONL 文件：${sourcePath}`)
   const totalBytes = files.reduce((sum, filePath) => sum + fs.statSync(filePath).size, 0)
-  if (totalBytes > MAX_SHOW_BYTES) {
+  if (enforceShowLimit && totalBytes > MAX_SHOW_BYTES) {
     throw new Error(`${agent} session 超过 50 MiB，暂不支持一次性输出：${sourcePath}`)
   }
   return files
+}
+
+function isBrokenPipe(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'EPIPE'
+}
+
+function writeStdout(chunk: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (error?: Error | null) => {
+      if (settled) return
+      settled = true
+      process.stdout.off('error', onError)
+      if (!error) {
+        resolve(true)
+      } else if (isBrokenPipe(error)) {
+        resolve(false)
+      } else {
+        reject(error)
+      }
+    }
+    const onError = (error: Error) => finish(error)
+
+    process.stdout.once('error', onError)
+    try {
+      process.stdout.write(chunk, (error) => finish(error))
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
+}
+
+async function writeStreamRecord(
+  sessionId: string,
+  agent: string,
+  index: number,
+  record: unknown,
+  writeOutput: NonNullable<SessionsShowDeps['writeOutput']>,
+): Promise<boolean> {
+  const chunk = `${JSON.stringify({ sessionId, agent, index, record })}\n`
+  try {
+    return (await writeOutput(chunk)) !== false
+  } catch (error) {
+    if (isBrokenPipe(error)) return false
+    throw error
+  }
+}
+
+async function streamJsonlRecords(
+  sessionId: string,
+  agent: string,
+  sourcePath: string,
+  writeOutput: NonNullable<SessionsShowDeps['writeOutput']>,
+): Promise<void> {
+  let recordIndex = 0
+  for (const filePath of jsonlFiles(sourcePath, agent, false)) {
+    const input = fs.createReadStream(filePath, { encoding: 'utf8' })
+    const lines = readline.createInterface({ input, crlfDelay: Infinity })
+    let lineNumber = 0
+    try {
+      for await (const rawLine of lines) {
+        lineNumber++
+        const line = rawLine.replace(/^\uFEFF/, '')
+        if (!line.trim()) continue
+        let record: unknown
+        try {
+          record = JSON.parse(line)
+        } catch {
+          throw new Error(`${agent} JSONL 解析失败：${filePath}:${lineNumber}`)
+        }
+        const shouldContinue = await writeStreamRecord(
+          sessionId,
+          agent,
+          recordIndex,
+          record,
+          writeOutput,
+        )
+        recordIndex++
+        if (!shouldContinue) return
+      }
+    } finally {
+      lines.close()
+      input.destroy()
+    }
+  }
+  if (recordIndex === 0) throw new Error(`${agent} session 没有可解析内容：${sourcePath}`)
+}
+
+async function streamRecords(
+  sessionId: string,
+  agent: string,
+  records: Iterable<unknown>,
+  writeOutput: NonNullable<SessionsShowDeps['writeOutput']>,
+  emptyMessage: string,
+): Promise<void> {
+  let recordIndex = 0
+  for (const record of records) {
+    const shouldContinue = await writeStreamRecord(
+      sessionId,
+      agent,
+      recordIndex,
+      record,
+      writeOutput,
+    )
+    recordIndex++
+    if (!shouldContinue) return
+  }
+  if (recordIndex === 0) throw new Error(emptyMessage)
 }
 
 function readJsonlRecords(sourcePath: string, agent: string): unknown[] {
@@ -148,18 +259,66 @@ function readCopilotSession(sessionId: string, sourcePath: string): Record<strin
   }
 }
 
+async function streamCopilotSession(
+  sessionId: string,
+  sourcePath: string,
+  writeOutput: NonNullable<SessionsShowDeps['writeOutput']>,
+): Promise<void> {
+  const eventsPath = path.basename(sourcePath) === 'events.jsonl'
+    ? sourcePath
+    : path.join(path.dirname(sourcePath), 'events.jsonl')
+  if (fs.existsSync(eventsPath)) {
+    await streamJsonlRecords(sessionId, 'copilot', eventsPath, writeOutput)
+    return
+  }
+
+  const storePath = copilotStorePath(sourcePath)
+  if (!storePath) {
+    throw new Error(`Copilot session 只有 metadata，源端未持久化对话：${sessionId}`)
+  }
+  const db = new Database(storePath, { readonly: true, fileMustExist: true })
+  try {
+    const turns = db
+      .prepare(`
+        SELECT turn_index, user_message, assistant_response, timestamp
+        FROM turns
+        WHERE session_id = ?
+        ORDER BY turn_index
+      `)
+      .iterate(sessionId)
+    await streamRecords(
+      sessionId,
+      'copilot',
+      turns,
+      writeOutput,
+      `Copilot session 只有 metadata，源端未持久化对话：${sessionId}`,
+    )
+  } finally {
+    db.close()
+  }
+}
+
 export async function runSessionsShow(
   sessionId: string,
   opts: SessionsShowOptions = {},
   deps: SessionsShowDeps = {},
 ): Promise<void> {
   const session = loadStoredSession(sessionId, opts.homeDir)
+  const writeOutput = deps.writeOutput ?? writeStdout
   if (JSONL_AGENTS.has(session.agent)) {
+    if (opts.stream) {
+      await streamJsonlRecords(sessionId, session.agent, session.source_path, writeOutput)
+      return
+    }
     const records = readJsonlRecords(session.source_path, session.agent)
     console.log(JSON.stringify({ sessionId, agent: session.agent, records }, null, 2))
     return
   }
   if (session.agent === 'copilot') {
+    if (opts.stream) {
+      await streamCopilotSession(sessionId, session.source_path, writeOutput)
+      return
+    }
     const content = readCopilotSession(sessionId, session.source_path)
     console.log(JSON.stringify({ sessionId, agent: session.agent, ...content }, null, 2))
     return
@@ -173,5 +332,15 @@ export async function runSessionsShow(
     sessionId,
     directory,
   })
+  if (opts.stream) {
+    await streamRecords(
+      sessionId,
+      session.agent,
+      Array.isArray(messages) ? messages : [messages],
+      writeOutput,
+      `OpenCode session 没有可解析内容：${sessionId}`,
+    )
+    return
+  }
   console.log(JSON.stringify({ sessionId, agent: session.agent, directory, messages }, null, 2))
 }

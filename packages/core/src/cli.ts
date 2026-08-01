@@ -24,6 +24,22 @@ import { WORKSPACE_ENV } from './workspace.js'
 
 const program = new Command()
 
+async function runWithStdoutPipeGuard(action: () => Promise<void>): Promise<void> {
+  let outputError: Error | undefined
+  const onError = (error: Error) => {
+    if (!('code' in error) || error.code !== 'EPIPE') outputError = error
+  }
+
+  process.stdout.on('error', onError)
+  try {
+    await action()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    if (outputError) throw outputError
+  } finally {
+    process.stdout.off('error', onError)
+  }
+}
+
 program
   .name('memory-manager')
   .description('本地优先 AI agent session 管理与 rules 生成 CLI')
@@ -59,7 +75,12 @@ const sessions = program
 sessions
   .command('show <session-id>')
   .description('读取 session 原文到 stdout（不落盘）')
-  .action(async (sessionId: string) => {
+  .option('--stream', '按 NDJSON 逐条流式输出，适用于大 Session', false)
+  .action(async (sessionId: string, opts: { stream: boolean }) => {
+    if (opts.stream) {
+      await runWithStdoutPipeGuard(() => runSessionsShow(sessionId, { stream: true }))
+      return
+    }
     await runSessionsShow(sessionId)
   })
 

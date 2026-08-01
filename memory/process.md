@@ -1738,3 +1738,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
   警告。
+
+## 大 Session 流式读取（2026-08-01）
+
+- `sessions show <session-id>` 新增 `--stream`，以一行一条记录的 NDJSON 输出
+  `{ sessionId, agent, index, record }`。不带参数时继续返回原有单个 JSON 文档，并保留
+  50 MiB 一次性输出保护，因此 Evidence 内部捕获逻辑和既有 CLI 调用不变。
+- Claude / Codex / Cursor / Pi 走 `createReadStream + readline` 逐行解析，不再构造完整
+  records 数组；Copilot events 复用相同链路，Copilot SQLite turns 使用 statement
+  iterator，OpenCode SDK 消息按返回顺序逐条写出。所有来源保持只读且不落对话原文。
+- 流式 writer 支持下游返回停止信号并识别同步 `EPIPE`。真实 70 MB Codex Session 首次
+  `--stream | head` 发现 Node 延迟派发 `EPIPE` 的竞态，CLI 随后增加仅在流式命令期间
+  生效的 stdout pipe guard；同一真实命令复验退出码为 0，只输出计数 2。
+- 计划与观察点见 `docs/plans/session-show-streaming.md`。测试覆盖超过 50 MiB 后提前停止、
+  NDJSON 顺序、BOM / CRLF、非法行定位、OpenCode、Copilot events / turns，以及真实子进程
+  stdout 提前关闭回归。
+- 最终验收：Core 25 suites / 275 tests、App 14 suites / 97 tests、skipped=0，Core/App
+  production build 全通过。Core build 仍只有既有 `tsdown define` 警告。
