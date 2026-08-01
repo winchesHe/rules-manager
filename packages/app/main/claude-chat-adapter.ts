@@ -117,6 +117,22 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
           contextUsage = claudeContextUsage(message.modelUsage)
           if (contextUsage) request.onEvent?.({ type: 'usage', contextUsage })
         }
+        if (message.type === 'assistant') {
+          const content = asRecord(message.message).content
+          if (Array.isArray(content)) {
+            for (const value of content) {
+              const block = asRecord(value)
+              if (block.type !== 'tool_use') continue
+              const activity = safeToolActivity({
+                itemId: block.id,
+                name: block.name,
+                status: 'completed',
+                input: block.input,
+              })
+              if (activity) request.onEvent?.({ type: 'tool_activity', activity })
+            }
+          }
+        }
         if (message.type === 'stream_event') {
           const event = asRecord(message.event)
           const delta = asRecord(event.delta)

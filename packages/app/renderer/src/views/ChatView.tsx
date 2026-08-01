@@ -29,7 +29,11 @@ import type {
   NativeToolItemPage,
   ProviderId,
   ProviderSnapshot,
+  Project,
   RunCancelResult,
+  NativeSessionReference,
+  SessionContextItem,
+  SessionContextPage,
 } from '../types'
 import {
   canRegenerate,
@@ -47,6 +51,7 @@ interface QueuedChatTurn {
     effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
     fastMode: boolean
   }
+  sessionContext?: NativeSessionReference[]
 }
 
 const CHAT_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
@@ -81,6 +86,15 @@ export function ChatView({
   const [liveTools, setLiveTools] = useState<NativeToolActivity[]>([])
   const [liveUsage, setLiveUsage] = useState<{ usedTokens: number; maxTokens: number } | null>(null)
   const [queuedCount, setQueuedCount] = useState(0)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [contextProject, setContextProject] = useState('all')
+  const [contextFrom, setContextFrom] = useState('')
+  const [contextTo, setContextTo] = useState('')
+  const [contextItems, setContextItems] = useState<SessionContextItem[]>([])
+  const [contextCursor, setContextCursor] = useState<string | null>(null)
+  const [contextLoading, setContextLoading] = useState(false)
+  const [selectedContext, setSelectedContext] = useState<NativeSessionReference[]>([])
+  const [selectedContextItems, setSelectedContextItems] = useState<SessionContextItem[]>([])
   const selectedIdRef = useRef<string | null>(selectedId)
   const liveChatIdRef = useRef<string | null>(null)
   const sendingRef = useRef(false)
@@ -111,12 +125,58 @@ export function ChatView({
   }, [])
 
   useEffect(() => {
+    void window.api.invoke<Project[]>('projects.list').then(setProjects).catch(() => setProjects([]))
+  }, [])
+
+  useEffect(() => {
     if (thread?.kind !== 'native-chat') return
     setProvider(thread.provider)
     setModel(thread.defaultTurnConfig.model ?? '')
     setEffort(thread.defaultTurnConfig.effort)
     setFastMode(thread.defaultTurnConfig.fastMode)
+    setSelectedContext(thread.sessionContext.selected)
   }, [thread?.id])
+
+  useEffect(() => {
+    if (thread || legacy) return
+    setSelectedContext([])
+  }, [thread?.id, legacy?.id])
+
+  useEffect(() => {
+    if (selectedContext.length === 0) {
+      setSelectedContextItems([])
+      return
+    }
+    void window.api.invoke<SessionContextItem[]>('chat.context.resolve', selectedContext)
+      .then(setSelectedContextItems)
+      .catch(() => setSelectedContextItems(selectedContext.map((reference) => ({
+        ...reference, slug: 'unknown', updatedAt: '', status: 'missing', sourceAvailable: false,
+      }))))
+  }, [selectedContext])
+
+  const loadContextSessions = useCallback(async (append = false) => {
+    setContextLoading(true)
+    try {
+      const page = await window.api.invoke<SessionContextPage>('chat.context.query', {
+        project: contextProject,
+        ...(contextFrom ? { from: localDateBoundary(contextFrom, false) } : {}),
+        ...(contextTo ? { to: localDateBoundary(contextTo, true) } : {}),
+        ...(append && contextCursor ? { cursor: contextCursor } : {}),
+        limit: 100,
+      })
+      setContextItems((current) => append ? mergeSessionContextItems(current, page.items) : page.items)
+      setContextCursor(page.nextCursor)
+    } catch {
+      if (!append) setContextItems([])
+      setContextCursor(null)
+    } finally {
+      setContextLoading(false)
+    }
+  }, [contextCursor, contextFrom, contextProject, contextTo])
+
+  useEffect(() => {
+    void loadContextSessions(false)
+  }, [contextProject, contextFrom, contextTo])
 
   useEffect(() => {
     void window.api.invoke<Array<{ name: string }>>('chat.skills', provider)
@@ -129,15 +189,16 @@ export function ChatView({
       if (!value || typeof value !== 'object' || Array.isArray(value)) return
       const envelope = value as { chatId?: unknown; event?: unknown }
       if (typeof envelope.chatId !== 'string' || !isNativeChatEvent(envelope.event)) return
+      const event = envelope.event
       if (selectedIdRef.current && selectedIdRef.current !== envelope.chatId) return
       if (!selectedIdRef.current && !sendingRef.current) return
       liveChatIdRef.current = envelope.chatId
-      if (envelope.event.type === 'assistant_delta') {
-        setLiveAssistant((current) => `${current}${envelope.event.text}`)
-      } else if (envelope.event.type === 'tool_activity') {
-        setLiveTools((current) => mergeNativeToolActivity(current, envelope.event.activity))
+      if (event.type === 'assistant_delta') {
+        setLiveAssistant((current) => `${current}${event.text}`)
+      } else if (event.type === 'tool_activity') {
+        setLiveTools((current) => mergeNativeToolActivity(current, event.activity))
       } else {
-        setLiveUsage(envelope.event.contextUsage)
+        setLiveUsage(event.contextUsage)
       }
     }
     window.api.onEvent('chat.event', onChatEvent)
@@ -327,6 +388,7 @@ export function ChatView({
       message,
       provider: thread?.provider ?? provider,
       config: { ...(model ? { model } : {}), effort, fastMode },
+      ...(!thread ? { sessionContext: selectedContext.map((reference) => ({ ...reference })) } : {}),
     }
     setComposer('')
     if (sendingRef.current) {
@@ -354,6 +416,7 @@ export function ChatView({
             provider: next.provider,
             message: next.message,
             config: next.config,
+            ...(next.sessionContext ? { sessionContext: next.sessionContext } : {}),
           },
         )
         currentChatId = result.chatId
@@ -379,6 +442,33 @@ export function ChatView({
       ?? (thread?.kind === 'native-chat' ? thread.id : null)
     if (!chatId) return
     await window.api.invoke('chat.interrupt', chatId)
+  }
+
+  async function updateSelectedContext(next: NativeSessionReference[]): Promise<void> {
+    const canonical = canonicalSessionReferences(next)
+    const previous = selectedContext
+    setSelectedContext(canonical)
+    if (thread?.kind !== 'native-chat') return
+    try {
+      const sessionContext = await window.api.invoke<Extract<ChatThread, { version: 2 }>['sessionContext']>(
+        'chat.context.update', { chatId: thread.id, selected: canonical },
+      )
+      setThread((current) => current?.kind === 'native-chat'
+        ? { ...current, sessionContext }
+        : current)
+    } catch (reason: unknown) {
+      setSelectedContext(previous)
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  function selectRecentContextDays(days: number): void {
+    const end = new Date()
+    const start = new Date(end)
+    start.setDate(start.getDate() - days + 1)
+    setContextFrom(localDateValue(start))
+    setContextTo(localDateValue(end))
   }
 
   function updateFollowState(): void {
@@ -673,6 +763,27 @@ export function ChatView({
                 <ContextDetail label={t('candidates')} value={String(legacy.candidateCount)} />
               </div>
             ) : null}
+            {!legacy && (!thread || thread.kind === 'native-chat') && (
+              <SessionContextPicker
+                cursor={contextCursor}
+                from={contextFrom}
+                items={contextItems}
+                loading={contextLoading}
+                onLoadMore={() => void loadContextSessions(true)}
+                onProjectChange={setContextProject}
+                onRangeChange={(nextFrom, nextTo) => {
+                  setContextFrom(nextFrom)
+                  setContextTo(nextTo)
+                }}
+                onRecentDays={selectRecentContextDays}
+                onSelectedChange={(next) => void updateSelectedContext(next)}
+                project={contextProject}
+                projects={projects}
+                selected={selectedContext}
+                selectedItems={selectedContextItems}
+                to={contextTo}
+              />
+            )}
             <p className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted">
               {t('privacy')}
             </p>
@@ -1054,6 +1165,159 @@ function LegacyConversation({ entry }: { entry: GenerationHistoryEntry }) {
   )
 }
 
+function SessionContextPicker({
+  cursor,
+  from,
+  items,
+  loading,
+  onLoadMore,
+  onProjectChange,
+  onRangeChange,
+  onRecentDays,
+  onSelectedChange,
+  project,
+  projects,
+  selected,
+  selectedItems,
+  to,
+}: {
+  cursor: string | null
+  from: string
+  items: SessionContextItem[]
+  loading: boolean
+  onLoadMore: () => void
+  onProjectChange: (value: string) => void
+  onRangeChange: (from: string, to: string) => void
+  onRecentDays: (days: number) => void
+  onSelectedChange: (selected: NativeSessionReference[]) => void
+  project: string
+  projects: Project[]
+  selected: NativeSessionReference[]
+  selectedItems: SessionContextItem[]
+  to: string
+}) {
+  const { t } = useTranslation('chat')
+  const [scrollTop, setScrollTop] = useState(0)
+  const rowHeight = 58
+  const viewportHeight = 290
+  const overscan = 4
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan)
+  const end = Math.min(items.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan)
+  const visibleItems = items.slice(start, end)
+  const selectedKeys = new Set(selected.map(sessionReferenceKey))
+  const knownItems = new Map(selectedItems.map((item) => [sessionReferenceKey(item), item]))
+  const projectOptions = ['default', ...projects.map((item) => item.slug)]
+    .filter((value, index, values) => values.indexOf(value) === index)
+
+  return (
+    <div className="mt-6 border-t border-border pt-5">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-medium text-foreground">{t('sessionContext')}</h3>
+        <Chip size="sm" variant="soft">{selected.length}</Chip>
+      </div>
+      <Select
+        aria-label={t('contextProject')}
+        className="mt-3"
+        onSelectionChange={(key) => onProjectChange(String(key))}
+        selectedKey={project}
+      >
+        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+        <Select.Popover><ListBox>
+          <ListBox.Item id="all">{t('allProjects')}</ListBox.Item>
+          {projectOptions.map((slug) => (
+            <ListBox.Item id={slug} key={slug}>{slug === 'default' ? t('defaultProject') : slug}</ListBox.Item>
+          ))}
+        </ListBox></Select.Popover>
+      </Select>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <input
+          aria-label={t('contextFrom')}
+          className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground"
+          onChange={(event) => onRangeChange(event.target.value, to)}
+          type="date"
+          value={from}
+        />
+        <input
+          aria-label={t('contextTo')}
+          className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground"
+          onChange={(event) => onRangeChange(from, event.target.value)}
+          type="date"
+          value={to}
+        />
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Button onPress={() => onRecentDays(7)} size="sm" variant="ghost">{t('recent7Days')}</Button>
+        <Button onPress={() => onRecentDays(30)} size="sm" variant="ghost">{t('recent30Days')}</Button>
+        {(from || to) && (
+          <Button onPress={() => onRangeChange('', '')} size="sm" variant="ghost">{t('clearRange')}</Button>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div className="mt-3 grid gap-1">
+          <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
+          {selected.map((reference) => {
+            const item = knownItems.get(sessionReferenceKey(reference))
+            return (
+              <button
+                className="flex items-center gap-2 rounded-md bg-surface-hover px-2 py-1 text-left text-xs"
+                key={sessionReferenceKey(reference)}
+                onClick={() => onSelectedChange(selected.filter(
+                  (current) => sessionReferenceKey(current) !== sessionReferenceKey(reference),
+                ))}
+                type="button"
+              >
+                <span className="min-w-0 flex-1 truncate">{reference.agent} · {reference.id}</span>
+                {item && !item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
+                <span aria-label={t('removeSession')}>×</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <div
+        className="relative mt-3 overflow-y-auto rounded-lg border border-border"
+        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        style={{ height: viewportHeight }}
+      >
+        <div style={{ height: items.length * rowHeight }}>
+          <div style={{ transform: `translateY(${start * rowHeight}px)` }}>
+            {visibleItems.map((item) => {
+              const active = selectedKeys.has(sessionReferenceKey(item))
+              return (
+                <button
+                  aria-pressed={active}
+                  className={`flex h-[58px] w-full items-center gap-2 border-b border-border px-2 text-left text-xs ${
+                    active ? 'bg-primary-soft' : 'hover:bg-surface-hover'
+                  }`}
+                  key={sessionReferenceKey(item)}
+                  onClick={() => onSelectedChange(active
+                    ? selected.filter((reference) => sessionReferenceKey(reference) !== sessionReferenceKey(item))
+                    : [...selected, { agent: item.agent, id: item.id }])}
+                  type="button"
+                >
+                  {active ? <CheckCircle2 className="shrink-0 text-primary" size={14} /> : <span className="size-3.5 shrink-0 rounded-full border border-border" />}
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate font-medium text-foreground">{item.agent} · {item.id}</strong>
+                    <span className="block truncate text-muted">{item.slug} · {formatDateTime(item.updatedAt, currentLocale())}</span>
+                  </span>
+                  {!item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        {loading && <div className="absolute inset-0 grid place-items-center bg-surface/70"><Spinner color="accent" /></div>}
+        {!loading && items.length === 0 && <div className="absolute inset-0 grid place-items-center px-3 text-center text-xs text-muted">{t('noContextSessions')}</div>}
+      </div>
+      {cursor && (
+        <Button className="mt-2" fullWidth isDisabled={loading} onPress={onLoadMore} size="sm" variant="ghost">
+          {t('loadMore')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function ContextDetail({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1">
@@ -1061,6 +1325,37 @@ function ContextDetail({ label, value }: { label: string; value: string }) {
       <span className="break-words text-sm text-foreground">{value}</span>
     </div>
   )
+}
+
+function canonicalSessionReferences(references: NativeSessionReference[]): NativeSessionReference[] {
+  const unique = new Map(references.map((reference) => [sessionReferenceKey(reference), reference]))
+  return [...unique.values()].sort((left, right) => sessionReferenceKey(left).localeCompare(sessionReferenceKey(right)))
+}
+
+function sessionReferenceKey(reference: NativeSessionReference): string {
+  return `${reference.agent}\0${reference.id}`
+}
+
+function mergeSessionContextItems(
+  current: SessionContextItem[],
+  incoming: SessionContextItem[],
+): SessionContextItem[] {
+  const merged = new Map(current.map((item) => [sessionReferenceKey(item), item]))
+  for (const item of incoming) merged.set(sessionReferenceKey(item), item)
+  return [...merged.values()]
+}
+
+function localDateBoundary(value: string, endOfDay: boolean): string {
+  const date = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`)
+  if (!Number.isFinite(date.getTime())) throw new Error('invalid local date')
+  return date.toISOString()
+}
+
+function localDateValue(value: Date): string {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function scopeLabel(

@@ -8,6 +8,7 @@ import type {
 import type { ProjectGenerationResponse } from '../../core/src/commands/rules-generate.js'
 import type { RunState } from './background-run.js'
 import type { NativeToolActivity } from './chat-runtime.js'
+import { canonicalReferences } from './session-context-prompt.js'
 
 export type ChatThreadStatus = Exclude<RunState, 'idle'>
 
@@ -90,6 +91,7 @@ export interface NativeChatThreadSummary {
     revision: number
     lastInjectedRevision: number
     selected: NativeSessionReference[]
+    lastInjectedSelected?: NativeSessionReference[]
   }
   contextUsage: {
     usedTokens: number
@@ -195,7 +197,9 @@ export class ChatStore {
       updatedAt: input.createdAt,
       archivedAt: null,
       defaultTurnConfig: { ...input.defaultTurnConfig },
-      sessionContext: { revision: 0, lastInjectedRevision: 0, selected: [] },
+      sessionContext: {
+        revision: 0, lastInjectedRevision: 0, selected: [], lastInjectedSelected: [],
+      },
       contextUsage: null,
       lastError: null,
       ...(input.runId ? { runId: input.runId } : {}),
@@ -260,6 +264,50 @@ export class ChatStore {
     atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
       ...thread,
       contextUsage: { ...usage, updatedAt: at },
+      updatedAt: at,
+    } satisfies NativeChatThreadFile)
+  }
+
+  setNativeSessionContext(
+    threadId: string,
+    references: NativeSessionReference[],
+    at: string,
+  ): NativeChatThreadFile['sessionContext'] {
+    const thread = this.requireNativeThread(threadId)
+    const selected = canonicalReferences(references)
+    if (sameReferences(thread.sessionContext.selected, selected)) return thread.sessionContext
+    const sessionContext = {
+      ...thread.sessionContext,
+      revision: thread.sessionContext.revision + 1,
+      selected,
+      lastInjectedSelected: thread.sessionContext.lastInjectedSelected ?? [],
+    }
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      sessionContext,
+      updatedAt: at,
+    } satisfies NativeChatThreadFile)
+    return sessionContext
+  }
+
+  markNativeSessionContextInjected(
+    threadId: string,
+    revision: number,
+    references: NativeSessionReference[],
+    at: string,
+  ): void {
+    const thread = this.requireNativeThread(threadId)
+    if (!Number.isInteger(revision) || revision < 1 || revision > thread.sessionContext.revision) {
+      throw new Error('session context revision is invalid')
+    }
+    if (revision < thread.sessionContext.lastInjectedRevision) return
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      sessionContext: {
+        ...thread.sessionContext,
+        lastInjectedRevision: revision,
+        lastInjectedSelected: canonicalReferences(references),
+      },
       updatedAt: at,
     } satisfies NativeChatThreadFile)
   }
@@ -498,6 +546,17 @@ function isChatMessage(value: unknown): value is ChatMessage {
     && typeof record.content === 'string'
     && typeof record.createdAt === 'string'
     && typeof record.status === 'string'
+}
+
+function sameReferences(
+  left: NativeSessionReference[],
+  right: NativeSessionReference[],
+): boolean {
+  const canonicalLeft = canonicalReferences(left)
+  return canonicalLeft.length === right.length
+    && canonicalLeft.every((reference, index) =>
+      reference.agent === right[index]?.agent && reference.id === right[index]?.id,
+    )
 }
 
 function toSummary(thread: StoredChatThreadFile): ChatThreadSummary {

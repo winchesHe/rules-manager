@@ -3,6 +3,10 @@ import { Worker } from 'node:worker_threads'
 import { BrowserWindow, ipcMain } from 'electron'
 import Database from 'better-sqlite3'
 import { listProjects, listProjectSessions } from '@memory-manager/core'
+import {
+  querySessionContext,
+  resolveSessionContextItems,
+} from '../../core/src/session-context.js'
 import { getDbPath, isDatabaseReady } from '@memory-manager/core/db'
 import { resolveWorkspace } from '@memory-manager/core/workspace'
 import {
@@ -147,6 +151,25 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle('chat.tool.read', (_event, value: unknown) => {
     return nativeChatController.readToolItem(validateNativeChatToolReadRequest(value))
+  })
+  ipcMain.handle('chat.context.query', (_event, value: unknown) => {
+    return querySessionContext(validateSessionContextQuery(value))
+  })
+  ipcMain.handle('chat.context.update', (_event, value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('invalid session context update')
+    }
+    const request = value as Record<string, unknown>
+    if (typeof request.chatId !== 'string' || !request.chatId.trim()) {
+      throw new Error('chat id is required')
+    }
+    return nativeChatController.updateSessionContext(
+      request.chatId,
+      validateSessionReferences(request.selected),
+    )
+  })
+  ipcMain.handle('chat.context.resolve', (_event, value: unknown) => {
+    return resolveSessionContextItems(validateSessionReferences(value))
   })
 
   ipcMain.handle('scan.run', (_event, value?: unknown) => {
@@ -363,13 +386,58 @@ function validateNativeChatSendRequest(value: unknown) {
   }
   return {
     ...(typeof request.chatId === 'string' ? { chatId: request.chatId } : {}),
-    provider: request.provider,
+    provider: request.provider as 'claude' | 'codex',
     message: request.message,
     config: {
       ...(typeof config.model === 'string' ? { model: config.model } : {}),
       effort: config.effort,
       fastMode: config.fastMode,
     },
+    ...(request.sessionContext !== undefined
+      ? { sessionContext: validateSessionReferences(request.sessionContext) }
+      : {}),
+  }
+}
+
+function validateSessionReferences(value: unknown) {
+  if (!Array.isArray(value) || value.length > 500) {
+    throw new Error('session context selected must be an array of at most 500 items')
+  }
+  return value.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('session context reference is invalid')
+    }
+    const reference = item as Record<string, unknown>
+    if (!['claude', 'codex', 'copilot', 'cursor', 'opencode', 'pi'].includes(String(reference.agent))) {
+      throw new Error('session context agent is unsupported')
+    }
+    if (typeof reference.id !== 'string' || !reference.id.trim()) {
+      throw new Error('session context id is required')
+    }
+    return { agent: String(reference.agent), id: reference.id }
+  })
+}
+
+function validateSessionContextQuery(value: unknown) {
+  if (value === undefined) return {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('invalid session context query')
+  }
+  const query = value as Record<string, unknown>
+  for (const key of ['project', 'from', 'to', 'cursor']) {
+    if (query[key] !== undefined && typeof query[key] !== 'string') {
+      throw new Error(`session context ${key} must be a string`)
+    }
+  }
+  if (query.limit !== undefined && !Number.isInteger(query.limit)) {
+    throw new Error('session context limit must be an integer')
+  }
+  return {
+    ...(typeof query.project === 'string' ? { project: query.project } : {}),
+    ...(typeof query.from === 'string' && query.from ? { from: query.from } : {}),
+    ...(typeof query.to === 'string' && query.to ? { to: query.to } : {}),
+    ...(typeof query.cursor === 'string' && query.cursor ? { cursor: query.cursor } : {}),
+    ...(typeof query.limit === 'number' ? { limit: query.limit } : {}),
   }
 }
 

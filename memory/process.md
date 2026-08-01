@@ -1836,3 +1836,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   token usage；数值缺失时保持 null，不推算。真实 Claude UI 首轮得到 33499 / 200000。
 - App 定向与全量测试、production build、真实 Electron 运行态/完成态及 1024 px 窄屏均已验证。
   提交信息：`feat: 完善原生 Chat 对话与 Composer`。
+
+## Chat V1 Phase 4：Session Context 查询、选择与注入（2026-08-01）
+
+- 新增 `querySessionContext`：直接查询 sessions 元数据，all 包含 default 与 missing/error；项目、
+  from/to 闭区间和 `(updated_at DESC, id DESC)` keyset cursor 可组合，单页 1–200。Renderer
+  默认每页 100，并使用固定 58 px 行高、290 px viewport 和 overscan 4 的窗口化列表。
+- Selected 集合与查询结果分离，通过 `resolveSessionContextItems` 恢复来源状态；完全不存在的引用
+  合成为 `status=missing/sourceAvailable=false`，因此切换项目或日期不会丢选择或失效提示。
+- `sessionContext.revision` 只随 canonical 引用集合变化递增；新增内部
+  `lastInjectedSelected` 保存上次成功提交集合，解决多次未发送修改后无法计算净 added/removed
+  的问题。旧 v2 文件缺少该字段时按空集合兼容。
+- Controller 在调用 Provider 前构造隐藏 replace block，但写 messages.jsonl 时只写用户原文；
+  仅 Provider turn 成功后推进 lastInjectedRevision。单次失败测试确认下一次 start 会重发同一
+  revision，且 Native ID 不被替换。
+- Host Policy 继续承担不可信资料边界与单源失败继续执行；App 不做 Session 读取、摘要、
+  Preflight、token 分配或“已加载 N/M”状态。真实 1.4 GB OpenCode SQLite 来源中的所选 Session
+  经 `--stream` 被 Claude 读取为 31 条记录并正常完成。
+- 提交信息：`feat: 接入 Chat Session 上下文`。

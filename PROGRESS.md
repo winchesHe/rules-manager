@@ -580,3 +580,22 @@ npm test -- --runInBand test/unit/rule-candidates-schema.test.ts test/unit/redac
   `Phase 3 Chat UI 验收通过`，Provider 被锁定，权威 Context Window 显示
   `33499 / 200000`；1024 px 宽窗口三栏保持可用，左栏横向溢出随后收口。
 - 提交信息：`feat: 完善原生 Chat 对话与 Composer`
+
+## Chat V1 Phase 4：Session Context 查询、选择与注入（2026-08-01）
+
+- Core 新增只读 Session Context 查询：支持 all（含 default/未分类）、指定项目、闭区间日期、
+  `updatedAt + id` 稳定倒序游标分页和 missing/error 来源状态；独立 resolve 接口保证 Selected
+  区切换筛选后仍能展示来源失效状态。查询只读 DB 元数据，不读取 Session 原文。
+- 右侧 Pane 提供项目筛选、日期区间、最近 7/30 天、100 条分页与固定行高虚拟窗口；选择集合
+  独立于筛选条件，Draft 保持 Renderer 内存，已创建 Chat 立即写入安全 Session 引用。
+- ChatStore 以 canonical set 维护 revision，仅集合实际变化时递增；另外记录最后成功提交给
+  Provider 的集合，用于计算相对上次成功注入的 added/removed。Provider 失败不推进
+  `lastInjectedRevision`，下一轮自动重试同一动态块。
+- 动态 Prompt 严格使用 version 1 / mode replace：selected 永远是完整当前集合，每项命令精确为
+  `memory-manager sessions show <id> --stream`；清空产生空 selected 与完整 removed。隐藏块只进入
+  Provider request，ChatStore 可见用户消息保持原文。
+- 真实 Electron 选择 OpenCode Session `ses_0580fbcd2ffeRZ7PzL1wsdeR4e`（底层 SQLite
+  约 1.4 GB），切换最近 7 天与 rules-manager 项目后选择仍保留；Claude 使用流式命令成功读取
+  31 条记录并继续回答。ChatStore 文件复查不含 `host_session_context` 或 show command。
+- 失效源由 query/resolve、Prompt 边界与失败重试测试覆盖；未人为移动或破坏用户真实 Session
+  文件。提交信息：`feat: 接入 Chat Session 上下文`。

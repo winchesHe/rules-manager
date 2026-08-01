@@ -152,4 +152,96 @@ describe('NativeChatController', () => {
       chatId: 'chat-tool', itemId: 'unknown-item', cursor: 0, limit: 128,
     })).rejects.toThrow('tool item was not found')
   })
+
+  it('只在首次选择或集合变化后注入完整 Session Context，且隐藏块不落可见消息', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-context-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const providerMessages: string[] = []
+    const adapter: ChatProviderAdapter = {
+      start: async (request) => {
+        providerMessages.push(request.message)
+        return { nativeSessionId: 'native-context', content: 'first' }
+      },
+      resume: async (request) => {
+        providerMessages.push(request.message)
+        return { nativeSessionId: request.nativeSessionId, content: 'next' }
+      },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      close: async () => undefined,
+    }
+    let tick = 0
+    const controller = new NativeChatController({
+      store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
+      createId: () => 'chat-context',
+      now: () => `2026-08-01T03:00:0${tick++}.000Z`,
+    })
+    await controller.send({
+      provider: 'claude', message: 'first visible',
+      config: { effort: 'high', fastMode: false },
+      sessionContext: [{ agent: 'claude', id: 's-1' }],
+    })
+    await controller.send({
+      chatId: 'chat-context', provider: 'claude', message: 'same visible',
+      config: { effort: 'high', fastMode: false },
+    })
+    controller.updateSessionContext('chat-context', [
+      { agent: 'codex', id: 's-2' },
+    ])
+    await controller.send({
+      chatId: 'chat-context', provider: 'claude', message: 'changed visible',
+      config: { effort: 'high', fastMode: false },
+    })
+
+    expect(providerMessages[0]).toContain('<host_session_context version="1" revision="1" mode="replace">')
+    expect(providerMessages[0]).toContain('memory-manager sessions show s-1 --stream')
+    expect(providerMessages[1]).toBe('same visible')
+    expect(providerMessages[2]).toContain('<added><session agent="codex" id="s-2" /></added>')
+    expect(providerMessages[2]).toContain('<removed><session agent="claude" id="s-1" /></removed>')
+    const persisted = JSON.stringify(store.readThread('chat-context'))
+    expect(persisted).toContain('first visible')
+    expect(persisted).toContain('changed visible')
+    expect(persisted).not.toContain('host_session_context')
+    expect(store.readThread('chat-context')).toMatchObject({
+      sessionContext: { revision: 2, lastInjectedRevision: 2 },
+    })
+  })
+
+  it('Provider 失败时不提交 injected revision，下一轮会重试同一隐藏块', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-context-retry-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const providerMessages: string[] = []
+    let attempts = 0
+    const adapter: ChatProviderAdapter = {
+      start: async (request) => {
+        providerMessages.push(request.message)
+        attempts++
+        if (attempts === 1) throw new Error('provider failed')
+        return { nativeSessionId: 'native-retry', content: 'done' }
+      },
+      resume: async () => { throw new Error('unexpected resume') },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      close: async () => undefined,
+    }
+    const controller = new NativeChatController({
+      store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
+      createId: () => 'chat-context-retry', now: () => '2026-08-01T04:00:00.000Z',
+    })
+    await expect(controller.send({
+      provider: 'claude', message: 'first', config: { effort: 'high', fastMode: false },
+      sessionContext: [{ agent: 'codex', id: 's-retry' }],
+    })).rejects.toThrow('provider failed')
+    expect(store.readThread('chat-context-retry')).toMatchObject({
+      sessionContext: { revision: 1, lastInjectedRevision: 0 },
+    })
+    await controller.send({
+      chatId: 'chat-context-retry', provider: 'claude', message: 'retry',
+      config: { effort: 'high', fastMode: false },
+    })
+    expect(providerMessages).toHaveLength(2)
+    expect(providerMessages.every((message) => message.includes('revision="1"'))).toBe(true)
+  })
 })

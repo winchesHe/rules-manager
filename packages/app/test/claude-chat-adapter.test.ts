@@ -27,7 +27,12 @@ describe('ClaudeChatAdapter', () => {
           delta: { type: 'text_delta', text: '你' },
         } }
         yield { type: 'assistant', session_id: 'claude-session-1', message: {
-          content: [{ type: 'text', text: '你好' }],
+          content: [
+            { type: 'tool_use', id: 'tool-1', name: 'Read', input: {
+              file_path: '/workspace/README.md', secret: 'must-not-leak',
+            } },
+            { type: 'text', text: '你好' },
+          ],
         } }
         yield {
           type: 'result', subtype: 'success', session_id: 'claude-session-1', result: '你好',
@@ -74,6 +79,13 @@ describe('ClaudeChatAdapter', () => {
         },
       },
       { type: 'assistant_delta', text: '你' },
+      {
+        type: 'tool_activity',
+        activity: {
+          itemId: 'tool-1', kind: 'read', name: 'Read', status: 'completed',
+          summary: '/workspace/README.md',
+        },
+      },
       { type: 'usage', contextUsage: { usedTokens: 160, maxTokens: 200000 } },
     ])
     expect(JSON.stringify(events)).not.toContain('must-not-leak')

@@ -395,12 +395,30 @@ export interface NativeChatThreadSummary {
   sessionContext: {
     revision: number
     lastInjectedRevision: number
-    selected: Array<{ id: string; agent: string }>
+    selected: NativeSessionReference[]
+    lastInjectedSelected?: NativeSessionReference[]
   }
   contextUsage: { usedTokens: number; maxTokens: number; updatedAt: string } | null
   lastError: string | null
   runId?: string
   intent?: 'chat' | 'rules-generation'
+}
+
+export interface NativeSessionReference {
+  id: string
+  agent: string
+}
+
+export interface SessionContextItem extends NativeSessionReference {
+  slug: string
+  updatedAt: string
+  status: SessionStatus
+  sourceAvailable: boolean
+}
+
+export interface SessionContextPage {
+  items: SessionContextItem[]
+  nextCursor: string | null
 }
 
 export interface NativeChatThread extends NativeChatThreadSummary {

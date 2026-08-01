@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   ChatStore,
   NativeChatProvider,
+  NativeSessionReference,
   NativeTurnConfig,
 } from './chat-store.js'
 import type {
@@ -11,12 +12,14 @@ import type {
   NativeToolActivity,
   NativeToolItemPage,
 } from './chat-runtime.js'
+import { buildSessionContextPrompt } from './session-context-prompt.js'
 
 export interface NativeChatSendRequest {
   chatId?: string
   provider: NativeChatProvider
   message: string
   config: NativeTurnConfig
+  sessionContext?: NativeSessionReference[]
 }
 
 export interface NativeChatSendResult {
@@ -72,6 +75,21 @@ export class NativeChatController {
       })
     }
 
+    if (request.sessionContext !== undefined) {
+      this.options.store.setNativeSessionContext(chatId, request.sessionContext, this.now())
+    }
+    const currentThread = this.options.store.readThread(chatId)
+    if (!currentThread || currentThread.version !== 2) throw new Error('native chat was not found')
+    const contextRevision = currentThread.sessionContext.revision
+    const contextSelected = currentThread.sessionContext.selected
+    const contextPrompt = contextRevision > currentThread.sessionContext.lastInjectedRevision
+      ? buildSessionContextPrompt({
+          revision: contextRevision,
+          selected: contextSelected,
+          previous: currentThread.sessionContext.lastInjectedSelected ?? [],
+        })
+      : null
+
     const startedAt = this.now()
     this.options.store.markNativeTurnRunning(chatId, request.config, startedAt)
     this.options.store.appendNativeMessage(chatId, visibleMessage({
@@ -87,7 +105,7 @@ export class NativeChatController {
         chatId,
         provider: request.provider,
         nativeSessionId,
-        message,
+        message: contextPrompt ? `${contextPrompt}\n\n${message}` : message,
         workingDirectory: this.options.workingDirectory,
         config: request.config,
         onEvent: (event) => {
@@ -98,6 +116,11 @@ export class NativeChatController {
         },
       })
       const completedAt = this.now()
+      if (contextPrompt) {
+        this.options.store.markNativeSessionContextInjected(
+          chatId, contextRevision, contextSelected, completedAt,
+        )
+      }
       this.options.store.bindNativeSession(chatId, result.nativeSessionId, completedAt)
       if (result.contextUsage) {
         this.options.store.updateContextUsage(chatId, result.contextUsage, completedAt)
@@ -120,6 +143,13 @@ export class NativeChatController {
     return this.options.runtime.interrupt(chatId)
   }
 
+  updateSessionContext(
+    chatId: string,
+    references: NativeSessionReference[],
+  ): NativeChatThreadSessionContext {
+    return this.options.store.setNativeSessionContext(chatId, references, this.now())
+  }
+
   async readToolItem(request: NativeChatToolReadRequest): Promise<NativeToolItemPage> {
     const thread = this.options.store.readThread(request.chatId)
     if (!thread || thread.version !== 2 || !thread.nativeSessionId) {
@@ -139,6 +169,11 @@ export class NativeChatController {
     })
   }
 }
+
+type NativeChatThreadSessionContext = Extract<
+  ReturnType<ChatStore['readThread']>,
+  { version: 2 }
+>['sessionContext']
 
 function visibleMessage(input: {
   id: string

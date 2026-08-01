@@ -141,6 +141,33 @@ describe('ChatStore', () => {
     expect(store.listThreads().map((thread) => thread.id)).toContain('chat-native')
   })
 
+  it('Session Context 只在集合变化时递增 revision，并独立记录最后成功注入集合', () => {
+    const { store } = createStore()
+    store.createNativeThread({
+      id: 'chat-context', provider: 'codex', origin: 'chat', title: 'context',
+      createdAt: '2026-08-01T01:00:00.000Z',
+      defaultTurnConfig: { effort: 'high', fastMode: false },
+    })
+    expect(store.setNativeSessionContext('chat-context', [
+      { agent: 'codex', id: 's-2' }, { agent: 'claude', id: 's-1' },
+    ], '2026-08-01T01:00:01.000Z')).toMatchObject({ revision: 1 })
+    expect(store.setNativeSessionContext('chat-context', [
+      { agent: 'claude', id: 's-1' }, { agent: 'codex', id: 's-2' },
+    ], '2026-08-01T01:00:02.000Z')).toMatchObject({ revision: 1 })
+
+    store.markNativeSessionContextInjected('chat-context', 1, [
+      { agent: 'claude', id: 's-1' }, { agent: 'codex', id: 's-2' },
+    ], '2026-08-01T01:00:03.000Z')
+    expect(store.readThread('chat-context')).toMatchObject({
+      sessionContext: {
+        revision: 1,
+        lastInjectedRevision: 1,
+        selected: [{ agent: 'claude', id: 's-1' }, { agent: 'codex', id: 's-2' }],
+        lastInjectedSelected: [{ agent: 'claude', id: 's-1' }, { agent: 'codex', id: 's-2' }],
+      },
+    })
+  })
+
   it('创建 FS-first Generation Thread 并保存用户可见请求', () => {
     const { chatsDir, store } = createStore()
     store.createGenerationThread({

@@ -43,6 +43,13 @@ describe('home workflow layout', () => {
     expect(source).toContain("'chat.event'")
     expect(source).toContain("'chat.skills'")
     expect(source).toContain("'chat.tool.read'")
+    expect(source).toContain("'chat.context.query'")
+    expect(source).toContain("'chat.context.update'")
+    expect(source).toContain("'chat.context.resolve'")
+    expect(source).toContain('SessionContextPicker')
+    expect(source).toContain('recent7Days')
+    expect(source).toContain('recent30Days')
+    expect(source).toContain('translateY(${start * rowHeight}px)')
     expect(source).toContain('queueRef.current')
     expect(source).toContain('isDisabled={thread?.kind === \'native-chat\'}')
     expect(source).toContain('ToolActivityList')
@@ -54,6 +61,8 @@ describe('home workflow layout', () => {
     expect(ipcSource).toContain("ipcMain.handle('chat.interrupt'")
     expect(ipcSource).toContain("ipcMain.handle('chat.skills'")
     expect(ipcSource).toContain("ipcMain.handle('chat.tool.read'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.context.query'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.context.update'")
   })
 
   it('Chat 固定 viewport 高度并把滚动限制在三段内容区', () => {
