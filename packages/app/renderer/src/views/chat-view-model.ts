@@ -1,14 +1,14 @@
 import type {
-  ChatThread,
+  GenerationChatThread,
   ProjectGenerationResponse,
 } from '../types'
 
-export function canRegenerate(status: ChatThread['status']): boolean {
+export function canRegenerate(status: GenerationChatThread['status']): boolean {
   return status === 'failed' || status === 'cancelled' || status === 'interrupted'
 }
 
 export function visibleProjectResponses(
-  status: ChatThread['status'],
+  status: GenerationChatThread['status'],
   responses: ProjectGenerationResponse[],
 ): ProjectGenerationResponse[] {
   if (status === 'completed') return responses
@@ -19,9 +19,9 @@ export function visibleProjectResponses(
 }
 
 export function mergeTimelineActivities(
-  activities: ChatThread['activities'],
-): ChatThread['activities'] {
-  const merged = new Map<string, ChatThread['activities'][number]>()
+  activities: GenerationChatThread['activities'],
+): GenerationChatThread['activities'] {
+  const merged = new Map<string, GenerationChatThread['activities'][number]>()
   for (const activity of activities) {
     const key = activity.id ?? `${activity.kind}-${activity.seq}`
     const existing = merged.get(key)

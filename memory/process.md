@@ -1781,3 +1781,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   production build 通过。Provider 版本为 Claude Code 2.1.220 / SDK 0.3.220、Codex CLI
   0.146.0。执行目标覆盖计划全部 7 个阶段；Claude Native Chat 最小骨架只是第一个完成即
   验证的 checkpoint，不是本轮终点。
+
+## Chat V1 Phase 1：Claude Native Chat 最小闭环（2026-08-01）
+
+- ChatStore 新增 version 2 Native Chat，保持 version 1 Rules Generation 兼容读取；v2 仅保存
+  Native Session 引用、可见消息投影、每轮配置与 UI/生命周期元数据，绑定后的 Native ID
+  不允许被不同 ID 覆盖。
+- 新增 `ChatRuntimeManager`、`NativeChatController` 与 `ClaudeChatAdapter`。同一 Chat 仅一轮，
+  不同 Chat 不设全局并发限制；首次调用 Claude start，后续及重建 Controller 后调用 resume。
+- Claude 固定 workspace cwd、持久 Session、`bypassPermissions` 与
+  `allowDangerouslySkipPermissions=true`；冻结 Host Policy 只在首轮 system preset append，
+  resume 不重复注入。
+- Renderer 新增仅本地 Draft、New Chat 和最小 Composer；首次发送才通过 `chat.send` 落盘，
+  version 1 Thread 不显示 Composer。中央区常驻显示 Full access。
+- 测试按红→绿推进：缺模块/API、缺 Controller、缺 Composer/IPC 三轮关键失败均已复现；最终
+  Core 25 suites / 275 tests、App 17 suites / 104 tests、skipped=0，App build 与 diff check
+  通过。
+- 真实 Claude smoke 连续三轮（第三轮新 Query 实例）保持同一 Session ID
+  `bc22d10e-6149-4f5f-a5aa-d39d9fa58303`，三轮精确返回预期短文本。
+- 提交信息：`feat: 打通 Claude 原生 Chat 最小闭环`

@@ -1,5 +1,9 @@
 # 阻塞项
 
+## Chat V1 原生 Session 重构（2026-08-01）
+
+无。
+
 ## Generation Run Paseo UI（2026-07-29）
 
 - 功能、测试、构建与 diff check 均无阻塞。

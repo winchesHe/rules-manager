@@ -311,14 +311,22 @@ export interface GenerationHistoryEntry {
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
-  kind: 'rules-generation-request' | 'assistant-response'
+  kind: 'rules-generation-request' | 'assistant-response' | 'text'
   content: string
   status: 'completed' | 'streaming' | 'cancelled' | 'failed' | 'interrupted'
   createdAt: string
   completedAt?: string
+  turnConfig?: ChatTurnConfig
 }
 
-export interface ChatThreadSummary {
+export interface ChatTurnConfig {
+  model?: string
+  effort: LlmConfig['effort']
+  fastMode: boolean
+}
+
+export interface GenerationChatThreadSummary {
+  version: 1
   id: string
   runId: string
   kind: 'rules-generation'
@@ -333,7 +341,7 @@ export interface ChatThreadSummary {
   endedAt?: string
 }
 
-export interface ChatThread extends ChatThreadSummary {
+export interface GenerationChatThread extends GenerationChatThreadSummary {
   evidence?: EvidenceSnapshot
   projectResponses: ProjectGenerationResponse[]
   activities: Array<{
@@ -348,6 +356,39 @@ export interface ChatThread extends ChatThreadSummary {
   messages: ChatMessage[]
   error?: string
 }
+
+export interface NativeChatThreadSummary {
+  version: 2
+  id: string
+  kind: 'native-chat'
+  title: string
+  titleSource: 'first-message' | 'manual'
+  origin: 'chat' | 'rules'
+  provider: ProviderId
+  nativeSessionId: string | null
+  nativeState: 'starting' | 'ready' | 'resume-failed' | 'deleted'
+  status: 'running' | 'ready' | 'failed' | 'interrupted'
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+  defaultTurnConfig: ChatTurnConfig
+  sessionContext: {
+    revision: number
+    lastInjectedRevision: number
+    selected: Array<{ id: string; agent: string }>
+  }
+  contextUsage: { usedTokens: number; maxTokens: number; updatedAt: string } | null
+  lastError: string | null
+  runId?: string
+  intent?: 'chat' | 'rules-generation'
+}
+
+export interface NativeChatThread extends NativeChatThreadSummary {
+  messages: ChatMessage[]
+}
+
+export type ChatThreadSummary = GenerationChatThreadSummary | NativeChatThreadSummary
+export type ChatThread = GenerationChatThread | NativeChatThread
 
 export type GenerationStartResult =
   | { started: true; runId: string }

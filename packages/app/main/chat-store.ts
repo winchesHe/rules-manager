@@ -13,14 +13,16 @@ export type ChatThreadStatus = Exclude<RunState, 'idle'>
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
-  kind: 'rules-generation-request' | 'assistant-response'
+  kind: 'rules-generation-request' | 'assistant-response' | 'text'
   content: string
   status: 'completed' | 'streaming' | 'cancelled' | 'failed' | 'interrupted'
   createdAt: string
   completedAt?: string
+  turnConfig?: NativeTurnConfig
 }
 
-export interface ChatThreadSummary {
+export interface GenerationChatThreadSummary {
+  version: 1
   id: string
   runId: string
   kind: 'rules-generation'
@@ -35,7 +37,7 @@ export interface ChatThreadSummary {
   endedAt?: string
 }
 
-export interface ChatThread extends ChatThreadSummary {
+export interface GenerationChatThread extends GenerationChatThreadSummary {
   evidence?: EvidenceSnapshot
   projectResponses: ProjectGenerationResponse[]
   activities: Array<{
@@ -51,14 +53,76 @@ export interface ChatThread extends ChatThreadSummary {
   error?: string
 }
 
-interface ChatThreadFile extends Omit<ChatThread, 'messages'> {
-  version: 1
+interface GenerationChatThreadFile extends Omit<GenerationChatThread, 'messages'> {}
+
+export type NativeChatProvider = 'claude' | 'codex'
+export type NativeChatEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+export interface NativeTurnConfig {
+  model?: string
+  effort: NativeChatEffort
+  fastMode: boolean
 }
+
+export interface NativeSessionReference {
+  id: string
+  agent: string
+}
+
+export interface NativeChatThreadSummary {
+  version: 2
+  id: string
+  kind: 'native-chat'
+  title: string
+  titleSource: 'first-message' | 'manual'
+  origin: 'chat' | 'rules'
+  provider: NativeChatProvider
+  nativeSessionId: string | null
+  nativeState: 'starting' | 'ready' | 'resume-failed' | 'deleted'
+  status: 'running' | 'ready' | 'failed' | 'interrupted'
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+  defaultTurnConfig: NativeTurnConfig
+  sessionContext: {
+    revision: number
+    lastInjectedRevision: number
+    selected: NativeSessionReference[]
+  }
+  contextUsage: {
+    usedTokens: number
+    maxTokens: number
+    updatedAt: string
+  } | null
+  lastError: string | null
+  runId?: string
+  intent?: 'chat' | 'rules-generation'
+}
+
+export interface NativeChatThread extends NativeChatThreadSummary {
+  messages: ChatMessage[]
+}
+
+interface NativeChatThreadFile extends Omit<NativeChatThread, 'messages'> {}
+type StoredChatThreadFile = GenerationChatThreadFile | NativeChatThreadFile
+export type ChatThreadSummary = GenerationChatThreadSummary | NativeChatThreadSummary
+export type ChatThread = GenerationChatThread | NativeChatThread
 
 export interface CreateGenerationThreadInput {
   runId: string
   request: GenerationRequest
   startedAt: string
+}
+
+export interface CreateNativeThreadInput {
+  id: string
+  provider: NativeChatProvider
+  origin: 'chat' | 'rules'
+  title: string
+  createdAt: string
+  defaultTurnConfig: NativeTurnConfig
+  runId?: string
+  intent?: 'chat' | 'rules-generation'
 }
 
 const THREAD_FILE = 'thread.json'
@@ -74,7 +138,7 @@ export class ChatStore {
     const directory = this.threadDirectory(input.runId)
     fs.mkdirSync(directory, { recursive: true })
 
-    const thread: ChatThreadFile = {
+    const thread: GenerationChatThreadFile = {
       version: 1,
       id: input.runId,
       runId: input.runId,
@@ -106,6 +170,85 @@ export class ChatStore {
     }
   }
 
+  createNativeThread(input: CreateNativeThreadInput): void {
+    validateThreadId(input.id)
+    fs.mkdirSync(this.chatsDir, { recursive: true })
+    const directory = this.threadDirectory(input.id)
+    if (fs.existsSync(path.join(directory, THREAD_FILE))) {
+      throw new Error(`chat thread ${input.id} already exists`)
+    }
+    fs.mkdirSync(directory, { recursive: true })
+    const thread: NativeChatThreadFile = {
+      version: 2,
+      id: input.id,
+      kind: 'native-chat',
+      title: input.title,
+      titleSource: 'first-message',
+      origin: input.origin,
+      provider: input.provider,
+      nativeSessionId: null,
+      nativeState: 'starting',
+      status: 'running',
+      createdAt: input.createdAt,
+      updatedAt: input.createdAt,
+      archivedAt: null,
+      defaultTurnConfig: { ...input.defaultTurnConfig },
+      sessionContext: { revision: 0, lastInjectedRevision: 0, selected: [] },
+      contextUsage: null,
+      lastError: null,
+      ...(input.runId ? { runId: input.runId } : {}),
+      ...(input.intent ? { intent: input.intent } : {}),
+    }
+    atomicWriteJson(path.join(directory, THREAD_FILE), thread)
+  }
+
+  appendNativeMessage(threadId: string, message: ChatMessage): void {
+    const thread = this.requireNativeThread(threadId)
+    appendJsonLine(path.join(this.threadDirectory(threadId), MESSAGES_FILE), message)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      updatedAt: message.completedAt ?? message.createdAt,
+    } satisfies NativeChatThreadFile)
+  }
+
+  bindNativeSession(threadId: string, nativeSessionId: string, at: string): void {
+    if (!nativeSessionId.trim()) throw new Error('native session id is required')
+    const thread = this.requireNativeThread(threadId)
+    if (thread.nativeSessionId && thread.nativeSessionId !== nativeSessionId) {
+      throw new Error('native session id cannot be replaced')
+    }
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      nativeSessionId,
+      nativeState: 'ready',
+      status: 'ready',
+      updatedAt: at,
+      lastError: null,
+    } satisfies NativeChatThreadFile)
+  }
+
+  markNativeTurnRunning(threadId: string, config: NativeTurnConfig, at: string): void {
+    const thread = this.requireNativeThread(threadId)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      status: 'running',
+      updatedAt: at,
+      defaultTurnConfig: { ...config },
+      lastError: null,
+    } satisfies NativeChatThreadFile)
+  }
+
+  markNativeTurnFailed(threadId: string, error: string, at: string): void {
+    const thread = this.requireNativeThread(threadId)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      status: 'failed',
+      nativeState: thread.nativeSessionId ? 'resume-failed' : thread.nativeState,
+      updatedAt: at,
+      lastError: error,
+    } satisfies NativeChatThreadFile)
+  }
+
   syncGeneration(status: GenerationStatus): void {
     if (!status.runId || status.state === 'idle') return
     const existing = this.readThreadFile(status.runId)
@@ -113,7 +256,8 @@ export class ChatStore {
     const now = status.endedAt ?? new Date().toISOString()
     const projectResponses = status.projectResponses.map(cloneProjectResponse)
     const content = assistantContent(projectResponses)
-    const thread: ChatThreadFile = {
+    if (existing.version !== 1) return
+    const thread: GenerationChatThreadFile = {
       ...existing,
       status: status.state,
       request: status.request ? cloneRequest(status.request) : existing.request,
@@ -205,6 +349,16 @@ export class ChatStore {
       if (summary.status !== 'running' && summary.status !== 'cancelling') continue
       const thread = this.readThread(summary.id)
       if (!thread) continue
+      if (thread.version === 2) {
+        const stored = this.requireNativeThread(thread.id)
+        atomicWriteJson(path.join(this.threadDirectory(thread.id), THREAD_FILE), {
+          ...stored,
+          status: 'interrupted',
+          updatedAt: at,
+          lastError: 'Turn was interrupted when the app stopped.',
+        } satisfies NativeChatThreadFile)
+        continue
+      }
       this.syncGeneration({
         running: false,
         state: 'interrupted',
@@ -223,7 +377,7 @@ export class ChatStore {
     }
   }
 
-  private readThreadFile(threadId: string): ChatThreadFile | null {
+  private readThreadFile(threadId: string): StoredChatThreadFile | null {
     validateThreadId(threadId)
     const value = readJsonFile<unknown>(
       path.join(this.threadDirectory(threadId), THREAD_FILE),
@@ -233,6 +387,14 @@ export class ChatStore {
       throw new Error(`chat thread ${threadId} metadata is invalid`)
     }
     return value
+  }
+
+  private requireNativeThread(threadId: string): NativeChatThreadFile {
+    const thread = this.readThreadFile(threadId)
+    if (!thread || thread.version !== 2) {
+      throw new Error(`native chat thread ${threadId} was not found`)
+    }
+    return thread
   }
 
   private readMessages(threadId: string): ChatMessage[] {
@@ -285,20 +447,32 @@ function isValidThreadId(value: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(value)
 }
 
-function isThreadFile(value: unknown, expectedId: string): value is ChatThreadFile {
+function isThreadFile(value: unknown, expectedId: string): value is StoredChatThreadFile {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const record = value as Partial<ChatThreadFile>
-  return record.version === 1
-    && record.id === expectedId
-    && record.runId === expectedId
-    && record.kind === 'rules-generation'
-    && typeof record.title === 'string'
-    && typeof record.status === 'string'
-    && Boolean(record.request)
-    && typeof record.createdAt === 'string'
-    && typeof record.updatedAt === 'string'
-    && Array.isArray(record.projectResponses)
-    && Array.isArray(record.activities)
+  const record = value as Partial<StoredChatThreadFile>
+  if (record.version === 2) {
+    const native = record as Partial<NativeChatThreadFile>
+    return native.id === expectedId
+      && native.kind === 'native-chat'
+      && (native.provider === 'claude' || native.provider === 'codex')
+      && typeof native.title === 'string'
+      && typeof native.createdAt === 'string'
+      && typeof native.updatedAt === 'string'
+      && Boolean(native.defaultTurnConfig)
+      && Boolean(native.sessionContext)
+  }
+  const generation = record as Partial<GenerationChatThreadFile>
+  return generation.version === 1
+    && generation.id === expectedId
+    && generation.runId === expectedId
+    && generation.kind === 'rules-generation'
+    && typeof generation.title === 'string'
+    && typeof generation.status === 'string'
+    && Boolean(generation.request)
+    && typeof generation.createdAt === 'string'
+    && typeof generation.updatedAt === 'string'
+    && Array.isArray(generation.projectResponses)
+    && Array.isArray(generation.activities)
 }
 
 function isChatMessage(value: unknown): value is ChatMessage {
@@ -311,13 +485,13 @@ function isChatMessage(value: unknown): value is ChatMessage {
     && typeof record.status === 'string'
 }
 
-function toSummary(thread: ChatThreadFile): ChatThreadSummary {
+function toSummary(thread: StoredChatThreadFile): ChatThreadSummary {
+  if (thread.version === 2) return { ...thread }
   const {
     evidence: _evidence,
     projectResponses: _responses,
     activities: _activities,
     error: _error,
-    version: _version,
     ...summary
   } = thread
   return summary
@@ -393,11 +567,11 @@ function cloneProjectResponse(
 
 function buildActivities(
   events: GenerationStatus['events'],
-): ChatThread['activities'] {
-  const activities = new Map<string, ChatThread['activities'][number]>()
+): GenerationChatThread['activities'] {
+  const activities = new Map<string, GenerationChatThread['activities'][number]>()
   for (const envelope of events) {
     const event = envelope.event
-    let activity: ChatThread['activities'][number]
+    let activity: GenerationChatThread['activities'][number]
     if (event.kind === 'activity') {
       activity = {
         seq: envelope.seq,

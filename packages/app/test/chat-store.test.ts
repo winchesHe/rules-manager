@@ -102,6 +102,45 @@ afterEach(() => {
 })
 
 describe('ChatStore', () => {
+  it('兼容 v1，并持久化 v2 Native Chat 的可见投影与原生引用', () => {
+    const { chatsDir, store } = createStore()
+    store.createNativeThread({
+      id: 'chat-native',
+      provider: 'claude',
+      origin: 'chat',
+      title: '解释这个项目',
+      createdAt: '2026-08-01T01:00:00.000Z',
+      defaultTurnConfig: { model: 'claude-sonnet', effort: 'high', fastMode: false },
+    })
+    store.appendNativeMessage('chat-native', {
+      id: 'message-user-1', role: 'user', kind: 'text', content: '解释这个项目',
+      status: 'completed', createdAt: '2026-08-01T01:00:00.000Z',
+      turnConfig: { model: 'claude-sonnet', effort: 'high', fastMode: false },
+    })
+    store.bindNativeSession('chat-native', 'native-claude-1', '2026-08-01T01:00:01.000Z')
+    store.appendNativeMessage('chat-native', {
+      id: 'message-assistant-1', role: 'assistant', kind: 'text', content: '这是一个本地 Session 管理器。',
+      status: 'completed', createdAt: '2026-08-01T01:00:01.000Z',
+    })
+
+    expect(store.readThread('chat-native')).toMatchObject({
+      version: 2,
+      id: 'chat-native',
+      provider: 'claude',
+      nativeSessionId: 'native-claude-1',
+      nativeState: 'ready',
+      messages: [
+        { role: 'user', content: '解释这个项目', turnConfig: { effort: 'high' } },
+        { role: 'assistant', content: '这是一个本地 Session 管理器。' },
+      ],
+    })
+    const persisted = fs.readFileSync(path.join(chatsDir, 'chat-native', 'thread.json'), 'utf8')
+      + fs.readFileSync(path.join(chatsDir, 'chat-native', 'messages.jsonl'), 'utf8')
+    expect(persisted).not.toContain('host_session_context')
+    expect(persisted).not.toContain('systemPrompt')
+    expect(store.listThreads().map((thread) => thread.id)).toContain('chat-native')
+  })
+
   it('创建 FS-first Generation Thread 并保存用户可见请求', () => {
     const { chatsDir, store } = createStore()
     store.createGenerationThread({

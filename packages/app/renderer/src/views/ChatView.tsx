@@ -21,6 +21,7 @@ import { formatDateTime } from '../i18n/format'
 import type {
   ChatThread,
   ChatThreadSummary,
+  GenerationChatThread,
   GenerationHistoryEntry,
   GenerationStartResult,
   RunCancelResult,
@@ -50,6 +51,8 @@ export function ChatView({
   const [error, setError] = useState<string | null>(null)
   const [errorTitle, setErrorTitle] = useState<'loadError' | 'actionError'>('loadError')
   const [isRegenerating, setIsRegenerating] = useState(false)
+  const [composer, setComposer] = useState('')
+  const [isSending, setIsSending] = useState(false)
   const selectedIdRef = useRef<string | null>(selectedId)
   const conversationRef = useRef<HTMLElement | null>(null)
   const followStreamRef = useRef(true)
@@ -124,7 +127,9 @@ export function ChatView({
       element.scrollTo({ top: element.scrollHeight })
     })
     return () => cancelAnimationFrame(frame)
-  }, [thread?.activities.length, thread?.messages.length, thread?.status])
+  }, [thread?.messages.length, thread?.status, thread?.kind === 'rules-generation'
+    ? thread.activities.length
+    : 0])
 
   useEffect(() => {
     const onGenerationChange = (value: unknown) => {
@@ -174,7 +179,8 @@ export function ChatView({
   }, [history, threads])
 
   async function stopGeneration(): Promise<void> {
-    if (!thread || (thread.status !== 'running' && thread.status !== 'cancelling')) return
+    if (!thread || thread.kind !== 'rules-generation'
+      || (thread.status !== 'running' && thread.status !== 'cancelling')) return
     try {
       await window.api.invoke<RunCancelResult>(
         'rules.generate.cancel',
@@ -188,7 +194,8 @@ export function ChatView({
   }
 
   async function regenerate(): Promise<void> {
-    if (!thread || !canRegenerate(thread.status) || isRegenerating) return
+    if (!thread || thread.kind !== 'rules-generation'
+      || !canRegenerate(thread.status) || isRegenerating) return
     setIsRegenerating(true)
     setError(null)
     try {
@@ -216,6 +223,44 @@ export function ChatView({
     void refresh(id)
   }
 
+  function startDraft(): void {
+    setSelectedId(null)
+    selectedIdRef.current = null
+    setThread(null)
+    setLegacy(null)
+    setComposer('')
+    setError(null)
+  }
+
+  async function sendChatMessage(): Promise<void> {
+    const message = composer.trim()
+    if (!message || isSending) return
+    if (thread && thread.kind !== 'native-chat') return
+    setIsSending(true)
+    setError(null)
+    try {
+      const result = await window.api.invoke<{ chatId: string; nativeSessionId: string }>(
+        'chat.send',
+        {
+          ...(thread ? { chatId: thread.id } : {}),
+          provider: thread?.provider ?? 'claude',
+          message,
+          config: thread?.defaultTurnConfig ?? {
+            effort: 'high',
+            fastMode: false,
+          },
+        },
+      )
+      setComposer('')
+      await refresh(result.chatId)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setIsSending(false)
+    }
+  }
+
   function updateFollowState(): void {
     const element = conversationRef.current
     if (!element) return
@@ -234,7 +279,8 @@ export function ChatView({
             <h1 className="text-2xl font-semibold text-foreground">{t('title')}</h1>
             <p className="mt-1 text-sm text-muted">{t('description')}</p>
           </div>
-          {thread?.status === 'completed' && thread.candidateCount > 0 && (
+          {thread?.kind === 'rules-generation'
+            && thread.status === 'completed' && thread.candidateCount > 0 && (
             <Button
               className="gap-2 bg-primary text-primary-foreground"
               onPress={() => onOpenGeneratedRules(thread.runId)}
@@ -243,7 +289,7 @@ export function ChatView({
               <ChevronRight aria-hidden="true" size={17} />
             </Button>
           )}
-          {thread && canRegenerate(thread.status) && (
+          {thread?.kind === 'rules-generation' && canRegenerate(thread.status) && (
             <Button
               className="gap-2 bg-primary text-primary-foreground"
               isDisabled={isRegenerating}
@@ -271,9 +317,10 @@ export function ChatView({
         <Card.Content className="grid h-full min-h-0 grid-cols-[14rem_minmax(0,1fr)_17rem] p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)] max-[1180px]:grid-rows-[minmax(0,1fr)_auto]">
           <aside aria-label={t('threadRail')} className="min-h-0 overflow-y-auto border-r border-border bg-sidebar/40">
             <div className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
-              <strong className="text-xs font-medium uppercase tracking-wide text-muted">
-                {t('threadRail')}
-              </strong>
+              <Button className="mb-3 bg-primary text-primary-foreground" fullWidth onPress={startDraft}>
+                {t('newChat', { defaultValue: 'New Chat' })}
+              </Button>
+              <strong className="text-xs font-medium uppercase tracking-wide text-muted">{t('threadRail')}</strong>
             </div>
             {loading ? (
               <div className="grid place-items-center py-12"><Spinner color="accent" /></div>
@@ -300,7 +347,9 @@ export function ChatView({
                           : <MessageSquareText aria-hidden="true" className="text-muted" size={15} />}
                         <strong className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                           {item.thread
-                            ? threadTitle(item.thread.request, t)
+                            ? item.thread.kind === 'native-chat'
+                              ? item.thread.title
+                              : threadTitle(item.thread.request, t)
                             : legacyTitle(item.legacy!, t)}
                         </strong>
                       </span>
@@ -317,24 +366,64 @@ export function ChatView({
 
           <main
             aria-label={t('conversation')}
-            className="min-h-0 overflow-y-auto bg-background px-6 py-6"
-            onScroll={updateFollowState}
-            ref={conversationRef}
+            className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background"
           >
-            {!thread && !legacy ? (
-              <div className="grid h-full place-items-center text-sm text-muted">
-                {loading ? t('loading') : t('emptySelection')}
+            <section className="min-h-0 overflow-y-auto px-6 py-6" onScroll={updateFollowState} ref={conversationRef}>
+              {!thread && !legacy ? (
+                <div className="grid h-full place-items-center text-sm text-muted">
+                  {loading ? t('loading') : t('emptySelection')}
+                </div>
+              ) : thread?.kind === 'native-chat' ? (
+                <NativeConversation thread={thread} />
+              ) : thread ? (
+                <PersistedConversation thread={thread} />
+              ) : (
+                <LegacyConversation entry={legacy!} />
+              )}
+            </section>
+            {!legacy && (!thread || thread.kind === 'native-chat') && (
+              <div className="border-t border-border p-4" data-chat-composer>
+                <div className="mx-auto flex max-w-3xl items-end gap-3 rounded-xl border border-border bg-surface p-3">
+                  <textarea
+                    aria-label={t('message', { defaultValue: 'Message' })}
+                    className="max-h-40 min-h-12 flex-1 resize-none bg-transparent text-sm text-foreground outline-none"
+                    disabled={isSending}
+                    onChange={(event) => setComposer(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault()
+                        void sendChatMessage()
+                      }
+                    }}
+                    placeholder={t('messagePlaceholder', { defaultValue: 'Message Claude…' })}
+                    value={composer}
+                  />
+                  <Button className="bg-primary text-primary-foreground" isDisabled={!composer.trim() || isSending} onPress={() => void sendChatMessage()}>
+                    {isSending ? <Spinner color="current" size="sm" /> : t('send', { defaultValue: 'Send' })}
+                  </Button>
+                </div>
+                <div className="mx-auto mt-2 flex max-w-3xl items-center justify-between text-xs text-muted">
+                  <span>{thread?.provider === 'codex' ? 'Codex' : 'Claude'} · {t('fullAccess')}</span>
+                  <span>{thread?.nativeSessionId ? thread.nativeSessionId.slice(0, 8) : t('draft', { defaultValue: 'Draft' })}</span>
+                </div>
               </div>
-            ) : thread ? (
-              <PersistedConversation thread={thread} />
-            ) : (
-              <LegacyConversation entry={legacy!} />
             )}
           </main>
 
           <aside aria-label={t('context')} className="min-h-0 overflow-y-auto border-l border-border p-5 max-[1180px]:col-start-2 max-[1180px]:max-h-52 max-[1180px]:border-l-0 max-[1180px]:border-t">
             <h2 className="text-sm font-medium text-foreground">{t('context')}</h2>
-            {thread ? (
+            {thread?.kind === 'native-chat' ? (
+              <div className="mt-4 grid gap-4">
+                <ContextDetail label={t('agent')} value={thread.provider === 'claude' ? 'Claude' : 'Codex'} />
+                <ContextDetail label={t('model')} value={thread.defaultTurnConfig.model ?? t('providerDefaultModel')} />
+                <ContextDetail label={t('effort')} value={thread.defaultTurnConfig.effort} />
+                <ContextDetail label={t('workingDirectory')} value={t('workspace')} />
+                <ContextDetail label={t('access')} value={t('fullAccess')} />
+                <ContextDetail label={t('contextWindow')} value={thread.contextUsage
+                  ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
+                  : '—'} />
+              </div>
+            ) : thread ? (
               <div className="mt-4 grid gap-4">
                 <ContextDetail label={t('run')} value={thread.runId.slice(0, 8)} />
                 <ContextDetail label={t('scope')} value={scopeLabel(thread.request, t)} />
@@ -398,7 +487,27 @@ export function ChatView({
   )
 }
 
-function PersistedConversation({ thread }: { thread: ChatThread }) {
+function NativeConversation({ thread }: { thread: Extract<ChatThread, { version: 2 }> }) {
+  return (
+    <div className="mx-auto grid w-full max-w-3xl gap-6">
+      {thread.messages.map((message) => message.role === 'user' ? (
+        <div className="flex justify-end" key={message.id}>
+          <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
+            {message.content}
+          </div>
+        </div>
+      ) : (
+        <article className="whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
+          {message.content}
+        </article>
+      ))}
+      {thread.status === 'running' && <RunningElapsed startedAt={thread.updatedAt} />}
+      {thread.lastError && <Alert status="danger"><Alert.Description>{thread.lastError}</Alert.Description></Alert>}
+    </div>
+  )
+}
+
+function PersistedConversation({ thread }: { thread: GenerationChatThread }) {
   const { t } = useTranslation('chat')
   const userMessage = thread.messages.find((message) => message.role === 'user')
   const assistantMessage = [...thread.messages].reverse().find(
@@ -472,7 +581,7 @@ function PersistedConversation({ thread }: { thread: ChatThread }) {
   )
 }
 
-function ActivityTimeline({ thread }: { thread: ChatThread }) {
+function ActivityTimeline({ thread }: { thread: GenerationChatThread }) {
   const [expandedActivityIds, setExpandedActivityIds] = useState<Set<string>>(
     () => new Set(),
   )
@@ -514,7 +623,7 @@ function ActivityRow({
   expanded,
   onToggle,
 }: {
-  activity: ChatThread['activities'][number]
+  activity: GenerationChatThread['activities'][number]
   expanded: boolean
   onToggle: () => void
 }) {
@@ -681,7 +790,7 @@ function requestMessage(
 }
 
 function terminalMessage(
-  status: ChatThread['status'],
+  status: GenerationChatThread['status'],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string | undefined {
   if (status === 'completed') return t('generationCompleted')

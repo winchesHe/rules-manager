@@ -51,8 +51,21 @@ import {
 } from '../../core/src/provider-settings.js'
 import type { AgentName } from '../../core/src/types.js'
 import { ChatStore } from './chat-store.js'
+import { ChatRuntimeManager } from './chat-runtime.js'
+import { ClaudeChatAdapter } from './claude-chat-adapter.js'
+import { NativeChatController } from './native-chat-controller.js'
 
-const chatStore = new ChatStore(resolveWorkspace().chatsDir)
+const workspace = resolveWorkspace()
+const chatStore = new ChatStore(workspace.chatsDir)
+const chatRuntime = new ChatRuntimeManager((provider) => {
+  if (provider === 'claude') return new ClaudeChatAdapter()
+  throw new Error('Codex native chat is not available yet')
+})
+const nativeChatController = new NativeChatController({
+  store: chatStore,
+  runtime: chatRuntime,
+  workingDirectory: workspace.workspaceDir,
+})
 const scanController = new ScanController(
   (request) =>
     new Worker(join(import.meta.dirname, 'scan-worker.js'), {
@@ -113,6 +126,15 @@ export function registerIpcHandlers(): void {
       throw new Error('chat thread id is required')
     }
     return chatStore.readThread(threadId)
+  })
+  ipcMain.handle('chat.send', (_event, value: unknown) => {
+    return nativeChatController.send(validateNativeChatSendRequest(value))
+  })
+  ipcMain.handle('chat.interrupt', (_event, threadId: unknown) => {
+    if (typeof threadId !== 'string' || !threadId.trim()) {
+      throw new Error('chat thread id is required')
+    }
+    return nativeChatController.interrupt(threadId)
   })
 
   ipcMain.handle('scan.run', (_event, value?: unknown) => {
@@ -298,6 +320,45 @@ export function registerIpcHandlers(): void {
     })
     return publishGlobalRulesToAgents(targets)
   })
+}
+
+function validateNativeChatSendRequest(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('invalid chat send request')
+  }
+  const request = value as Record<string, unknown>
+  if (request.provider !== 'claude' && request.provider !== 'codex') {
+    throw new Error('chat provider must be claude or codex')
+  }
+  if (typeof request.message !== 'string' || !request.message.trim()) {
+    throw new Error('chat message is required')
+  }
+  if (request.chatId !== undefined && (
+    typeof request.chatId !== 'string' || !request.chatId.trim()
+  )) {
+    throw new Error('chat id must be a non-empty string')
+  }
+  if (!request.config || typeof request.config !== 'object' || Array.isArray(request.config)) {
+    throw new Error('chat turn config is required')
+  }
+  const config = request.config as Record<string, unknown>
+  if (!isLlmEffort(config.effort)) throw new Error('chat effort is unsupported')
+  if (typeof config.fastMode !== 'boolean') throw new Error('chat fastMode must be boolean')
+  if (config.model !== undefined && (
+    typeof config.model !== 'string' || !config.model.trim()
+  )) {
+    throw new Error('chat model must be a non-empty string')
+  }
+  return {
+    ...(typeof request.chatId === 'string' ? { chatId: request.chatId } : {}),
+    provider: request.provider,
+    message: request.message,
+    config: {
+      ...(typeof config.model === 'string' ? { model: config.model } : {}),
+      effort: config.effort,
+      fastMode: config.fastMode,
+    },
+  }
 }
 
 function markInterruptedBackgroundRuns(): void {

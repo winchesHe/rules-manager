@@ -1,5 +1,29 @@
 # 执行进度
 
+## Chat V1 原生 Session 重构（2026-08-01）
+
+- 目标：一次完成冻结计划全部 7 阶段；Phase 1 仅为首个 checkpoint，不是交付终点。
+- 顺序：基线 → Claude Native → Codex Native → Composer → Session Context → 生命周期 → Rules → 收口。
+- 数据边界：Native Session 是执行真相；ChatStore 只存可见投影、配置、状态和 Native 引用。
+- 固定约束：workspace cwd、Full access、同 Chat 单轮；不同 Chat 无全局并发上限。
+- 最大风险：Provider 恢复/事件语义差异可能造成静默换 Session 或隐藏内容泄漏，必须由假进程和重启测试锁定。
+- 任务 0 基线：Core 25 suites / 275 tests；App 14 suites / 97 tests；skipped=0。
+- 任务 0 构建：Core/App production build 均通过；Core 仅有既有 `tsdown define` warning。
+- 冻结文件、AGENTS、RTK 规则及 `memory/process.md` 末尾已读；起始工作树无未提交改动。
+- 当前阶段：任务 1，先制造 ChatStore v2、RuntimeManager、Claude Adapter、IPC/Renderer 契约红测。
+
+### Phase 1：Claude Native Chat 最小闭环（完成）
+
+- 红测证据：首次定向测试因缺少 `chat-runtime.ts`、`claude-chat-adapter.ts` 及 ChatStore v2 API，3 suites 编译失败；Controller 红测随后因缺少 `native-chat-controller.ts` 失败；Composer 契约红测因缺少 `data-chat-composer` 与 IPC handler 失败。
+- ChatStore 现在兼容 version 1 Rules Thread 与 version 2 Native Chat；v2 只保存 Native 引用、可见消息、每轮配置及生命周期元数据，拒绝替换已绑定的 Native ID。
+- `ChatRuntimeManager` 以 chatId 隔离 Runtime：同 Chat 拒绝并发，不同 Chat 并行；已有 Native ID 必须走 resume，中断只定向当前 Chat。
+- Claude Adapter 使用持久 Session，固定 workspace cwd、`bypassPermissions` 与危险权限确认；Host Policy 只在 start 的 system append 注入，resume 不重复注入。
+- Draft 只存在 Renderer；New Chat 不落盘，首次发送经 `chat.send` 创建 Chat，中央 Composer 显示固定 Full access，version 1 Thread 仍只读。
+- 定向绿测：4 suites / 12 tests（Store/Runtime/Claude/Controller）与 UI/View Model 2 suites / 38 tests 通过。
+- 真实 Claude 三轮：Native ID 三次均为 `bc22d10e-6149-4f5f-a5aa-d39d9fa58303`，`same=true`；返回 `PHASE1-ONE/TWO/THREE`，第三轮使用新 Query 实例模拟重启。
+- 阶段全量：Core 25 suites / 275 tests；App 17 suites / 104 tests；skipped=0；App production build 与 `git diff --check` 通过。
+- 下一阶段：Codex app-server 原生 Adapter 与可控 JSON-RPC 假进程。
+
 ## 窗口位置与大小恢复（2026-07-30）
 - 范围：扩展现有窗口状态文件与 main 接线，保存普通窗口 `{x,y,width,height}`；兼容旧 `{x,y}`。
 - 验收：resize/move/close 均保存完整 bounds；重启恢复大小；非法状态安全回退；最大化/全屏/最小化不覆盖。

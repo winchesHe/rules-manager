@@ -27,7 +27,7 @@ describe('home workflow layout', () => {
     expect(source).toContain('overflow-x-hidden')
   })
 
-  it('Chat 使用 Thread Rail、Conversation、Context 且第一版不提供 Composer', () => {
+  it('Chat 使用 Thread Rail、Conversation、Context，并提供首次发送才落盘的 Composer', () => {
     const source = read('views/ChatView.tsx')
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
 
@@ -38,9 +38,13 @@ describe('home workflow layout', () => {
     expect(source).toContain("t('context')")
     expect(source).toContain('projectResponses')
     expect(source).toContain("t('openGeneratedRules')")
-    expect(source).not.toContain('Composer')
+    expect(source).toContain('data-chat-composer')
+    expect(source).toContain("'chat.send'")
+    expect(source).toContain("t('newChat'")
     expect(ipcSource).toContain("ipcMain.handle('chat.list'")
     expect(ipcSource).toContain("ipcMain.handle('chat.read'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.send'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.interrupt'")
   })
 
   it('Chat 固定 viewport 高度并把滚动限制在三段内容区', () => {
