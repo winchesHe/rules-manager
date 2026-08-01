@@ -36,6 +36,10 @@ function fakeServer(autoComplete = true) {
         queueMicrotask(() => {
           notify('turn/started', { threadId: 'codex-thread-1', turn: { id: 'codex-turn-1' } })
           if (!autoComplete) return
+          notify('item/started', {
+            threadId: 'codex-thread-1',
+            item: { id: 'cmd-1', type: 'commandExecution', command: 'rtk git status', rawOutput: 'must-not-leak' },
+          })
           notify('item/agentMessage/delta', { threadId: 'codex-thread-1', itemId: 'msg-1', delta: 'hello ' })
           notify('item/agentMessage/delta', { threadId: 'codex-thread-1', itemId: 'msg-1', delta: 'codex' })
           notify('thread/tokenUsage/updated', {
@@ -46,6 +50,11 @@ function fakeServer(autoComplete = true) {
         })
       }
       if (message.method === 'turn/interrupt') respond(message.id, {})
+      if (message.method === 'thread/read') respond(message.id, {
+        thread: { id: 'codex-thread-1', turns: [{ items: [{
+          id: 'cmd-1', type: 'commandExecution', command: 'full-command', aggregatedOutput: 'full-output',
+        }] }] },
+      })
     }
   })
   function respond(id: number, result: unknown) {
@@ -61,10 +70,12 @@ describe('CodexChatAdapter', () => {
   it('使用 app-server 创建 thread 并按轮传递完整配置与权威 usage', async () => {
     const server = fakeServer()
     const adapter = new CodexChatAdapter(() => server.child)
+    const events: unknown[] = []
     const result = await adapter.start({
       chatId: 'chat-codex', provider: 'codex', message: 'hello',
       workingDirectory: '/fixed-workspace',
       config: { model: 'gpt-5.4', effort: 'xhigh', fastMode: true },
+      onEvent: (event) => events.push(event),
     })
 
     expect(result).toEqual({
@@ -85,6 +96,17 @@ describe('CodexChatAdapter', () => {
       sandboxPolicy: { type: 'dangerFullAccess' },
       input: [{ type: 'text', text: 'hello' }],
     })
+    expect(events).toContainEqual({
+      type: 'tool_activity',
+      activity: {
+        itemId: 'cmd-1', kind: 'shell', name: 'Command', status: 'running', summary: 'rtk git status',
+      },
+    })
+    expect(events).toContainEqual({ type: 'assistant_delta', text: 'hello ' })
+    expect(events).toContainEqual({
+      type: 'usage', contextUsage: { usedTokens: 50000, maxTokens: 200000 },
+    })
+    expect(JSON.stringify(events)).not.toContain('must-not-leak')
   })
 
   it('重启后 resume 原 thread，interrupt 使用当前 turn ID', async () => {
@@ -123,5 +145,17 @@ describe('CodexChatAdapter', () => {
     await running
     expect(server.requests.find((item) => item.method === 'turn/interrupt')?.params)
       .toEqual({ threadId: 'codex-thread-1', turnId: 'codex-turn-1' })
+  })
+
+  it('完整 Tool 内容通过 thread/read 按 Item ID 分页读取', async () => {
+    const server = fakeServer()
+    const adapter = new CodexChatAdapter(() => server.child)
+    const page = await adapter.readToolItem({
+      nativeSessionId: 'codex-thread-1', itemId: 'cmd-1', cursor: 0, limit: 24,
+    })
+    expect(page.available).toBe(true)
+    expect(page.content.length).toBeLessThanOrEqual(24)
+    expect(page.nextCursor).toBe(24)
+    expect(server.requests.map((item) => item.method)).toContain('thread/read')
   })
 })

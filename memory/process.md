@@ -1817,3 +1817,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `019fbde9-e579-7131-b57f-e3cf5e9bfe95`，第三轮 usage 为 20301 / 258400。
 - 最终 Core 25 suites / 275 tests、App 18 suites / 107 tests、skipped=0，Core/App build 通过。
 - 提交信息：`feat: 接入 Codex 原生 app-server Chat`
+
+## Chat V1 Phase 3：Paseo 式 Conversation 与 Composer（2026-08-01）
+
+- Main 与 Renderer 之间只传递归一化 `assistant_delta / tool_activity / usage`；Tool activity
+  的持久化字段限制为 Native item ID 和安全摘要。原始 tool input/output 只能在用户展开卡片
+  后由 Provider Adapter 分页读取，并且只保存在 Renderer 组件状态中。
+- `chat.tool.read` 以 ChatStore 中已经持久化的安全 item 引用作为 allowlist，避免 Renderer
+  构造任意 item ID 读取 Native Session。原生来源缺失返回 unavailable；大内容每页最多
+  64 KiB，当前 UI 每次请求 8 KiB。
+- Skills 发现复用 Paseo 式目录约定：公共 `~/.agents/skills` 加 Provider 自身 skills 目录，
+  只识别含 `SKILL.md` 的目录并按名称去重；选择后只插入本轮 Composer，不建立持久 enabled
+  列表。
+- Provider 首轮后锁定；model/effort/fast 在入队时形成每轮快照。队列只存 Renderer 内存，
+  不进入 LocalStorage/ChatStore；一个 Chat 仍由 RuntimeManager 保证单 active turn，不同 Chat
+  可并行。
+- Claude Context Window 使用 SDK result 的 `modelUsage` 权威字段，Codex 继续使用 app-server
+  token usage；数值缺失时保持 null，不推算。真实 Claude UI 首轮得到 33499 / 200000。
+- App 定向与全量测试、production build、真实 Electron 运行态/完成态及 1024 px 窄屏均已验证。
+  提交信息：`feat: 完善原生 Chat 对话与 Composer`。

@@ -317,6 +317,26 @@ export interface ChatMessage {
   createdAt: string
   completedAt?: string
   turnConfig?: ChatTurnConfig
+  toolActivities?: NativeToolActivity[]
+}
+
+export interface NativeToolActivity {
+  itemId: string
+  kind: 'thinking' | 'read' | 'search' | 'shell' | 'tool'
+  name: string
+  status: 'running' | 'completed' | 'failed'
+  summary?: string
+}
+
+export type NativeChatEvent =
+  | { type: 'assistant_delta'; text: string }
+  | { type: 'tool_activity'; activity: NativeToolActivity }
+  | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
+
+export interface NativeToolItemPage {
+  available: boolean
+  content: string
+  nextCursor: number | null
 }
 
 export interface ChatTurnConfig {

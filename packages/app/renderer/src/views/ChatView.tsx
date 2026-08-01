@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Card, Chip, Spinner } from '@heroui/react'
+import { Alert, Button, Card, Chip, ListBox, Select, Spinner, Switch } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
   Brain,
@@ -24,6 +24,11 @@ import type {
   GenerationChatThread,
   GenerationHistoryEntry,
   GenerationStartResult,
+  NativeChatEvent,
+  NativeToolActivity,
+  NativeToolItemPage,
+  ProviderId,
+  ProviderSnapshot,
   RunCancelResult,
 } from '../types'
 import {
@@ -33,6 +38,18 @@ import {
   shouldFollowStream,
   visibleProjectResponses,
 } from './chat-view-model'
+
+interface QueuedChatTurn {
+  message: string
+  provider: ProviderId
+  config: {
+    model?: string
+    effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+    fastMode: boolean
+  }
+}
+
+const CHAT_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
 export function ChatView({
   initialThreadId,
@@ -53,13 +70,79 @@ export function ChatView({
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [composer, setComposer] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [provider, setProvider] = useState<ProviderId>('claude')
+  const [model, setModel] = useState('')
+  const [effort, setEffort] = useState<(typeof CHAT_EFFORTS)[number]>('high')
+  const [fastMode, setFastMode] = useState(false)
+  const [providerSnapshot, setProviderSnapshot] = useState<ProviderSnapshot>({ entries: [], refreshing: false })
+  const [skills, setSkills] = useState<Array<{ name: string }>>([])
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null)
+  const [liveAssistant, setLiveAssistant] = useState('')
+  const [liveTools, setLiveTools] = useState<NativeToolActivity[]>([])
+  const [liveUsage, setLiveUsage] = useState<{ usedTokens: number; maxTokens: number } | null>(null)
+  const [queuedCount, setQueuedCount] = useState(0)
   const selectedIdRef = useRef<string | null>(selectedId)
+  const liveChatIdRef = useRef<string | null>(null)
+  const sendingRef = useRef(false)
+  const queueRef = useRef<QueuedChatTurn[]>([])
   const conversationRef = useRef<HTMLElement | null>(null)
   const followStreamRef = useRef(true)
 
   useEffect(() => {
     selectedIdRef.current = selectedId
   }, [selectedId])
+
+  useEffect(() => {
+    void Promise.all([
+      window.api.invoke<ProviderSnapshot>('settings.providers.snapshot'),
+      window.api.invoke<{
+        provider: ProviderId
+        model?: string
+        effort: (typeof CHAT_EFFORTS)[number]
+        fastMode?: boolean
+      }>('settings.load'),
+    ]).then(([snapshot, config]) => {
+      setProviderSnapshot(snapshot)
+      setProvider(config.provider)
+      setModel(config.model ?? '')
+      setEffort(config.effort)
+      setFastMode(config.fastMode === true)
+    }).catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    if (thread?.kind !== 'native-chat') return
+    setProvider(thread.provider)
+    setModel(thread.defaultTurnConfig.model ?? '')
+    setEffort(thread.defaultTurnConfig.effort)
+    setFastMode(thread.defaultTurnConfig.fastMode)
+  }, [thread?.id])
+
+  useEffect(() => {
+    void window.api.invoke<Array<{ name: string }>>('chat.skills', provider)
+      .then(setSkills)
+      .catch(() => setSkills([]))
+  }, [provider])
+
+  useEffect(() => {
+    const onChatEvent = (value: unknown) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return
+      const envelope = value as { chatId?: unknown; event?: unknown }
+      if (typeof envelope.chatId !== 'string' || !isNativeChatEvent(envelope.event)) return
+      if (selectedIdRef.current && selectedIdRef.current !== envelope.chatId) return
+      if (!selectedIdRef.current && !sendingRef.current) return
+      liveChatIdRef.current = envelope.chatId
+      if (envelope.event.type === 'assistant_delta') {
+        setLiveAssistant((current) => `${current}${envelope.event.text}`)
+      } else if (envelope.event.type === 'tool_activity') {
+        setLiveTools((current) => mergeNativeToolActivity(current, envelope.event.activity))
+      } else {
+        setLiveUsage(envelope.event.contextUsage)
+      }
+    }
+    window.api.onEvent('chat.event', onChatEvent)
+    return () => window.api.offEvent('chat.event', onChatEvent)
+  }, [])
 
   const loadIndex = useCallback(async (preferredId?: string | null) => {
     const [threadRows, historyRows] = await Promise.all([
@@ -229,36 +312,73 @@ export function ChatView({
     setThread(null)
     setLegacy(null)
     setComposer('')
+    setLiveAssistant('')
+    setLiveTools([])
+    setLiveUsage(null)
+    liveChatIdRef.current = null
     setError(null)
   }
 
-  async function sendChatMessage(): Promise<void> {
+  function sendChatMessage(): void {
     const message = composer.trim()
-    if (!message || isSending) return
+    if (!message) return
     if (thread && thread.kind !== 'native-chat') return
+    const turn: QueuedChatTurn = {
+      message,
+      provider: thread?.provider ?? provider,
+      config: { ...(model ? { model } : {}), effort, fastMode },
+    }
+    setComposer('')
+    if (sendingRef.current) {
+      queueRef.current.push(turn)
+      setQueuedCount(queueRef.current.length)
+      return
+    }
+    void drainChatQueue(turn)
+  }
+
+  async function drainChatQueue(first: QueuedChatTurn): Promise<void> {
+    sendingRef.current = true
     setIsSending(true)
     setError(null)
+    setLiveAssistant('')
+    setLiveTools([])
+    let next: QueuedChatTurn | undefined = first
+    let currentChatId = thread?.kind === 'native-chat' ? thread.id : undefined
     try {
-      const result = await window.api.invoke<{ chatId: string; nativeSessionId: string }>(
-        'chat.send',
-        {
-          ...(thread ? { chatId: thread.id } : {}),
-          provider: thread?.provider ?? 'claude',
-          message,
-          config: thread?.defaultTurnConfig ?? {
-            effort: 'high',
-            fastMode: false,
+      while (next) {
+        const result = await window.api.invoke<{ chatId: string; nativeSessionId: string }>(
+          'chat.send',
+          {
+            ...(currentChatId ? { chatId: currentChatId } : {}),
+            provider: next.provider,
+            message: next.message,
+            config: next.config,
           },
-        },
-      )
-      setComposer('')
-      await refresh(result.chatId)
+        )
+        currentChatId = result.chatId
+        selectedIdRef.current = result.chatId
+        setSelectedId(result.chatId)
+        await refresh(result.chatId)
+        setLiveAssistant('')
+        setLiveTools([])
+        next = queueRef.current.shift()
+        setQueuedCount(queueRef.current.length)
+      }
     } catch (reason: unknown) {
       setErrorTitle('actionError')
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
+      sendingRef.current = false
       setIsSending(false)
     }
+  }
+
+  async function stopChatTurn(): Promise<void> {
+    const chatId = liveChatIdRef.current
+      ?? (thread?.kind === 'native-chat' ? thread.id : null)
+    if (!chatId) return
+    await window.api.invoke('chat.interrupt', chatId)
   }
 
   function updateFollowState(): void {
@@ -315,7 +435,7 @@ export function ChatView({
 
       <Card className="min-h-0 overflow-hidden border border-border bg-surface shadow-none">
         <Card.Content className="grid h-full min-h-0 grid-cols-[14rem_minmax(0,1fr)_17rem] p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)] max-[1180px]:grid-rows-[minmax(0,1fr)_auto]">
-          <aside aria-label={t('threadRail')} className="min-h-0 overflow-y-auto border-r border-border bg-sidebar/40">
+          <aside aria-label={t('threadRail')} className="min-h-0 overflow-x-hidden overflow-y-auto border-r border-border bg-sidebar/40">
             <div className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
               <Button className="mb-3 bg-primary text-primary-foreground" fullWidth onPress={startDraft}>
                 {t('newChat', { defaultValue: 'New Chat' })}
@@ -369,12 +489,18 @@ export function ChatView({
             className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background"
           >
             <section className="min-h-0 overflow-y-auto px-6 py-6" onScroll={updateFollowState} ref={conversationRef}>
-              {!thread && !legacy ? (
+              {!thread && !legacy && !isSending ? (
                 <div className="grid h-full place-items-center text-sm text-muted">
                   {loading ? t('loading') : t('emptySelection')}
                 </div>
               ) : thread?.kind === 'native-chat' ? (
-                <NativeConversation thread={thread} />
+                <NativeConversation
+                  liveAssistant={liveAssistant}
+                  liveTools={liveTools}
+                  thread={thread}
+                />
+              ) : !thread && isSending ? (
+                <LiveTurn assistant={liveAssistant} tools={liveTools} />
               ) : thread ? (
                 <PersistedConversation thread={thread} />
               ) : (
@@ -387,24 +513,94 @@ export function ChatView({
                   <textarea
                     aria-label={t('message', { defaultValue: 'Message' })}
                     className="max-h-40 min-h-12 flex-1 resize-none bg-transparent text-sm text-foreground outline-none"
-                    disabled={isSending}
                     onChange={(event) => setComposer(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' && !event.shiftKey) {
                         event.preventDefault()
-                        void sendChatMessage()
+                        sendChatMessage()
                       }
                     }}
                     placeholder={t('messagePlaceholder', { defaultValue: 'Message Claude…' })}
                     value={composer}
                   />
-                  <Button className="bg-primary text-primary-foreground" isDisabled={!composer.trim() || isSending} onPress={() => void sendChatMessage()}>
-                    {isSending ? <Spinner color="current" size="sm" /> : t('send', { defaultValue: 'Send' })}
+                  {isSending && (
+                    <Button isIconOnly onPress={() => void stopChatTurn()} variant="ghost">
+                      <Square aria-label={t('stopChat')} size={15} />
+                    </Button>
+                  )}
+                  <Button className="bg-primary text-primary-foreground" isDisabled={!composer.trim()} onPress={sendChatMessage}>
+                    {isSending ? t('queue', { count: queuedCount }) : t('send', { defaultValue: 'Send' })}
                   </Button>
                 </div>
-                <div className="mx-auto mt-2 flex max-w-3xl items-center justify-between text-xs text-muted">
-                  <span>{thread?.provider === 'codex' ? 'Codex' : 'Claude'} · {t('fullAccess')}</span>
-                  <span>{thread?.nativeSessionId ? thread.nativeSessionId.slice(0, 8) : t('draft', { defaultValue: 'Draft' })}</span>
+                <div className="mx-auto mt-2 flex max-w-3xl flex-wrap items-center gap-2 text-xs text-muted">
+                  <Select
+                    aria-label={t('agent')}
+                    className="w-28"
+                    isDisabled={thread?.kind === 'native-chat'}
+                    onSelectionChange={(key) => setProvider(String(key) as ProviderId)}
+                    selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}
+                  >
+                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                    <Select.Popover><ListBox>
+                      <ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item>
+                      <ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item>
+                    </ListBox></Select.Popover>
+                  </Select>
+                  <Select
+                    aria-label={t('model')}
+                    className="w-40"
+                    onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))}
+                    selectedKey={model || '__default'}
+                  >
+                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                    <Select.Popover><ListBox>
+                      <ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>
+                      {(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => (
+                        <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>
+                      ))}
+                    </ListBox></Select.Popover>
+                  </Select>
+                  <Select
+                    aria-label={t('effort')}
+                    className="w-28"
+                    onSelectionChange={(key) => setEffort(String(key) as typeof effort)}
+                    selectedKey={effort}
+                  >
+                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                    <Select.Popover><ListBox>
+                      {CHAT_EFFORTS.map((value) => (
+                        <ListBox.Item id={value} key={value}>{value}</ListBox.Item>
+                      ))}
+                    </ListBox></Select.Popover>
+                  </Select>
+                  <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={setFastMode}>
+                    <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control></Switch.Content>
+                  </Switch>
+                  <Select
+                    aria-label={t('skills')}
+                    className="w-36"
+                    onSelectionChange={(key) => {
+                      const name = String(key)
+                      setComposer((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}/${name} `)
+                      setSelectedSkill(null)
+                    }}
+                    selectedKey={selectedSkill}
+                  >
+                    <Select.Trigger><Select.Value>{t('skills')}</Select.Value><Select.Indicator /></Select.Trigger>
+                    <Select.Popover><ListBox>
+                      {skills.map((skill) => (
+                        <ListBox.Item id={skill.name} key={skill.name}>{skill.name}</ListBox.Item>
+                      ))}
+                    </ListBox></Select.Popover>
+                  </Select>
+                  <span>{t('fullAccess')}</span>
+                  <span className="ml-auto">
+                    {liveUsage
+                      ? `${liveUsage.usedTokens} / ${liveUsage.maxTokens}`
+                      : thread?.kind === 'native-chat' && thread.contextUsage
+                        ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
+                        : '—'}
+                  </span>
                 </div>
               </div>
             )}
@@ -487,23 +683,141 @@ export function ChatView({
   )
 }
 
-function NativeConversation({ thread }: { thread: Extract<ChatThread, { version: 2 }> }) {
+function NativeConversation({
+  thread,
+  liveAssistant,
+  liveTools,
+}: {
+  thread: Extract<ChatThread, { version: 2 }>
+  liveAssistant: string
+  liveTools: NativeToolActivity[]
+}) {
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6">
       {thread.messages.map((message) => message.role === 'user' ? (
-        <div className="flex justify-end" key={message.id}>
+        <div className="grid justify-items-end gap-1" key={message.id}>
           <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
-            {message.content}
+            <p>{message.content}</p>
           </div>
+          {message.turnConfig && <TurnConfigLine config={message.turnConfig} />}
         </div>
       ) : (
-        <article className="whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
+        <article className="grid gap-3 whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
           {message.content}
+          <ToolActivityList activities={message.toolActivities ?? []} chatId={thread.id} />
         </article>
       ))}
-      {thread.status === 'running' && <RunningElapsed startedAt={thread.updatedAt} />}
+      {thread.status === 'running' && <LiveTurn assistant={liveAssistant} chatId={thread.id} tools={liveTools} />}
       {thread.lastError && <Alert status="danger"><Alert.Description>{thread.lastError}</Alert.Description></Alert>}
     </div>
+  )
+}
+
+function LiveTurn({
+  assistant,
+  tools,
+  chatId,
+}: {
+  assistant: string
+  tools: NativeToolActivity[]
+  chatId?: string
+}) {
+  return (
+    <article className="mx-auto grid w-full max-w-3xl gap-3 text-sm leading-7 text-foreground">
+      {assistant && <p className="whitespace-pre-wrap">{assistant}</p>}
+      <ToolActivityList activities={tools} chatId={chatId} />
+      <Spinner color="accent" size="sm" />
+    </article>
+  )
+}
+
+function ToolActivityList({ activities, chatId }: {
+  activities: NativeToolActivity[]
+  chatId?: string
+}) {
+  if (activities.length === 0) return null
+  return (
+    <div className="grid gap-2" role="list">
+      {activities.map((activity) => (
+        <NativeToolCard activity={activity} chatId={chatId} key={activity.itemId} />
+      ))}
+    </div>
+  )
+}
+
+function NativeToolCard({ activity, chatId }: {
+  activity: NativeToolActivity
+  chatId?: string
+}) {
+  const { t } = useTranslation('chat')
+  const [expanded, setExpanded] = useState(false)
+  const [content, setContent] = useState('')
+  const [nextCursor, setNextCursor] = useState<number | null>(0)
+  const [loading, setLoading] = useState(false)
+  const [available, setAvailable] = useState(true)
+
+  async function loadPage(cursor: number): Promise<void> {
+    if (!chatId || loading) return
+    setLoading(true)
+    try {
+      const page = await window.api.invoke<NativeToolItemPage>('chat.tool.read', {
+        chatId, itemId: activity.itemId, cursor, limit: 8192,
+      })
+      setAvailable(page.available)
+      setContent((current) => cursor === 0 ? page.content : `${current}${page.content}`)
+      setNextCursor(page.nextCursor)
+    } catch {
+      setAvailable(false)
+      setNextCursor(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function toggle(): void {
+    const next = !expanded
+    setExpanded(next)
+    if (next && !content && nextCursor === 0) void loadPage(0)
+  }
+
+  const Icon = activityIcon(activity.kind)
+  return (
+    <Card className="border border-border bg-surface shadow-none" role="listitem">
+      <Card.Content className="p-3">
+        <button className="flex w-full items-center gap-2 text-left" onClick={toggle} type="button">
+          <Icon aria-hidden="true" className="text-muted" size={15} />
+          <strong className="text-xs font-medium text-foreground">{activity.name}</strong>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted">{activity.summary}</span>
+          {activity.status === 'running' ? <Spinner color="accent" size="sm" /> : (
+            <ChevronRight className={expanded ? 'rotate-90' : ''} size={14} />
+          )}
+        </button>
+        {expanded && (
+          <div className="mt-3 border-t border-border pt-3">
+            {loading && !content ? <Spinner color="accent" size="sm" /> : available ? (
+              <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs leading-5 text-muted">{content}</pre>
+            ) : <p className="text-xs text-muted">{t('toolSourceUnavailable')}</p>}
+            {nextCursor !== null && nextCursor > 0 && (
+              <Button className="mt-2" isDisabled={loading} onPress={() => void loadPage(nextCursor)} size="sm" variant="ghost">
+                {t('loadMore')}
+              </Button>
+            )}
+          </div>
+        )}
+      </Card.Content>
+    </Card>
+  )
+}
+
+function TurnConfigLine({ config }: {
+  config: { model?: string; effort: string; fastMode: boolean }
+}) {
+  const { t } = useTranslation('chat')
+  return (
+    <span className="text-[11px] text-muted">
+      {config.model ?? t('providerDefaultModel')} · {config.effort}
+      {config.fastMode ? ` · ${t('fastMode')}` : ''}
+    </span>
   )
 }
 
@@ -806,4 +1120,33 @@ function confidenceColor(
   if (confidence === 'high') return 'success'
   if (confidence === 'medium') return 'warning'
   return 'default'
+}
+
+function mergeNativeToolActivity(
+  current: NativeToolActivity[],
+  incoming: NativeToolActivity,
+): NativeToolActivity[] {
+  const index = current.findIndex((activity) => activity.itemId === incoming.itemId)
+  if (index < 0) return [...current, incoming]
+  return current.map((activity, itemIndex) => itemIndex === index ? incoming : activity)
+}
+
+function isNativeChatEvent(value: unknown): value is NativeChatEvent {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const event = value as Record<string, unknown>
+  if (event.type === 'assistant_delta') return typeof event.text === 'string'
+  if (event.type === 'usage') {
+    if (!event.contextUsage || typeof event.contextUsage !== 'object') return false
+    const usage = event.contextUsage as Record<string, unknown>
+    return typeof usage.usedTokens === 'number' && typeof usage.maxTokens === 'number'
+  }
+  if (event.type !== 'tool_activity' || !event.activity || typeof event.activity !== 'object') {
+    return false
+  }
+  const activity = event.activity as Record<string, unknown>
+  return typeof activity.itemId === 'string'
+    && typeof activity.kind === 'string'
+    && typeof activity.name === 'string'
+    && typeof activity.status === 'string'
+    && (activity.summary === undefined || typeof activity.summary === 'string')
 }

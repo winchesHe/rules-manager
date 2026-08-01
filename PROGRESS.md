@@ -556,3 +556,27 @@ npm test -- --runInBand test/unit/rule-candidates-schema.test.ts test/unit/redac
 - 新增结构回归测试，锁定拖动带、drag/no-drag CSS 契约。
 - 真实 Electron 验收：主界面与 Settings 顶部拖动均执行成功；拖动后 Settings 和返回按钮仍可点击。
 - 验证：App 3 suites / 7 tests、renderer strict TypeScript、production build、`git diff --check` 全通过。
+
+---
+
+## Chat V1 Phase 3：Paseo 式 Conversation 与 Composer（2026-08-01）
+
+- Claude/Codex Adapter 将 Assistant delta、Tool activity 与 Provider 权威 usage 归一化后发送
+  到 Renderer；安全 Tool 事件只包含 item ID、类型、名称、状态与截断摘要，不转发原始
+  input/output。Claude `modelUsage` 与 Codex token usage 均可更新 Context Window，缺失时显示
+  `—`，不做本地估算。
+- Tool 卡片默认只显示安全预览；用户展开后才通过 `chat.tool.read` 按 Native item ID、8 KiB
+  分页读取原生 Session。Controller 只接受已存在于可见消息投影中的 item ID，完整内容仅保留
+  在组件内存，来源失效显示明确状态且不写 ChatStore。
+- Composer 支持 Claude/Codex、Provider model、五档 effort、fast mode 和按 Provider 扫描的
+  Skills；选择 Skill 只向当前输入插入 `/skill-name`。Provider 在首轮后锁定，其余配置按轮捕获，
+  每条用户消息展示实际 turn config。
+- 同一 Chat 的后续输入使用 Renderer 内存队列串行提交，允许在当前轮运行时继续输入；停止只
+  interrupt 当前 turn。流式 Assistant、Tool 状态和 usage 实时更新，完成后以 ChatStore 投影
+  替换临时状态。
+- 测试按红→绿覆盖 Provider event normalizer、Skills 去重、Tool 大输出分页、安全 item 引用和
+  Controller 广播。最终 App 19 suites / 111 tests 通过，App build 与 diff check 通过。
+- 真实 Electron Claude 首轮从运行态观察到停止按钮和队列入口，最终回复
+  `Phase 3 Chat UI 验收通过`，Provider 被锁定，权威 Context Window 显示
+  `33499 / 200000`；1024 px 宽窗口三栏保持可用，左栏横向溢出随后收口。
+- 提交信息：`feat: 完善原生 Chat 对话与 Composer`

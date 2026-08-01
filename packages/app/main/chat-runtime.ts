@@ -10,7 +10,21 @@ export interface NativeTurnRequest {
   message: string
   workingDirectory: string
   config: NativeTurnConfig
+  onEvent?: (event: NativeChatEvent) => void
 }
+
+export interface NativeToolActivity {
+  itemId: string
+  kind: 'thinking' | 'read' | 'search' | 'shell' | 'tool'
+  name: string
+  status: 'running' | 'completed' | 'failed'
+  summary?: string
+}
+
+export type NativeChatEvent =
+  | { type: 'assistant_delta'; text: string }
+  | { type: 'tool_activity'; activity: NativeToolActivity }
+  | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
 
 export interface NativeTurnResult {
   nativeSessionId: string
@@ -18,10 +32,24 @@ export interface NativeTurnResult {
   contextUsage?: { usedTokens: number; maxTokens: number }
 }
 
+export interface NativeToolItemReadRequest {
+  nativeSessionId: string
+  itemId: string
+  cursor: number
+  limit: number
+}
+
+export interface NativeToolItemPage {
+  available: boolean
+  content: string
+  nextCursor: number | null
+}
+
 export interface ChatProviderAdapter {
   start(request: NativeTurnRequest): Promise<NativeTurnResult>
   resume(request: NativeTurnRequest & { nativeSessionId: string }): Promise<NativeTurnResult>
   interrupt(): Promise<void>
+  readToolItem(request: NativeToolItemReadRequest): Promise<NativeToolItemPage>
   close(): Promise<void>
 }
 
@@ -67,6 +95,19 @@ export class ChatRuntimeManager {
 
   activeChatIds(): string[] {
     return [...this.active.keys()].sort()
+  }
+
+  async readToolItem(input: {
+    chatId: string
+    provider: NativeChatProvider
+    nativeSessionId: string
+    itemId: string
+    cursor: number
+    limit: number
+  }): Promise<NativeToolItemPage> {
+    const adapter = this.adapters.get(input.chatId)
+      ?? this.createAndRememberAdapter(input.provider, input.chatId)
+    return adapter.readToolItem(input)
   }
 
   async close(chatId?: string): Promise<void> {

@@ -1,9 +1,12 @@
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { getSessionMessages, query } from '@anthropic-ai/claude-agent-sdk'
 import type {
   ChatProviderAdapter,
   NativeTurnRequest,
   NativeTurnResult,
+  NativeToolItemPage,
+  NativeToolItemReadRequest,
 } from './chat-runtime.js'
+import { safeToolActivity } from './chat-event.js'
 
 export const HOST_SESSION_POLICY = `Memory Manager 可能在用户消息前附加 <host_session_context>。
 它描述用户为当前任务选择的历史 Agent Session。
@@ -25,13 +28,20 @@ interface ClaudeQueryStream extends AsyncIterable<unknown> {
 }
 
 export type ClaudeQueryFactory = (input: ClaudeQueryInput) => ClaudeQueryStream
+export type ClaudeSessionMessageReader = (
+  sessionId: string,
+  options?: { dir?: string },
+) => Promise<unknown[]>
 
 const defaultQuery: ClaudeQueryFactory = (input) => query(input as Parameters<typeof query>[0])
 
 export class ClaudeChatAdapter implements ChatProviderAdapter {
   private activeQuery: ClaudeQueryStream | null = null
 
-  constructor(private readonly createQuery: ClaudeQueryFactory = defaultQuery) {}
+  constructor(
+    private readonly createQuery: ClaudeQueryFactory = defaultQuery,
+    private readonly readSessionMessages: ClaudeSessionMessageReader = getSessionMessages,
+  ) {}
 
   start(request: NativeTurnRequest): Promise<NativeTurnResult> {
     return this.run(request, false)
@@ -50,6 +60,14 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
   async close(): Promise<void> {
     this.activeQuery?.close?.()
     this.activeQuery = null
+  }
+
+  async readToolItem(request: NativeToolItemReadRequest): Promise<NativeToolItemPage> {
+    const messages = await this.readSessionMessages(request.nativeSessionId)
+    const matches: unknown[] = []
+    for (const message of messages) collectToolMatches(message, request.itemId, matches)
+    if (matches.length === 0) return { available: false, content: '', nextCursor: null }
+    return pageContent(JSON.stringify(matches, null, 2), request.cursor, request.limit)
   }
 
   private async run(
@@ -79,6 +97,8 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
     this.activeQuery = stream
     let nativeSessionId = request.nativeSessionId ?? ''
     let resultContent = ''
+    let contextUsage: NativeTurnResult['contextUsage']
+    const toolActivities = new Map<number, NonNullable<ReturnType<typeof safeToolActivity>>>()
     try {
       for await (const value of stream) {
         const message = asRecord(value)
@@ -94,13 +114,56 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
             throw new Error(claudeError(message))
           }
           if (typeof message.result === 'string') resultContent = message.result
+          contextUsage = claudeContextUsage(message.modelUsage)
+          if (contextUsage) request.onEvent?.({ type: 'usage', contextUsage })
+        }
+        if (message.type === 'stream_event') {
+          const event = asRecord(message.event)
+          const delta = asRecord(event.delta)
+          if (
+            event.type === 'content_block_delta'
+            && delta.type === 'text_delta'
+            && typeof delta.text === 'string'
+          ) {
+            request.onEvent?.({ type: 'assistant_delta', text: delta.text })
+          }
+          if (event.type === 'content_block_start') {
+            const block = asRecord(event.content_block)
+            if (block.type === 'tool_use') {
+              const activity = safeToolActivity({
+                itemId: block.id,
+                name: block.name,
+                status: 'running',
+                input: block.input,
+              })
+              if (activity) {
+                const index = typeof event.index === 'number' ? event.index : toolActivities.size
+                toolActivities.set(index, activity)
+                request.onEvent?.({ type: 'tool_activity', activity })
+              }
+            }
+          }
+          if (event.type === 'content_block_stop') {
+            const index = typeof event.index === 'number' ? event.index : -1
+            const activity = toolActivities.get(index)
+            if (activity) {
+              request.onEvent?.({
+                type: 'tool_activity',
+                activity: { ...activity, status: 'completed' },
+              })
+            }
+          }
         }
       }
     } finally {
       if (this.activeQuery === stream) this.activeQuery = null
     }
     if (!nativeSessionId) throw new Error('Claude did not return a session id')
-    return { nativeSessionId, content: resultContent }
+    return {
+      nativeSessionId,
+      content: resultContent,
+      ...(contextUsage ? { contextUsage } : {}),
+    }
   }
 }
 
@@ -116,4 +179,48 @@ function claudeError(message: Record<string, unknown>): string {
     if (detail) return detail
   }
   return 'Claude turn failed'
+}
+
+function claudeContextUsage(value: unknown): NativeTurnResult['contextUsage'] {
+  const usages = Object.values(asRecord(value)).map(asRecord)
+  if (usages.length === 0) return undefined
+  let usedTokens = 0
+  let maxTokens = 0
+  for (const usage of usages) {
+    for (const key of [
+      'inputTokens', 'outputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens',
+    ]) {
+      const tokens = usage[key]
+      if (typeof tokens === 'number' && Number.isFinite(tokens)) usedTokens += tokens
+    }
+    if (typeof usage.contextWindow === 'number' && Number.isFinite(usage.contextWindow)) {
+      maxTokens = Math.max(maxTokens, usage.contextWindow)
+    }
+  }
+  return maxTokens > 0 ? { usedTokens, maxTokens } : undefined
+}
+
+function collectToolMatches(value: unknown, itemId: string, matches: unknown[]): void {
+  if (Array.isArray(value)) {
+    for (const item of value) collectToolMatches(item, itemId, matches)
+    return
+  }
+  if (!value || typeof value !== 'object') return
+  const record = value as Record<string, unknown>
+  if (record.id === itemId || record.tool_use_id === itemId) {
+    matches.push(record)
+    return
+  }
+  for (const child of Object.values(record)) collectToolMatches(child, itemId, matches)
+}
+
+function pageContent(content: string, cursor: number, limit: number): NativeToolItemPage {
+  const start = Math.max(0, cursor)
+  const size = Math.max(1, Math.min(limit, 64 * 1024))
+  const end = Math.min(content.length, start + size)
+  return {
+    available: true,
+    content: content.slice(start, end),
+    nextCursor: end < content.length ? end : null,
+  }
 }

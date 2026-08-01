@@ -7,6 +7,7 @@ import type {
 } from './generation-controller.js'
 import type { ProjectGenerationResponse } from '../../core/src/commands/rules-generate.js'
 import type { RunState } from './background-run.js'
+import type { NativeToolActivity } from './chat-runtime.js'
 
 export type ChatThreadStatus = Exclude<RunState, 'idle'>
 
@@ -19,6 +20,7 @@ export interface ChatMessage {
   createdAt: string
   completedAt?: string
   turnConfig?: NativeTurnConfig
+  toolActivities?: NativeToolActivity[]
 }
 
 export interface GenerationChatThreadSummary {

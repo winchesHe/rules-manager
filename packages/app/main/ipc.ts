@@ -55,6 +55,7 @@ import { ChatRuntimeManager } from './chat-runtime.js'
 import { ClaudeChatAdapter } from './claude-chat-adapter.js'
 import { CodexChatAdapter } from './codex-chat-adapter.js'
 import { NativeChatController } from './native-chat-controller.js'
+import { listChatSkills } from './chat-skills.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
@@ -66,6 +67,7 @@ const nativeChatController = new NativeChatController({
   store: chatStore,
   runtime: chatRuntime,
   workingDirectory: workspace.workspaceDir,
+  onEvent: broadcastNativeChatEvent,
 })
 const scanController = new ScanController(
   (request) =>
@@ -136,6 +138,15 @@ export function registerIpcHandlers(): void {
       throw new Error('chat thread id is required')
     }
     return nativeChatController.interrupt(threadId)
+  })
+  ipcMain.handle('chat.skills', (_event, provider: unknown) => {
+    if (provider !== 'claude' && provider !== 'codex') {
+      throw new Error('chat provider must be claude or codex')
+    }
+    return listChatSkills(provider)
+  })
+  ipcMain.handle('chat.tool.read', (_event, value: unknown) => {
+    return nativeChatController.readToolItem(validateNativeChatToolReadRequest(value))
   })
 
   ipcMain.handle('scan.run', (_event, value?: unknown) => {
@@ -359,6 +370,33 @@ function validateNativeChatSendRequest(value: unknown) {
       effort: config.effort,
       fastMode: config.fastMode,
     },
+  }
+}
+
+function validateNativeChatToolReadRequest(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('invalid tool read request')
+  }
+  const request = value as Record<string, unknown>
+  if (typeof request.chatId !== 'string' || !request.chatId.trim()) {
+    throw new Error('chat id is required')
+  }
+  if (typeof request.itemId !== 'string' || !request.itemId.trim()) {
+    throw new Error('tool item id is required')
+  }
+  const cursor = request.cursor ?? 0
+  const limit = request.limit ?? 8192
+  if (!Number.isInteger(cursor) || Number(cursor) < 0) {
+    throw new Error('tool cursor must be a non-negative integer')
+  }
+  if (!Number.isInteger(limit) || Number(limit) < 1 || Number(limit) > 65536) {
+    throw new Error('tool limit must be between 1 and 65536')
+  }
+  return {
+    chatId: request.chatId,
+    itemId: request.itemId,
+    cursor: Number(cursor),
+    limit: Number(limit),
   }
 }
 
@@ -637,6 +675,15 @@ function broadcastProviderEvent(event: ProviderControllerEvent): void {
         : { message: event.message }
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) window.webContents.send(channel, payload)
+  }
+}
+
+function broadcastNativeChatEvent(payload: {
+  chatId: string
+  event: import('./chat-runtime.js').NativeChatEvent
+}): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) window.webContents.send('chat.event', payload)
   }
 }
 

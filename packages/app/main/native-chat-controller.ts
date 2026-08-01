@@ -5,7 +5,12 @@ import type {
   NativeChatProvider,
   NativeTurnConfig,
 } from './chat-store.js'
-import type { ChatRuntimeManager } from './chat-runtime.js'
+import type {
+  ChatRuntimeManager,
+  NativeChatEvent,
+  NativeToolActivity,
+  NativeToolItemPage,
+} from './chat-runtime.js'
 
 export interface NativeChatSendRequest {
   chatId?: string
@@ -19,12 +24,20 @@ export interface NativeChatSendResult {
   nativeSessionId: string
 }
 
+export interface NativeChatToolReadRequest {
+  chatId: string
+  itemId: string
+  cursor?: number
+  limit?: number
+}
+
 export interface NativeChatControllerOptions {
   store: ChatStore
   runtime: ChatRuntimeManager
   workingDirectory: string
   createId?: () => string
   now?: () => string
+  onEvent?: (envelope: { chatId: string; event: NativeChatEvent }) => void
 }
 
 export class NativeChatController {
@@ -68,6 +81,7 @@ export class NativeChatController {
       at: startedAt,
       turnConfig: request.config,
     }))
+    const toolActivities = new Map<string, NativeToolActivity>()
     try {
       const result = await this.options.runtime.sendTurn({
         chatId,
@@ -76,6 +90,12 @@ export class NativeChatController {
         message,
         workingDirectory: this.options.workingDirectory,
         config: request.config,
+        onEvent: (event) => {
+          if (event.type === 'tool_activity') {
+            toolActivities.set(event.activity.itemId, event.activity)
+          }
+          this.options.onEvent?.({ chatId, event })
+        },
       })
       const completedAt = this.now()
       this.options.store.bindNativeSession(chatId, result.nativeSessionId, completedAt)
@@ -87,6 +107,7 @@ export class NativeChatController {
         role: 'assistant',
         content: result.content,
         at: completedAt,
+        toolActivities: [...toolActivities.values()],
       }))
       return { chatId, nativeSessionId: result.nativeSessionId }
     } catch (error) {
@@ -98,6 +119,25 @@ export class NativeChatController {
   interrupt(chatId: string): Promise<void> {
     return this.options.runtime.interrupt(chatId)
   }
+
+  async readToolItem(request: NativeChatToolReadRequest): Promise<NativeToolItemPage> {
+    const thread = this.options.store.readThread(request.chatId)
+    if (!thread || thread.version !== 2 || !thread.nativeSessionId) {
+      throw new Error('native chat was not found')
+    }
+    const allowed = thread.messages.some((message) =>
+      message.toolActivities?.some((activity) => activity.itemId === request.itemId),
+    )
+    if (!allowed) throw new Error('tool item was not found')
+    return this.options.runtime.readToolItem({
+      chatId: request.chatId,
+      provider: thread.provider,
+      nativeSessionId: thread.nativeSessionId,
+      itemId: request.itemId,
+      cursor: request.cursor ?? 0,
+      limit: request.limit ?? 8192,
+    })
+  }
 }
 
 function visibleMessage(input: {
@@ -106,6 +146,7 @@ function visibleMessage(input: {
   content: string
   at: string
   turnConfig?: NativeTurnConfig
+  toolActivities?: NativeToolActivity[]
 }): ChatMessage {
   return {
     id: input.id,
@@ -116,6 +157,9 @@ function visibleMessage(input: {
     createdAt: input.at,
     completedAt: input.at,
     ...(input.turnConfig ? { turnConfig: { ...input.turnConfig } } : {}),
+    ...(input.toolActivities && input.toolActivities.length > 0
+      ? { toolActivities: input.toolActivities.map((activity) => ({ ...activity })) }
+      : {}),
   }
 }
 

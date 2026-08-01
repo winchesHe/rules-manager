@@ -4,8 +4,11 @@ import type {
   ChatProviderAdapter,
   NativeTurnRequest,
   NativeTurnResult,
+  NativeToolItemPage,
+  NativeToolItemReadRequest,
 } from './chat-runtime.js'
 import { HOST_SESSION_POLICY } from './claude-chat-adapter.js'
+import { safeToolActivity } from './chat-event.js'
 
 export interface CodexAppServerProcess {
   stdin: NodeJS.WritableStream
@@ -35,6 +38,7 @@ interface ActiveCodexTurn {
   contextUsage?: { usedTokens: number; maxTokens: number }
   resolve: (value: NativeTurnResult) => void
   reject: (error: Error) => void
+  onEvent?: NativeTurnRequest['onEvent']
 }
 
 class CodexRpcClient {
@@ -142,6 +146,17 @@ export class CodexChatAdapter implements ChatProviderAdapter {
     this.initialized = false
   }
 
+  async readToolItem(request: NativeToolItemReadRequest): Promise<NativeToolItemPage> {
+    const client = await this.ensureClient()
+    const response = await client.request('thread/read', {
+      threadId: request.nativeSessionId,
+      includeTurns: true,
+    })
+    const match = findItemById(response, request.itemId)
+    if (!match) return { available: false, content: '', nextCursor: null }
+    return pageContent(JSON.stringify(match, null, 2), request.cursor, request.limit)
+  }
+
   private async run(request: NativeTurnRequest, resuming: boolean): Promise<NativeTurnResult> {
     if (this.active) throw new Error('Codex adapter already has an active turn')
     const client = await this.ensureClient()
@@ -169,7 +184,14 @@ export class CodexChatAdapter implements ChatProviderAdapter {
 
     let activeTurn!: ActiveCodexTurn
     const completion = new Promise<NativeTurnResult>((resolve, reject) => {
-      activeTurn = { threadId, turnId: null, content: '', resolve, reject }
+      activeTurn = {
+        threadId,
+        turnId: null,
+        content: '',
+        resolve,
+        reject,
+        ...(request.onEvent ? { onEvent: request.onEvent } : {}),
+      }
     })
     this.active = activeTurn
     try {
@@ -221,11 +243,31 @@ export class CodexChatAdapter implements ChatProviderAdapter {
       return
     }
     if (method === 'item/agentMessage/delta') {
-      if (typeof params.delta === 'string') active.content += params.delta
+      if (typeof params.delta === 'string') {
+        active.content += params.delta
+        active.onEvent?.({ type: 'assistant_delta', text: params.delta })
+      }
+      return
+    }
+    if (method === 'item/started' || method === 'item/completed') {
+      const item = asRecord(params.item)
+      const activity = safeToolActivity({
+        itemId: item.id,
+        name: item.type,
+        providerType: item.type,
+        status: method === 'item/started' ? 'running' : 'completed',
+        item,
+      })
+      if (activity && activity.kind !== 'thinking') {
+        active.onEvent?.({ type: 'tool_activity', activity })
+      }
       return
     }
     if (method === 'thread/tokenUsage/updated') {
       active.contextUsage = normalizeContextUsage(params.tokenUsage) ?? active.contextUsage
+      if (active.contextUsage) {
+        active.onEvent?.({ type: 'usage', contextUsage: active.contextUsage })
+      }
       return
     }
     if (method !== 'turn/completed') return
@@ -270,4 +312,33 @@ function asNumber(value: unknown): number | null {
 function rpcError(value: unknown): string {
   const error = asRecord(value)
   return asString(error.message) ?? 'Codex app-server request failed'
+}
+
+function findItemById(value: unknown, itemId: string): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const match = findItemById(item, itemId)
+      if (match) return match
+    }
+    return null
+  }
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  if (record.id === itemId) return record
+  for (const child of Object.values(record)) {
+    const match = findItemById(child, itemId)
+    if (match) return match
+  }
+  return null
+}
+
+function pageContent(content: string, cursor: number, limit: number): NativeToolItemPage {
+  const start = Math.max(0, cursor)
+  const size = Math.max(1, Math.min(limit, 64 * 1024))
+  const end = Math.min(content.length, start + size)
+  return {
+    available: true,
+    content: content.slice(start, end),
+    nextCursor: end < content.length ? end : null,
+  }
 }
