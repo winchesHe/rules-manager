@@ -162,7 +162,7 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 - 大数据列表采用“数据层限定查询 + renderer 虚拟窗口”，默认只渲染可视区域附近的行。
 - 同一页面只保留一个主操作按钮；次级操作使用 ghost，状态计数使用 Chip。
 
-### Chat 第一版
+### Chat 第一版（历史实现）
 
 - 主导航顺序为 Scan / Projects / Chat / Rules。
 - Rules 负责选择 Evidence scope、审核和发布；生成开始后创建 Chat Thread 并切换到 Chat。
@@ -170,6 +170,24 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 - 用户请求使用右侧轻量气泡，Assistant 使用无气泡正文，Candidate 使用结构化 Artifact。
 - 第一版不提供 Composer、通用 New chat、连续追问或 Session Summary。
 - Chat 可见正文使用 FS-first 本地持久化；隐藏 Prompt、Session 原文、tool 参数和 tool output 不进入 Chat 文件。
+
+上述条目描述现有 Rules Generation 只读 Chat。通用 Chat 重构以
+[Chat View 原生 Agent Session 重构规格](docs/specs/chat-view-native-sessions.md) 为准；旧 Thread
+继续只读兼容，不再把“无 Composer”作为新 Chat 的限制。
+
+### Chat 原生 Session 重构
+
+- Chat 继续使用 `workspace + fluid`，桌面端为可收起 Thread Rail、Conversation、Session
+  Context 三段布局；各 Pane 独立滚动，窄屏将 Rail/Context 转为 Sheet。
+- Conversation 底部固定 Composer。首次发送前是临时 Draft；发送后一个 Chat 永久绑定一个
+  Claude 或 Codex Native Session，Provider 不可切换。
+- 通用 Chat 操作、消息层级、Skill 插入、重命名和运行状态参考 Paseo；右侧 Session
+  Context、Rules Run intent 和 Native 生命周期遵循专项规格。
+- Tool 原始 input/output 可以在用户展开时从 Native Session 按需查看，但不进入 ChatStore；
+  默认只保存和展示 Native Item 引用、安全摘要与有限预览。隐藏 Prompt 永不进入 Renderer。
+- Context Window 只显示 Provider 权威值，缺失时显示不可用，不在应用侧估算。
+- Full access 是固定运行模式，必须在 Composer 附近常驻显示；页面不提供 Permission Mode 或
+  working directory 控件。
 
 ### Chat Agent Stream
 

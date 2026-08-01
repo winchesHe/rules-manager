@@ -1755,3 +1755,28 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   stdout 提前关闭回归。
 - 最终验收：Core 25 suites / 275 tests、App 14 suites / 97 tests、skipped=0，Core/App
   production build 全通过。Core build 仍只有既有 `tsdown define` 警告。
+
+## Chat View 原生 Agent Session 重构规格（2026-08-01）
+
+- 将下一阶段的 Chat 定义为一个 App Chat 对应一个 Claude/Codex Native Session；当前
+  Rules Generation version 1 Thread 继续只读兼容，不伪造 Native Session。完整规格见
+  `docs/specs/chat-view-native-sessions.md`，7 步实施节奏见
+  `docs/plans/chat-view-native-sessions.md`。
+- 工作目录收敛为所有 Chat 共用 `resolveWorkspace().workspaceDir`，不创建每 Chat 目录；
+  Full access 固定开启。Provider 首轮后锁定，model/effort/fast 按轮生效；一个 Chat 同时
+  一轮，不同 Chat 无应用级并发上限。
+- 右侧历史 Session 采用引用而非复制：首次选择或集合变化后的下一轮发送完整 replace
+  block 和净 added/removed，每个来源只提供
+  `memory-manager sessions show <id> --stream`。Agent 自行决定读取深度，大 Session 和失效
+  源由 CLI/Agent 处理，App 不实现 Locator、摘要器、Preflight 或 token 分配。
+- ChatStore version 2 只保存 Native 引用、UI 元数据、可见消息投影和 Tool Item 引用；
+  完整 tool input/output 按需从 Native Session 读取，不落 ChatStore，隐藏 Prompt 不进入
+  Renderer。Context Window 只展示 Provider 权威数值。
+- Codex Archive/Restore/Delete 分别使用 app-server `thread/archive`、`thread/unarchive`、
+  `thread/delete`；Claude Archive 仅为 App 状态，永久删除使用 SDK `deleteSession()`。
+  Native resume 失败不得静默换 Session。
+- Rules Run 改为带 `origin=rules` 和首轮 `intent=rules-generation` 的普通 Chat；后续默认
+  普通对话。现有 Evidence 资格与 Candidate 持久化约束必须保留。
+- 代码实测基线：Core 25 suites / 275 tests、App 14 suites / 97 tests、skipped=0；两端
+  production build 通过。Provider 版本为 Claude Code 2.1.220 / SDK 0.3.220、Codex CLI
+  0.146.0。首个执行目标只做 Claude Native Chat 端到端最小骨架。
