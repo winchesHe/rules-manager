@@ -1725,3 +1725,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
   production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
   警告。
+
+## 候选规则整行选择热区（2026-08-01）
+
+- 候选表不再要求用户精确点击小型 Checkbox。通过 React Aria Table 原生 `onRowAction`
+  把候选行从 Checkbox 到置信度列扩展为选择热区，支持再次点击取消，并保留键盘行操作。
+- 行增加 pointer、hover、focus ring 和已选背景反馈；批量提交期间忽略行操作，避免请求中
+  改变选择集合。Checkbox 与最右侧审核按钮属于 Table 的交互子元素，保持独立行为。
+- App 视图契约先增加行操作、提交态守卫及热区反馈断言并确认失败，再完成实现。真实
+  Electron 中点击首行规则文字成功显示“已选 1 条”与批量工具栏；点击首行审核按钮仍
+  直接进入候选详情，没有触发行选择。
+- 最终验收：Core 25 suites / 269 tests、App 14 suites / 97 tests、skipped=0，Core/App
+  production build 与 `git diff --check` 全通过。Core build 仍只有既有 `tsdown define`
+  警告。

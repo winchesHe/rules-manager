@@ -1288,6 +1288,15 @@ function GeneratedRulesIndexPage({
     })
   }, [candidates, selectedRunId])
 
+  function toggleCandidateSelection(candidateId: string): void {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(candidateId)) next.delete(candidateId)
+      else next.add(candidateId)
+      return next
+    })
+  }
+
   async function runBulkUpdate(nextStatus: 'accepted' | 'rejected'): Promise<void> {
     const succeeded = await onBatchUpdate([...selectedIds], nextStatus)
     if (succeeded) setSelectedIds(new Set())
@@ -1441,7 +1450,13 @@ function GeneratedRulesIndexPage({
           ) : (
             <Table className="rounded-none bg-transparent shadow-none">
               <Table.ScrollContainer>
-                <Table.Content aria-label={tr('overview.tableLabel', { status: tr(`status.${status}`) })}>
+                <Table.Content
+                  aria-label={tr('overview.tableLabel', { status: tr(`status.${status}`) })}
+                  onRowAction={(key) => {
+                    if (pendingBatchAction !== null) return
+                    toggleCandidateSelection(String(key))
+                  }}
+                >
                   <Table.Header>
                     <Table.Column>
                       <Checkbox
@@ -1470,7 +1485,13 @@ function GeneratedRulesIndexPage({
                   </Table.Header>
                   <Table.Body>
                     {visibleCandidates.map((candidate) => (
-                      <Table.Row id={candidate.id} key={candidate.id}>
+                      <Table.Row
+                        className={`cursor-pointer rounded-none outline-none transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary [&>td]:rounded-none ${
+                          selectedIds.has(candidate.id) ? 'bg-primary-soft' : ''
+                        }`}
+                        id={candidate.id}
+                        key={candidate.id}
+                      >
                         <Table.Cell>
                           <Checkbox
                             aria-label={tr('generated.selectCandidate', { rule: candidate.rule_text })}
