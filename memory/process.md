@@ -1779,4 +1779,5 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   普通对话。现有 Evidence 资格与 Candidate 持久化约束必须保留。
 - 代码实测基线：Core 25 suites / 275 tests、App 14 suites / 97 tests、skipped=0；两端
   production build 通过。Provider 版本为 Claude Code 2.1.220 / SDK 0.3.220、Codex CLI
-  0.146.0。首个执行目标只做 Claude Native Chat 端到端最小骨架。
+  0.146.0。执行目标覆盖计划全部 7 个阶段；Claude Native Chat 最小骨架只是第一个完成即
+  验证的 checkpoint，不是本轮终点。
