@@ -24,6 +24,18 @@
 - 阶段全量：Core 25 suites / 275 tests；App 17 suites / 104 tests；skipped=0；App production build 与 `git diff --check` 通过。
 - 下一阶段：Codex app-server 原生 Adapter 与可控 JSON-RPC 假进程。
 
+### Phase 2：Codex app-server 原生接入（完成）
+
+- 红测证据：`codex-chat-adapter.test.ts` 首次运行因缺少 `codex-chat-adapter.ts` 编译失败；实现后又捕获假进程 ReadableStream 写入类型及 active turn 收窄问题，修正后转绿。
+- 新增 stdio JSON-RPC Client 与 Codex Adapter，Chat 路径只使用 `initialize`、`thread/start|resume`、`turn/start|interrupt`，不调用 `codex exec --ephemeral`。
+- `thread/start` 固定 workspace cwd、`approvalPolicy=never`、`sandbox=danger-full-access` 并只在新 thread 注入 Host Policy；resume 只携带原 threadId。
+- `turn/start` 每轮发送 model、effort、`serviceTier=fast|null`、固定 cwd、never 与 `dangerFullAccess`；Assistant delta 在 Main 聚合为可见回复。
+- `thread/tokenUsage/updated` 的权威 `last.total_tokens / model_context_window` 进入 ChatStore `contextUsage`，无值时不估算。
+- 可控假进程覆盖 start、resume、delta、usage、interrupt 和配置参数；定向 3/3 通过。
+- 真实 Codex 三轮：Native ID 三次均为 `019fbde9-e579-7131-b57f-e3cf5e9bfe95`，`same=true`；重启 app-server 后第三轮仍恢复，usage=`20301 / 258400`。
+- 阶段全量：Core 25 suites / 275 tests；App 18 suites / 107 tests；skipped=0；Core/App build 通过，Core 仅既有 define warning。
+- 下一阶段：完善 Provider/model/effort/fast 控件、流式事件、停止/排队、Skills 与 Tool 卡片。
+
 ## 窗口位置与大小恢复（2026-07-30）
 - 范围：扩展现有窗口状态文件与 main 接线，保存普通窗口 `{x,y,width,height}`；兼容旧 `{x,y}`。
 - 验收：resize/move/close 均保存完整 bounds；重启恢复大小；非法状态安全回退；最大化/全屏/最小化不覆盖。

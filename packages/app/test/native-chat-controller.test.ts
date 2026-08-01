@@ -24,7 +24,11 @@ describe('NativeChatController', () => {
     const adapter = (): ChatProviderAdapter => ({
       start: async (request) => {
         calls.push(`start:${request.message}`)
-        return { nativeSessionId: 'native-fixed', content: 'first reply' }
+        return {
+          nativeSessionId: 'native-fixed',
+          content: 'first reply',
+          contextUsage: { usedTokens: 1234, maxTokens: 200000 },
+        }
       },
       resume: async (request) => {
         calls.push(`resume:${request.nativeSessionId}:${request.message}`)
@@ -49,6 +53,7 @@ describe('NativeChatController', () => {
     expect(first.chatId).toBe('chat-fixed')
     expect(store.readThread('chat-fixed')).toMatchObject({
       nativeSessionId: 'native-fixed', provider: 'claude', status: 'ready',
+      contextUsage: { usedTokens: 1234, maxTokens: 200000 },
       messages: [{ role: 'user', content: 'first' }, { role: 'assistant', content: 'first reply' }],
     })
 

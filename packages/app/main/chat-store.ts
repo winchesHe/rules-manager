@@ -249,6 +249,19 @@ export class ChatStore {
     } satisfies NativeChatThreadFile)
   }
 
+  updateContextUsage(
+    threadId: string,
+    usage: { usedTokens: number; maxTokens: number },
+    at: string,
+  ): void {
+    const thread = this.requireNativeThread(threadId)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      contextUsage: { ...usage, updatedAt: at },
+      updatedAt: at,
+    } satisfies NativeChatThreadFile)
+  }
+
   syncGeneration(status: GenerationStatus): void {
     if (!status.runId || status.state === 'idle') return
     const existing = this.readThreadFile(status.runId)

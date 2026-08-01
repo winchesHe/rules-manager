@@ -15,6 +15,7 @@ export interface NativeTurnRequest {
 export interface NativeTurnResult {
   nativeSessionId: string
   content: string
+  contextUsage?: { usedTokens: number; maxTokens: number }
 }
 
 export interface ChatProviderAdapter {

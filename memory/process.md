@@ -1800,3 +1800,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 真实 Claude smoke 连续三轮（第三轮新 Query 实例）保持同一 Session ID
   `bc22d10e-6149-4f5f-a5aa-d39d9fa58303`，三轮精确返回预期短文本。
 - 提交信息：`feat: 打通 Claude 原生 Chat 最小闭环`
+
+## Chat V1 Phase 2：Codex app-server 原生接入（2026-08-01）
+
+- Chat Runtime 新增 Codex stdio JSON-RPC Adapter；Chat 执行链使用
+  `thread/start|resume`、`turn/start|interrupt`，不复用 Rules Generation 的
+  `codex exec --ephemeral`。
+- 新 thread 固定 workspace cwd、`approvalPolicy=never`、`sandbox=danger-full-access` 并
+  注入一次 Host Policy；resume 只携带原 threadId，避免重启后重复系统指令。
+- 每轮 `turn/start` 传递 model、effort、`serviceTier=fast|null`、cwd、never 与
+  `{type: dangerFullAccess}`。Main 只归一化 Assistant 文本和数值 usage，不广播原始 payload。
+- `thread/tokenUsage/updated` 的 Provider 权威值进入 ChatStore `contextUsage`；缺失时保持 null，
+  不做本地 token 估算。
+- 可控 JSON-RPC 假进程覆盖 initialize、start/resume、delta、usage、interrupt 与权限配置；
+  真实 Codex 三轮在关闭并重建 app-server 后仍保持 thread ID
+  `019fbde9-e579-7131-b57f-e3cf5e9bfe95`，第三轮 usage 为 20301 / 258400。
+- 最终 Core 25 suites / 275 tests、App 18 suites / 107 tests、skipped=0，Core/App build 通过。
+- 提交信息：`feat: 接入 Codex 原生 app-server Chat`

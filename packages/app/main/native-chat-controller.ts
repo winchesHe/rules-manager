@@ -79,6 +79,9 @@ export class NativeChatController {
       })
       const completedAt = this.now()
       this.options.store.bindNativeSession(chatId, result.nativeSessionId, completedAt)
+      if (result.contextUsage) {
+        this.options.store.updateContextUsage(chatId, result.contextUsage, completedAt)
+      }
       this.options.store.appendNativeMessage(chatId, visibleMessage({
         id: randomUUID(),
         role: 'assistant',

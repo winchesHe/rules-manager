@@ -53,13 +53,14 @@ import type { AgentName } from '../../core/src/types.js'
 import { ChatStore } from './chat-store.js'
 import { ChatRuntimeManager } from './chat-runtime.js'
 import { ClaudeChatAdapter } from './claude-chat-adapter.js'
+import { CodexChatAdapter } from './codex-chat-adapter.js'
 import { NativeChatController } from './native-chat-controller.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
 const chatRuntime = new ChatRuntimeManager((provider) => {
   if (provider === 'claude') return new ClaudeChatAdapter()
-  throw new Error('Codex native chat is not available yet')
+  return new CodexChatAdapter()
 })
 const nativeChatController = new NativeChatController({
   store: chatStore,
