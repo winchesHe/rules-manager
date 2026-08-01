@@ -76,7 +76,7 @@ describe('home workflow layout', () => {
     expect(source).toContain('continueAsNewChat')
     expect(source).toContain('compactRailOpen')
     expect(source).toContain('compactContextOpen')
-    expect(source).toContain('max-[1180px]:fixed')
+    expect(source).toContain('max-[1600px]:fixed')
   })
 
   it('Chat 固定 viewport 高度并把滚动限制在三段内容区', () => {
@@ -88,6 +88,35 @@ describe('home workflow layout', () => {
     expect(chatSource).toContain('h-[calc(100vh-4rem)]')
     expect(chatSource).toContain('overflow-hidden')
     expect(chatSource.match(/overflow-y-auto/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
+  })
+
+  it('Chat 使用稳定三栏、共享阅读线和可降级的连续过渡', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('data-chat-workspace')
+    expect(source).toContain('grid-cols-[16rem_minmax(0,1fr)_22rem]')
+    expect(source).toContain('grid-cols-[4rem_minmax(0,1fr)_22rem]')
+    expect(source).toContain('transition-[grid-template-columns]')
+    expect(source).toContain('motion-reduce:transition-none')
+    expect(source).toContain('max-[1600px]:grid-cols-1')
+    expect(source).toContain("window.matchMedia('(max-width: 1600px)')")
+    expect(source).toContain('inert={compactLayout')
+    expect(source).toContain("event.key !== 'Escape'")
+    expect(source.match(/max-w-\[60rem\]/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
+    expect(source).toContain('data-chat-conversation')
+    expect(source).toContain('data-chat-composer-surface')
+  })
+
+  it('Chat 右栏分离管理、运行信息和 Session 选择，长内容不撑破布局', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('data-chat-management')
+    expect(source).toContain('data-runtime-context')
+    expect(source).toContain('data-session-context')
+    expect(source).toContain('max-h-28')
+    expect(source).toContain('overflow-y-auto')
+    expect(source).toContain('min-w-0 max-w-full overflow-hidden')
+    expect(source).toContain('break-words whitespace-pre-wrap')
   })
 
   it('Chat 直接展示 Activity timeline、elapsed，并只在 completed 后展示 Rules', () => {

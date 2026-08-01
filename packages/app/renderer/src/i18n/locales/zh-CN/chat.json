@@ -20,6 +20,8 @@
   "draft": "草稿",
   "conversation": "对话",
   "context": "任务上下文",
+  "chatManagement": "对话管理",
+  "runtimeContext": "运行上下文",
   "running": "运行中",
   "recent": "最近",
   "empty": "还没有 Chat Thread。请从规则页面开始一次生成。",

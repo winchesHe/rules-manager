@@ -1902,3 +1902,23 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终自动化基线：Core 277、App 125 全绿；两端 production build 与 diff check 通过。App 独立
   typecheck 的 `rootDir/TS6307`、跨 workspace 源导入及 JSON include 是既有工程配置 debt，继续留存。
 - 提交信息：`chore: 收口 Chat V1 验收`。
+
+## Chat View UX 布局收口（2026-08-02）
+
+- Chat 桌面三栏按语义宽度重排为 16rem Thread Rail、弹性 Conversation、22rem Context Pane；
+  Rail 折叠为 4rem，Grid 以 200ms 连续过渡并尊重 `prefers-reduced-motion`。
+- 断点从只考虑 Chat 内部宽度的 1180px 调整为 1600px：实测 1440px 下保留三栏会把主对话压到
+  约 500px，因此 1600px 及以下改为专注 Conversation，Rail/Context 使用位移 Sheet；Sheet 具备
+  backdrop、Escape 关闭、关闭态 `inert`，避免键盘焦点进入不可见控件。
+- Conversation、Native/Rules/Legacy 消息与 Composer 统一使用 60rem 阅读对齐线；用户气泡限制
+  42rem。Composer 将输入、本轮 Agent/Model/Effort/Fast/Skills、Full access 与 Context Window
+  合并为单一 Surface，解决原输入框过窄且配置栏游离的问题。
+- Tool 卡片从 Conversation 到 `pre` 全链路增加 `min-width: 0`、最大宽度和局部 overflow/换行约束，
+  超长 input/output 不再制造页面级横向滚动。
+- 右栏拆为对话管理、两列运行上下文和 Session 上下文三个明确区块；已选 Session 区限制为
+  7rem 内部滚动，避免大量引用把筛选和可选列表推出视口。
+- 真实 Electron 已逐档检查：1728×979 保持平衡三栏；1440×900 使用专注布局并展开 Context Sheet；
+  1024×768 正文与 Composer 无横向滚动。定向布局测试 30 项通过，App production build 通过。
+- 最终自动化基线：Core 26 suites / 277 tests、App 20 suites / 127 tests 全绿；Core/App production
+  build 与 `git diff --check` 通过。
+- 提交信息：`refactor: 优化 Chat 布局与交互体验`。

@@ -105,6 +105,7 @@ export function ChatView({
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [compactRailOpen, setCompactRailOpen] = useState(false)
   const [compactContextOpen, setCompactContextOpen] = useState(false)
+  const [compactLayout, setCompactLayout] = useState(false)
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirmThread, setDeleteConfirmThread] = useState<Extract<ChatThread, { version: 2 }> | null>(null)
@@ -119,6 +120,25 @@ export function ChatView({
   useEffect(() => {
     selectedIdRef.current = selectedId
   }, [selectedId])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 1600px)')
+    const syncLayout = () => setCompactLayout(mediaQuery.matches)
+    syncLayout()
+    mediaQuery.addEventListener('change', syncLayout)
+    return () => mediaQuery.removeEventListener('change', syncLayout)
+  }, [])
+
+  useEffect(() => {
+    if (!compactRailOpen && !compactContextOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setCompactRailOpen(false)
+      setCompactContextOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [compactContextOpen, compactRailOpen])
 
   useEffect(() => {
     void Promise.all([
@@ -602,12 +622,12 @@ export function ChatView({
   return (
     <section aria-label={t('title')} className="grid h-[calc(100vh-4rem)] min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
       <div>
-        <header className="mb-4 flex items-end justify-between gap-4">
+        <header className="mb-3 flex min-h-12 items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">{t('title')}</h1>
-            <p className="mt-1 text-sm text-muted">{t('description')}</p>
+            <h1 className="text-xl font-semibold text-foreground">{t('title')}</h1>
+            <p className="mt-0.5 text-xs text-muted">{t('description')}</p>
           </div>
-          <div className="ml-auto hidden gap-2 max-[1180px]:flex">
+          <div className="ml-auto hidden gap-2 max-[1600px]:flex">
             <Button isIconOnly onPress={() => setCompactRailOpen(true)} size="sm" variant="ghost">
               <MessageSquareText aria-label={t('threadRail')} size={16} />
             </Button>
@@ -661,19 +681,33 @@ export function ChatView({
         )}
       </div>
 
-      <Card className="min-h-0 overflow-hidden border border-border bg-surface shadow-none">
-        <Card.Content className={`grid h-full min-h-0 ${railCollapsed
-          ? 'grid-cols-[3.5rem_minmax(0,1fr)_17rem]'
-          : 'grid-cols-[14rem_minmax(0,1fr)_17rem]'} p-0 max-[1180px]:grid-cols-1`}>
-          {(compactRailOpen || compactContextOpen) && (
-            <button
-              aria-label={t('closePanels')}
-              className="fixed inset-0 z-30 hidden cursor-default bg-black/40 max-[1180px]:block"
-              onClick={() => { setCompactRailOpen(false); setCompactContextOpen(false) }}
-              type="button"
-            />
-          )}
-          <aside aria-label={t('threadRail')} className={`min-h-0 overflow-x-hidden overflow-y-auto border-r border-border bg-sidebar/40 max-[1180px]:fixed max-[1180px]:bottom-4 max-[1180px]:left-4 max-[1180px]:top-16 max-[1180px]:z-40 max-[1180px]:w-72 max-[1180px]:rounded-xl max-[1180px]:border max-[1180px]:shadow-xl ${compactRailOpen ? 'max-[1180px]:block' : 'max-[1180px]:hidden'}`}>
+      <Card className="min-h-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-none">
+        <Card.Content
+          className={`grid h-full min-h-0 transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${railCollapsed
+            ? 'grid-cols-[4rem_minmax(0,1fr)_22rem]'
+            : 'grid-cols-[16rem_minmax(0,1fr)_22rem]'} p-0 max-[1600px]:grid-cols-1`}
+          data-chat-workspace
+        >
+          <button
+            aria-hidden={!compactRailOpen && !compactContextOpen}
+            aria-label={t('closePanels')}
+            className={`fixed inset-0 z-30 hidden cursor-default bg-black/45 backdrop-blur-[1px] transition-opacity duration-200 motion-reduce:transition-none max-[1600px]:block ${
+              compactRailOpen || compactContextOpen ? 'max-[1600px]:opacity-100' : 'max-[1600px]:pointer-events-none max-[1600px]:opacity-0'
+            }`}
+            onClick={() => { setCompactRailOpen(false); setCompactContextOpen(false) }}
+            tabIndex={compactRailOpen || compactContextOpen ? 0 : -1}
+            type="button"
+          />
+          <aside
+            aria-hidden={compactLayout && !compactRailOpen ? true : undefined}
+            aria-label={t('threadRail')}
+            className={`min-h-0 overflow-x-hidden overflow-y-auto border-r border-border bg-sidebar/40 transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1600px]:fixed max-[1600px]:bottom-4 max-[1600px]:left-4 max-[1600px]:top-16 max-[1600px]:z-40 max-[1600px]:w-72 max-[1600px]:rounded-2xl max-[1600px]:border max-[1600px]:bg-surface max-[1600px]:shadow-2xl ${
+              compactRailOpen
+                ? 'max-[1600px]:translate-x-0 max-[1600px]:opacity-100'
+                : 'max-[1600px]:pointer-events-none max-[1600px]:-translate-x-[calc(100%+2rem)] max-[1600px]:opacity-0'
+            }`}
+            inert={compactLayout && !compactRailOpen ? true : undefined}
+          >
             <div className={`sticky top-0 z-10 border-b border-border bg-surface ${railCollapsed ? 'p-2' : 'px-4 py-3'}`}>
               <Button isIconOnly={railCollapsed} onPress={() => setRailCollapsed((value) => !value)} size="sm" variant="ghost">
                 {railCollapsed ? <PanelLeftOpen aria-label={t('expandRail')} size={16} /> : <PanelLeftClose aria-label={t('collapseRail')} size={16} />}
@@ -734,9 +768,14 @@ export function ChatView({
 
           <main
             aria-label={t('conversation')}
-            className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background"
+            className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-x-hidden bg-background"
           >
-            <section className="min-h-0 overflow-y-auto px-6 py-6" onScroll={updateFollowState} ref={conversationRef}>
+            <section
+              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-[clamp(1rem,4vw,3rem)] py-8"
+              data-chat-conversation
+              onScroll={updateFollowState}
+              ref={conversationRef}
+            >
               {!thread && !legacy && !isSending ? (
                 <div className="grid h-full place-items-center text-sm text-muted">
                   {loading ? t('loading') : t('emptySelection')}
@@ -756,31 +795,35 @@ export function ChatView({
               )}
             </section>
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
-              <div className="border-t border-border p-4" data-chat-composer>
-                <div className="mx-auto flex max-w-3xl items-end gap-3 rounded-xl border border-border bg-surface p-3">
-                  <textarea
-                    aria-label={t('message', { defaultValue: 'Message' })}
-                    className="max-h-40 min-h-12 flex-1 resize-none bg-transparent text-sm text-foreground outline-none"
-                    onChange={(event) => setComposer(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault()
-                        sendChatMessage()
-                      }
-                    }}
-                    placeholder={t('messagePlaceholder', { defaultValue: 'Message Claude…' })}
-                    value={composer}
-                  />
-                  {isSending && (
-                    <Button isIconOnly onPress={() => void stopChatTurn()} variant="ghost">
-                      <Square aria-label={t('stopChat')} size={15} />
+              <div className="bg-gradient-to-t from-background via-background to-transparent px-[clamp(1rem,4vw,3rem)] pb-5 pt-3" data-chat-composer>
+                <div
+                  className="mx-auto w-full max-w-[60rem] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_14px_36px_rgba(0,0,0,0.22)] motion-reduce:transition-none"
+                  data-chat-composer-surface
+                >
+                  <div className="flex min-w-0 items-end gap-3 px-4 pb-3 pt-4">
+                    <textarea
+                      aria-label={t('message', { defaultValue: 'Message' })}
+                      className="max-h-44 min-h-14 min-w-0 flex-1 resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted"
+                      onChange={(event) => setComposer(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault()
+                          sendChatMessage()
+                        }
+                      }}
+                      placeholder={t('messagePlaceholder', { defaultValue: 'Message Claude…' })}
+                      value={composer}
+                    />
+                    {isSending && (
+                      <Button isIconOnly onPress={() => void stopChatTurn()} variant="ghost">
+                        <Square aria-label={t('stopChat')} size={15} />
+                      </Button>
+                    )}
+                    <Button className="shrink-0 bg-primary text-primary-foreground" isDisabled={!composer.trim()} onPress={sendChatMessage}>
+                      {isSending ? t('queue', { count: queuedCount }) : t('send', { defaultValue: 'Send' })}
                     </Button>
-                  )}
-                  <Button className="bg-primary text-primary-foreground" isDisabled={!composer.trim()} onPress={sendChatMessage}>
-                    {isSending ? t('queue', { count: queuedCount }) : t('send', { defaultValue: 'Send' })}
-                  </Button>
-                </div>
-                <div className="mx-auto mt-2 flex max-w-3xl flex-wrap items-center gap-2 text-xs text-muted">
+                  </div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border/70 px-3 py-2 text-xs text-muted">
                   <Select
                     aria-label={t('agent')}
                     className="w-28"
@@ -849,24 +892,29 @@ export function ChatView({
                         ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
                         : '—'}
                   </span>
+                  </div>
                 </div>
               </div>
             )}
           </main>
 
-          <aside aria-label={t('context')} className={`min-h-0 overflow-x-hidden overflow-y-auto border-l border-border bg-surface p-5 max-[1180px]:fixed max-[1180px]:bottom-4 max-[1180px]:right-4 max-[1180px]:top-16 max-[1180px]:z-40 max-[1180px]:w-80 max-[1180px]:rounded-xl max-[1180px]:border max-[1180px]:shadow-xl ${compactContextOpen ? 'max-[1180px]:block' : 'max-[1180px]:hidden'}`}>
-            <h2 className="text-sm font-medium text-foreground">{t('context')}</h2>
+          <aside
+            aria-hidden={compactLayout && !compactContextOpen ? true : undefined}
+            aria-label={t('context')}
+            className={`min-h-0 overflow-x-hidden overflow-y-auto border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1600px]:fixed max-[1600px]:bottom-4 max-[1600px]:right-4 max-[1600px]:top-16 max-[1600px]:z-40 max-[1600px]:w-[22rem] max-[1600px]:rounded-2xl max-[1600px]:border max-[1600px]:shadow-2xl ${
+              compactContextOpen
+                ? 'max-[1600px]:translate-x-0 max-[1600px]:opacity-100'
+                : 'max-[1600px]:pointer-events-none max-[1600px]:translate-x-[calc(100%+2rem)] max-[1600px]:opacity-0'
+            }`}
+            inert={compactLayout && !compactContextOpen ? true : undefined}
+          >
+            <div className="sticky top-0 z-10 border-b border-border bg-surface/95 px-5 py-4 backdrop-blur">
+              <h2 className="text-sm font-semibold text-foreground">{t('context')}</h2>
+            </div>
             {thread?.kind === 'native-chat' ? (
-              <div className="mt-4 grid gap-4">
-                <ContextDetail label={t('agent')} value={thread.provider === 'claude' ? 'Claude' : 'Codex'} />
-                <ContextDetail label={t('model')} value={thread.defaultTurnConfig.model ?? t('providerDefaultModel')} />
-                <ContextDetail label={t('effort')} value={thread.defaultTurnConfig.effort} />
-                <ContextDetail label={t('workingDirectory')} value={t('workspace')} />
-                <ContextDetail label={t('access')} value={t('fullAccess')} />
-                <ContextDetail label={t('contextWindow')} value={thread.contextUsage
-                  ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
-                  : '—'} />
-                <div className="grid gap-2 border-t border-border pt-4">
+              <div>
+                <section className="grid gap-2 border-b border-border p-5" data-chat-management>
+                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{t('chatManagement')}</h3>
                   <div className="flex gap-2">
                     <input
                       aria-label={t('chatTitle')}
@@ -898,10 +946,23 @@ export function ChatView({
                       <Button onPress={continueAsNewChat} size="sm" variant="ghost">{t('continueAsNew')}</Button>
                     </div>
                   )}
-                </div>
+                </section>
+                <section className="border-b border-border p-5" data-runtime-context>
+                  <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">{t('runtimeContext')}</h3>
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                    <ContextDetail label={t('agent')} value={thread.provider === 'claude' ? 'Claude' : 'Codex'} />
+                    <ContextDetail label={t('model')} value={thread.defaultTurnConfig.model ?? t('providerDefaultModel')} />
+                    <ContextDetail label={t('effort')} value={thread.defaultTurnConfig.effort} />
+                    <ContextDetail label={t('workingDirectory')} value={t('workspace')} />
+                    <ContextDetail label={t('access')} value={t('fullAccess')} />
+                    <ContextDetail label={t('contextWindow')} value={thread.contextUsage
+                      ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
+                      : '—'} />
+                  </div>
+                </section>
               </div>
             ) : thread ? (
-              <div className="mt-4 grid gap-4">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4 border-b border-border p-5" data-runtime-context>
                 <ContextDetail label={t('run')} value={thread.runId.slice(0, 8)} />
                 <ContextDetail label={t('scope')} value={scopeLabel(thread.request, t)} />
                 <ContextDetail
@@ -947,7 +1008,7 @@ export function ChatView({
                 )}
               </div>
             ) : legacy ? (
-              <div className="mt-4 grid gap-4">
+              <div className="grid gap-4 border-b border-border p-5" data-runtime-context>
                 <Chip color="warning" size="sm" variant="soft">{t('legacy')}</Chip>
                 <ContextDetail label={t('run')} value={legacy.id.slice(0, 8)} />
                 <ContextDetail label={t('scope')} value={scopeLabel(legacy.request, t)} />
@@ -975,7 +1036,7 @@ export function ChatView({
                 to={contextTo}
               />
             )}
-            <p className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted">
+            <p className="border-t border-border p-5 text-xs leading-5 text-muted">
               {t('privacy')}
             </p>
           </aside>
@@ -1017,16 +1078,16 @@ function NativeConversation({
   liveTools: NativeToolActivity[]
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-6">
+    <div className="mx-auto grid w-full max-w-[60rem] gap-7">
       {thread.messages.map((message) => message.role === 'user' ? (
         <div className="grid justify-items-end gap-1" key={message.id}>
-          <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
-            <p>{message.content}</p>
+          <div className="max-w-[42rem] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
+            <p className="break-words whitespace-pre-wrap">{message.content}</p>
           </div>
           {message.turnConfig && <TurnConfigLine config={message.turnConfig} />}
         </div>
       ) : (
-        <article className="grid gap-3 whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
+        <article className="grid min-w-0 max-w-full gap-3 overflow-hidden whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
           {message.content}
           <ToolActivityList activities={message.toolActivities ?? []} chatId={thread.id} />
         </article>
@@ -1047,7 +1108,7 @@ function LiveTurn({
   chatId?: string
 }) {
   return (
-    <article className="mx-auto grid w-full max-w-3xl gap-3 text-sm leading-7 text-foreground">
+    <article className="mx-auto grid w-full max-w-[60rem] gap-3 text-sm leading-7 text-foreground">
       {assistant && <p className="whitespace-pre-wrap">{assistant}</p>}
       <ToolActivityList activities={tools} chatId={chatId} />
       <Spinner color="accent" size="sm" />
@@ -1061,7 +1122,7 @@ function ToolActivityList({ activities, chatId }: {
 }) {
   if (activities.length === 0) return null
   return (
-    <div className="grid gap-2" role="list">
+    <div className="grid min-w-0 max-w-full gap-2 overflow-hidden" role="list">
       {activities.map((activity) => (
         <NativeToolCard activity={activity} chatId={chatId} key={activity.itemId} />
       ))}
@@ -1106,8 +1167,8 @@ function NativeToolCard({ activity, chatId }: {
 
   const Icon = activityIcon(activity.kind)
   return (
-    <Card className="border border-border bg-surface shadow-none" role="listitem">
-      <Card.Content className="p-3">
+    <Card className="min-w-0 max-w-full overflow-hidden border border-border bg-surface shadow-none" role="listitem">
+      <Card.Content className="min-w-0 max-w-full overflow-hidden p-3">
         <button className="flex w-full items-center gap-2 text-left" onClick={toggle} type="button">
           <Icon aria-hidden="true" className="text-muted" size={15} />
           <strong className="text-xs font-medium text-foreground">{activity.name}</strong>
@@ -1119,7 +1180,7 @@ function NativeToolCard({ activity, chatId }: {
         {expanded && (
           <div className="mt-3 border-t border-border pt-3">
             {loading && !content ? <Spinner color="accent" size="sm" /> : available ? (
-              <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs leading-5 text-muted">{content}</pre>
+              <pre className="max-h-80 max-w-full overflow-auto break-words whitespace-pre-wrap text-xs leading-5 text-muted">{content}</pre>
             ) : <p className="text-xs text-muted">{t('toolSourceUnavailable')}</p>}
             {nextCursor !== null && nextCursor > 0 && (
               <Button className="mt-2" isDisabled={loading} onPress={() => void loadPage(nextCursor)} size="sm" variant="ghost">
@@ -1159,9 +1220,9 @@ function PersistedConversation({ thread }: { thread: GenerationChatThread }) {
     ? assistantMessage?.content ?? terminalMessage(thread.status, t)
     : terminalMessage(thread.status, t)
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-6">
+    <div className="mx-auto grid w-full max-w-[60rem] gap-7">
       <div className="flex justify-end">
-        <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
+        <div className="max-w-[42rem] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
           {userMessage?.kind === 'rules-generation-request'
             ? requestMessage(thread.request, t)
             : userMessage?.content ?? scopeLabel(thread.request, t)}
@@ -1349,7 +1410,7 @@ function activityLabel(kind: string): string {
 function LegacyConversation({ entry }: { entry: GenerationHistoryEntry }) {
   const { t } = useTranslation('chat')
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-6">
+    <div className="mx-auto grid w-full max-w-[60rem] gap-7">
       <div className="flex justify-end">
         <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm text-foreground">
           {scopeLabel(entry.request, t)}
@@ -1423,7 +1484,7 @@ function SessionContextPicker({
     .filter((value, index, values) => values.indexOf(value) === index)
 
   return (
-    <div className="mt-6 border-t border-border pt-5">
+    <section className="p-5" data-session-context>
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium text-foreground">{t('sessionContext')}</h3>
         <Chip size="sm" variant="soft">{selected.length}</Chip>
@@ -1466,7 +1527,7 @@ function SessionContextPicker({
         )}
       </div>
       {selected.length > 0 && (
-        <div className="mt-3 grid gap-1">
+        <div className="mt-3 grid max-h-28 gap-1 overflow-y-auto pr-1">
           <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
           {selected.map((reference) => {
             const item = knownItems.get(sessionReferenceKey(reference))
@@ -1527,7 +1588,7 @@ function SessionContextPicker({
           {t('loadMore')}
         </Button>
       )}
-    </div>
+    </section>
   )
 }
 

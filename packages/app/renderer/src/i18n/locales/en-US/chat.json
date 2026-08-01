@@ -20,6 +20,8 @@
   "draft": "Draft",
   "conversation": "Conversation",
   "context": "Run context",
+  "chatManagement": "Chat management",
+  "runtimeContext": "Runtime context",
   "running": "Running",
   "recent": "Recent",
   "empty": "No Chat Threads yet. Start a generation from Rules.",
