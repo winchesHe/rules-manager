@@ -45,6 +45,9 @@ describe('NativeChatController', () => {
       },
       interrupt: async () => undefined,
       readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
       close: async () => undefined,
     })
     const createController = () => new NativeChatController({
@@ -139,6 +142,9 @@ describe('NativeChatController', () => {
         content: `${request.nativeSessionId}:${request.itemId}:${request.cursor ?? 0}`,
         nextCursor: null,
       }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
       close: async () => undefined,
     }
     const controller = new NativeChatController({
@@ -169,6 +175,9 @@ describe('NativeChatController', () => {
       },
       interrupt: async () => undefined,
       readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
       close: async () => undefined,
     }
     let tick = 0
@@ -224,6 +233,9 @@ describe('NativeChatController', () => {
       resume: async () => { throw new Error('unexpected resume') },
       interrupt: async () => undefined,
       readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
       close: async () => undefined,
     }
     const controller = new NativeChatController({
@@ -243,5 +255,83 @@ describe('NativeChatController', () => {
     })
     expect(providerMessages).toHaveLength(2)
     expect(providerMessages.every((message) => message.includes('revision="1"'))).toBe(true)
+  })
+
+  it('生命周期先同步 Native，再改本地；删除失败保留 Archived 记录重试', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-lifecycle-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    store.createNativeThread({
+      id: 'chat-life', provider: 'codex', origin: 'chat', title: 'before',
+      createdAt: '2026-08-01T05:00:00.000Z',
+      defaultTurnConfig: { effort: 'high', fastMode: false },
+    })
+    store.bindNativeSession('chat-life', 'native-life', '2026-08-01T05:00:01.000Z')
+    const calls: string[] = []
+    let deleteFails = true
+    const adapter: ChatProviderAdapter = {
+      start: async () => { throw new Error('unexpected start') },
+      resume: async () => { throw new Error('unexpected resume') },
+      interrupt: async () => { calls.push('interrupt') },
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async (id) => { calls.push(`archive:${id}`) },
+      unarchive: async (id) => { calls.push(`unarchive:${id}`) },
+      delete: async (id) => {
+        calls.push(`delete:${id}`)
+        if (deleteFails) throw new Error('native delete failed')
+      },
+      close: async () => { calls.push('close') },
+    }
+    const controller = new NativeChatController({
+      store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
+      now: () => '2026-08-01T05:00:02.000Z',
+    })
+    controller.rename('chat-life', 'after')
+    await controller.archive('chat-life')
+    expect(store.readThread('chat-life')).toMatchObject({ title: 'after', archivedAt: expect.any(String) })
+    await controller.unarchive('chat-life')
+    await controller.archive('chat-life')
+    await expect(controller.deleteArchived('chat-life')).rejects.toThrow('native delete failed')
+    expect(store.readThread('chat-life')).not.toBeNull()
+    deleteFails = false
+    await controller.deleteArchived('chat-life')
+    expect(store.readThread('chat-life')).toBeNull()
+    expect(calls).toEqual([
+      'archive:native-life', 'unarchive:native-life', 'archive:native-life',
+      'delete:native-life', 'delete:native-life', 'close',
+    ])
+  })
+
+  it('Native resume 失败保留原 Session ID 并进入可重试状态', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-resume-failure-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    store.createNativeThread({
+      id: 'chat-resume-failure', provider: 'codex', origin: 'chat', title: 'resume',
+      createdAt: '2026-08-01T06:00:00.000Z',
+      defaultTurnConfig: { effort: 'high', fastMode: false },
+    })
+    store.bindNativeSession('chat-resume-failure', 'native-original', '2026-08-01T06:00:01.000Z')
+    const adapter: ChatProviderAdapter = {
+      start: async () => { throw new Error('unexpected start') },
+      resume: async () => { throw new Error('native resume failed') },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }
+    const controller = new NativeChatController({
+      store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
+      now: () => '2026-08-01T06:00:02.000Z',
+    })
+    await expect(controller.send({
+      chatId: 'chat-resume-failure', provider: 'codex', message: 'retry',
+      config: { effort: 'high', fastMode: false },
+    })).rejects.toThrow('native resume failed')
+    expect(store.readThread('chat-resume-failure')).toMatchObject({
+      nativeSessionId: 'native-original', nativeState: 'resume-failed', status: 'failed',
+    })
   })
 })

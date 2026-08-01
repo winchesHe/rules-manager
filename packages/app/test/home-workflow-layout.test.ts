@@ -63,6 +63,17 @@ describe('home workflow layout', () => {
     expect(ipcSource).toContain("ipcMain.handle('chat.tool.read'")
     expect(ipcSource).toContain("ipcMain.handle('chat.context.query'")
     expect(ipcSource).toContain("ipcMain.handle('chat.context.update'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.rename'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.archive'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.unarchive'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.delete'")
+    expect(source).toContain("'chat.rename'")
+    expect(source).toContain("'chat.archive'")
+    expect(source).toContain("'chat.unarchive'")
+    expect(source).toContain("'chat.delete'")
+    expect(source).toContain('deleteConfirmThread')
+    expect(source).toContain('railCollapsed')
+    expect(source).toContain('continueAsNewChat')
   })
 
   it('Chat 固定 viewport 高度并把滚动限制在三段内容区', () => {

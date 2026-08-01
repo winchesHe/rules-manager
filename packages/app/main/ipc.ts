@@ -171,6 +171,19 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('chat.context.resolve', (_event, value: unknown) => {
     return resolveSessionContextItems(validateSessionReferences(value))
   })
+  ipcMain.handle('chat.rename', (_event, value: unknown) => {
+    const request = validateChatLifecycleRequest(value, true)
+    nativeChatController.rename(request.chatId, request.title)
+  })
+  ipcMain.handle('chat.archive', (_event, value: unknown) => {
+    return nativeChatController.archive(validateChatLifecycleRequest(value).chatId)
+  })
+  ipcMain.handle('chat.unarchive', (_event, value: unknown) => {
+    return nativeChatController.unarchive(validateChatLifecycleRequest(value).chatId)
+  })
+  ipcMain.handle('chat.delete', (_event, value: unknown) => {
+    return nativeChatController.deleteArchived(validateChatLifecycleRequest(value).chatId)
+  })
 
   ipcMain.handle('scan.run', (_event, value?: unknown) => {
     const request = validateScanRequest(value)
@@ -438,6 +451,23 @@ function validateSessionContextQuery(value: unknown) {
     ...(typeof query.to === 'string' && query.to ? { to: query.to } : {}),
     ...(typeof query.cursor === 'string' && query.cursor ? { cursor: query.cursor } : {}),
     ...(typeof query.limit === 'number' ? { limit: query.limit } : {}),
+  }
+}
+
+function validateChatLifecycleRequest(value: unknown, requireTitle = false) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('invalid chat lifecycle request')
+  }
+  const request = value as Record<string, unknown>
+  if (typeof request.chatId !== 'string' || !request.chatId.trim()) {
+    throw new Error('chat id is required')
+  }
+  if (requireTitle && (typeof request.title !== 'string' || !request.title.trim())) {
+    throw new Error('chat title is required')
+  }
+  return {
+    chatId: request.chatId,
+    title: typeof request.title === 'string' ? request.title : '',
   }
 }
 

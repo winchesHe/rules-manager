@@ -599,3 +599,21 @@ npm test -- --runInBand test/unit/rule-candidates-schema.test.ts test/unit/redac
   31 条记录并继续回答。ChatStore 文件复查不含 `host_session_context` 或 show command。
 - 失效源由 query/resolve、Prompt 边界与失败重试测试覆盖；未人为移动或破坏用户真实 Session
   文件。提交信息：`feat: 接入 Chat Session 上下文`。
+
+## Chat V1 Phase 5：History 生命周期（2026-08-01）
+
+- ChatProviderAdapter 与 RuntimeManager 新增 archive/unarchive/delete。Codex 精确调用
+  `thread/archive`、`thread/unarchive`、`thread/delete`；Claude Archive/Restore 为 App 级
+  no-op，Delete 调用 Agent SDK `deleteSession`。两端 not-found/ENOENT 按幂等成功处理。
+- Controller 严格先完成 Native 操作再改 ChatStore；永久删除失败保留 Archived 记录供重试，
+  成功后关闭 runtime 并删除本地 Chat 目录。运行中归档先 interrupt；无 Native ID 的失败
+  Claude Chat 可本地归档，Codex 则明确报错。
+- ChatStore 支持手动重命名、archive/unarchive 和仅 Archived 可永久删除；Native resume 失败
+  保留原 `nativeSessionId` 并标记 `resume-failed`，UI 提供继续重试及复制配置/Session Context
+  作为新 Chat 的入口。
+- 左栏新增 Active/Archived 切换与收起/展开；Archived Chat 不显示 Composer 或可编辑 Session
+  Context。右栏支持重命名、Archive、Restore；永久删除使用明确描述“先 Native 后本地”的二次
+  确认 Modal。
+- 真实 Electron 对 Phase 4 测试 Chat 完成重命名、Archive、打开永久删除确认但取消、Restore
+  和 Rail 收起；未执行不可恢复的真实删除。删除顺序、失败保留和 not-found 幂等由测试覆盖。
+- 提交信息：`feat: 完善 Chat 历史生命周期`。

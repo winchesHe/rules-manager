@@ -24,6 +24,9 @@ describe('ChatRuntimeManager', () => {
       resume: () => { throw new Error('unexpected resume') },
       interrupt: async () => undefined,
       readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
       close: async () => undefined,
     }
     const manager = new ChatRuntimeManager(() => adapter)
@@ -58,6 +61,9 @@ describe('ChatRuntimeManager', () => {
       },
       interrupt: async () => { calls.push('interrupt') },
       readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
       close: async () => undefined,
     }
     const manager = new ChatRuntimeManager(() => adapter)

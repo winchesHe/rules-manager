@@ -312,6 +312,44 @@ export class ChatStore {
     } satisfies NativeChatThreadFile)
   }
 
+  renameNativeThread(threadId: string, title: string, at: string): void {
+    const normalized = title.replace(/\s+/g, ' ').trim()
+    if (!normalized) throw new Error('chat title is required')
+    const thread = this.requireNativeThread(threadId)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      title: normalized.slice(0, 120),
+      titleSource: 'manual',
+      updatedAt: at,
+    } satisfies NativeChatThreadFile)
+  }
+
+  archiveNativeThread(threadId: string, at: string): void {
+    const thread = this.requireNativeThread(threadId)
+    if (thread.archivedAt) return
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      archivedAt: at,
+      updatedAt: at,
+    } satisfies NativeChatThreadFile)
+  }
+
+  unarchiveNativeThread(threadId: string, at: string): void {
+    const thread = this.requireNativeThread(threadId)
+    if (!thread.archivedAt) return
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      archivedAt: null,
+      updatedAt: at,
+    } satisfies NativeChatThreadFile)
+  }
+
+  deleteArchivedNativeThread(threadId: string): void {
+    const thread = this.requireNativeThread(threadId)
+    if (!thread.archivedAt) throw new Error('native chat must be archived before deletion')
+    fs.rmSync(this.threadDirectory(threadId), { recursive: true })
+  }
+
   syncGeneration(status: GenerationStatus): void {
     if (!status.runId || status.state === 'idle') return
     const existing = this.readThreadFile(status.runId)

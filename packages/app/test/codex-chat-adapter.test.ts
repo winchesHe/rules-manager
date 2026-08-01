@@ -55,6 +55,9 @@ function fakeServer(autoComplete = true) {
           id: 'cmd-1', type: 'commandExecution', command: 'full-command', aggregatedOutput: 'full-output',
         }] }] },
       })
+      if (['thread/archive', 'thread/unarchive', 'thread/delete'].includes(message.method)) {
+        respond(message.id, {})
+      }
     }
   })
   function respond(id: number, result: unknown) {
@@ -157,5 +160,19 @@ describe('CodexChatAdapter', () => {
     expect(page.content.length).toBeLessThanOrEqual(24)
     expect(page.nextCursor).toBe(24)
     expect(server.requests.map((item) => item.method)).toContain('thread/read')
+  })
+
+  it('Archive、Restore 与 Delete 使用 Codex 原生 thread API', async () => {
+    const server = fakeServer()
+    const adapter = new CodexChatAdapter(() => server.child)
+    await adapter.archive('codex-thread-1')
+    await adapter.unarchive('codex-thread-1')
+    await adapter.delete('codex-thread-1')
+    expect(server.requests.slice(-3).map((request) => [request.method, request.params]))
+      .toEqual([
+        ['thread/archive', { threadId: 'codex-thread-1' }],
+        ['thread/unarchive', { threadId: 'codex-thread-1' }],
+        ['thread/delete', { threadId: 'codex-thread-1' }],
+      ])
   })
 })

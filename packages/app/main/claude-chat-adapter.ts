@@ -1,4 +1,4 @@
-import { getSessionMessages, query } from '@anthropic-ai/claude-agent-sdk'
+import { deleteSession, getSessionMessages, query } from '@anthropic-ai/claude-agent-sdk'
 import type {
   ChatProviderAdapter,
   NativeTurnRequest,
@@ -32,6 +32,7 @@ export type ClaudeSessionMessageReader = (
   sessionId: string,
   options?: { dir?: string },
 ) => Promise<unknown[]>
+export type ClaudeSessionDeleter = (sessionId: string) => Promise<void>
 
 const defaultQuery: ClaudeQueryFactory = (input) => query(input as Parameters<typeof query>[0])
 
@@ -41,6 +42,7 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
   constructor(
     private readonly createQuery: ClaudeQueryFactory = defaultQuery,
     private readonly readSessionMessages: ClaudeSessionMessageReader = getSessionMessages,
+    private readonly deleteNativeSession: ClaudeSessionDeleter = deleteSession,
   ) {}
 
   start(request: NativeTurnRequest): Promise<NativeTurnResult> {
@@ -68,6 +70,18 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
     for (const message of messages) collectToolMatches(message, request.itemId, matches)
     if (matches.length === 0) return { available: false, content: '', nextCursor: null }
     return pageContent(JSON.stringify(matches, null, 2), request.cursor, request.limit)
+  }
+
+  async archive(_nativeSessionId: string): Promise<void> {}
+
+  async unarchive(_nativeSessionId: string): Promise<void> {}
+
+  async delete(nativeSessionId: string): Promise<void> {
+    try {
+      await this.deleteNativeSession(nativeSessionId)
+    } catch (error) {
+      if (!isNotFoundError(error)) throw error
+    }
   }
 
   private async run(
@@ -239,4 +253,9 @@ function pageContent(content: string, cursor: number, limit: number): NativeTool
     content: content.slice(start, end),
     nextCursor: end < content.length ? end : null,
   }
+}
+
+function isNotFoundError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /not found|enoent|does not exist/i.test(message)
 }

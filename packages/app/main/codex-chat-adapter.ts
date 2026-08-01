@@ -157,6 +157,25 @@ export class CodexChatAdapter implements ChatProviderAdapter {
     return pageContent(JSON.stringify(match, null, 2), request.cursor, request.limit)
   }
 
+  async archive(nativeSessionId: string): Promise<void> {
+    const client = await this.ensureClient()
+    await client.request('thread/archive', { threadId: nativeSessionId })
+  }
+
+  async unarchive(nativeSessionId: string): Promise<void> {
+    const client = await this.ensureClient()
+    await client.request('thread/unarchive', { threadId: nativeSessionId })
+  }
+
+  async delete(nativeSessionId: string): Promise<void> {
+    const client = await this.ensureClient()
+    try {
+      await client.request('thread/delete', { threadId: nativeSessionId })
+    } catch (error) {
+      if (!isNotFoundError(error)) throw error
+    }
+  }
+
   private async run(request: NativeTurnRequest, resuming: boolean): Promise<NativeTurnResult> {
     if (this.active) throw new Error('Codex adapter already has an active turn')
     const client = await this.ensureClient()
@@ -341,4 +360,9 @@ function pageContent(content: string, cursor: number, limit: number): NativeTool
     content: content.slice(start, end),
     nextCursor: end < content.length ? end : null,
   }
+}
+
+function isNotFoundError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /not found|does not exist|unknown thread/i.test(message)
 }

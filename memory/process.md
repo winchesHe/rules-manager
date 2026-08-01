@@ -1854,3 +1854,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   Preflight、token 分配或“已加载 N/M”状态。真实 1.4 GB OpenCode SQLite 来源中的所选 Session
   经 `--stream` 被 Claude 读取为 31 条记录并正常完成。
 - 提交信息：`feat: 接入 Chat Session 上下文`。
+
+## Chat V1 Phase 5：History 生命周期（2026-08-01）
+
+- Provider 生命周期契约补齐 archive/unarchive/delete。Codex 使用 app-server 原生 thread API；
+  Claude 只有 deleteSession 原生删除，Archive/Restore 明确保持应用级语义。原生 not found 被视为
+  幂等成功，其他错误原样上抛。
+- Controller 的不变量是 Native-first：Archive/Restore/Delete 只有原生调用成功后才写
+  `archivedAt` 或删除 ChatStore；Delete 失败时本地 Archived 记录不变。运行中 Archive 先向当前
+  RuntimeManager turn 发 interrupt。
+- `deleteArchivedNativeThread` 仅接受经过 thread ID 校验且 `archivedAt != null` 的 v2 目录；
+  UI 只在 Archived 视图暴露永久删除，并有第二次确认。关联的右侧历史 Session 引用只是 ID，
+  不随 Chat 删除。
+- resume 错误继续由 `markNativeTurnFailed` 设置 `nativeState=resume-failed`，不覆盖 Native ID；
+  Renderer 保持可读并允许正常重试，或复制 Provider/每轮默认配置/当前 Session Context 到纯
+  Renderer Draft，首次发送才创建新 Native Chat。
+- 真实 Electron 完成 Claude App 级 Archive/Restore、重命名、Active/Archived Rail 和删除确认
+  Modal 验收；按不可恢复操作边界取消最终删除，原生删除由可控 Adapter 测试验证。
+- 提交信息：`feat: 完善 Chat 历史生命周期`。

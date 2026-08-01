@@ -168,6 +168,31 @@ describe('ChatStore', () => {
     })
   })
 
+  it('Native Chat 支持重命名、Archive/Restore，并只允许删除 Archived', () => {
+    const { chatsDir, store } = createStore()
+    store.createNativeThread({
+      id: 'chat-lifecycle', provider: 'claude', origin: 'chat', title: 'before',
+      createdAt: '2026-08-01T01:00:00.000Z',
+      defaultTurnConfig: { effort: 'high', fastMode: false },
+    })
+    store.bindNativeSession('chat-lifecycle', 'native-lifecycle', '2026-08-01T01:00:01.000Z')
+    store.renameNativeThread('chat-lifecycle', 'after', '2026-08-01T01:00:02.000Z')
+    expect(store.readThread('chat-lifecycle')).toMatchObject({
+      title: 'after', titleSource: 'manual', archivedAt: null,
+    })
+    expect(() => store.deleteArchivedNativeThread('chat-lifecycle')).toThrow('must be archived')
+    store.archiveNativeThread('chat-lifecycle', '2026-08-01T01:00:03.000Z')
+    expect(store.readThread('chat-lifecycle')).toMatchObject({
+      archivedAt: '2026-08-01T01:00:03.000Z',
+    })
+    store.unarchiveNativeThread('chat-lifecycle', '2026-08-01T01:00:04.000Z')
+    expect(store.readThread('chat-lifecycle')).toMatchObject({ archivedAt: null })
+    store.archiveNativeThread('chat-lifecycle', '2026-08-01T01:00:05.000Z')
+    store.deleteArchivedNativeThread('chat-lifecycle')
+    expect(store.readThread('chat-lifecycle')).toBeNull()
+    expect(fs.existsSync(path.join(chatsDir, 'chat-lifecycle'))).toBe(false)
+  })
+
   it('创建 FS-first Generation Thread 并保存用户可见请求', () => {
     const { chatsDir, store } = createStore()
     store.createGenerationThread({

@@ -150,6 +150,44 @@ export class NativeChatController {
     return this.options.store.setNativeSessionContext(chatId, references, this.now())
   }
 
+  rename(chatId: string, title: string): void {
+    this.options.store.renameNativeThread(chatId, title, this.now())
+  }
+
+  async archive(chatId: string): Promise<void> {
+    const thread = this.requireNativeThread(chatId)
+    if (thread.archivedAt) return
+    if (thread.status === 'running') await this.options.runtime.interrupt(chatId)
+    if (thread.nativeSessionId) {
+      await this.options.runtime.archive(chatId, thread.provider, thread.nativeSessionId)
+    } else if (thread.provider === 'codex') {
+      throw new Error('Codex native thread is unavailable')
+    }
+    this.options.store.archiveNativeThread(chatId, this.now())
+  }
+
+  async unarchive(chatId: string): Promise<void> {
+    const thread = this.requireNativeThread(chatId)
+    if (!thread.archivedAt) return
+    if (thread.nativeSessionId) {
+      await this.options.runtime.unarchive(chatId, thread.provider, thread.nativeSessionId)
+    } else if (thread.provider === 'codex') {
+      throw new Error('Codex native thread is unavailable')
+    }
+    this.options.store.unarchiveNativeThread(chatId, this.now())
+  }
+
+  async deleteArchived(chatId: string): Promise<void> {
+    const thread = this.requireNativeThread(chatId)
+    if (!thread.archivedAt) throw new Error('native chat must be archived before deletion')
+    if (thread.nativeSessionId) {
+      await this.options.runtime.delete(chatId, thread.provider, thread.nativeSessionId)
+    } else {
+      await this.options.runtime.close(chatId)
+    }
+    this.options.store.deleteArchivedNativeThread(chatId)
+  }
+
   async readToolItem(request: NativeChatToolReadRequest): Promise<NativeToolItemPage> {
     const thread = this.options.store.readThread(request.chatId)
     if (!thread || thread.version !== 2 || !thread.nativeSessionId) {
@@ -167,6 +205,12 @@ export class NativeChatController {
       cursor: request.cursor ?? 0,
       limit: request.limit ?? 8192,
     })
+  }
+
+  private requireNativeThread(chatId: string) {
+    const thread = this.options.store.readThread(chatId)
+    if (!thread || thread.version !== 2) throw new Error('native chat was not found')
+    return thread
   }
 }
 

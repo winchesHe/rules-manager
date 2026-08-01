@@ -128,4 +128,17 @@ describe('ClaudeChatAdapter', () => {
     expect(first.content.length).toBeLessThanOrEqual(20)
     expect(first.nextCursor).toBe(20)
   })
+
+  it('Archive/Restore 为应用级 no-op，Delete 调用 Claude 原生 SDK', async () => {
+    const deleted: string[] = []
+    const adapter = new ClaudeChatAdapter(
+      () => (async function* () {})(),
+      async () => [],
+      async (sessionId) => { deleted.push(sessionId) },
+    )
+    await adapter.archive('claude-session-1')
+    await adapter.unarchive('claude-session-1')
+    await adapter.delete('claude-session-1')
+    expect(deleted).toEqual(['claude-session-1'])
+  })
 })

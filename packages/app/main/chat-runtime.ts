@@ -50,6 +50,9 @@ export interface ChatProviderAdapter {
   resume(request: NativeTurnRequest & { nativeSessionId: string }): Promise<NativeTurnResult>
   interrupt(): Promise<void>
   readToolItem(request: NativeToolItemReadRequest): Promise<NativeToolItemPage>
+  archive(nativeSessionId: string): Promise<void>
+  unarchive(nativeSessionId: string): Promise<void>
+  delete(nativeSessionId: string): Promise<void>
   close(): Promise<void>
 }
 
@@ -108,6 +111,22 @@ export class ChatRuntimeManager {
     const adapter = this.adapters.get(input.chatId)
       ?? this.createAndRememberAdapter(input.provider, input.chatId)
     return adapter.readToolItem(input)
+  }
+
+  async archive(chatId: string, provider: NativeChatProvider, nativeSessionId: string): Promise<void> {
+    const adapter = this.adapters.get(chatId) ?? this.createAndRememberAdapter(provider, chatId)
+    await adapter.archive(nativeSessionId)
+  }
+
+  async unarchive(chatId: string, provider: NativeChatProvider, nativeSessionId: string): Promise<void> {
+    const adapter = this.adapters.get(chatId) ?? this.createAndRememberAdapter(provider, chatId)
+    await adapter.unarchive(nativeSessionId)
+  }
+
+  async delete(chatId: string, provider: NativeChatProvider, nativeSessionId: string): Promise<void> {
+    const adapter = this.adapters.get(chatId) ?? this.createAndRememberAdapter(provider, chatId)
+    await adapter.delete(nativeSessionId)
+    await this.close(chatId)
   }
 
   async close(chatId?: string): Promise<void> {

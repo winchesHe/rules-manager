@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Card, Chip, ListBox, Select, Spinner, Switch } from '@heroui/react'
+import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Switch } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
   Brain,
+  Archive,
+  ArchiveRestore,
   CheckCircle2,
   ChevronRight,
   Clock3,
   Eye,
   FilePenLine,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
   RotateCcw,
   Search,
   Square,
   SquareTerminal,
+  Trash2,
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -95,10 +101,16 @@ export function ChatView({
   const [contextLoading, setContextLoading] = useState(false)
   const [selectedContext, setSelectedContext] = useState<NativeSessionReference[]>([])
   const [selectedContextItems, setSelectedContextItems] = useState<SessionContextItem[]>([])
+  const [historyMode, setHistoryMode] = useState<'active' | 'archived'>('active')
+  const [railCollapsed, setRailCollapsed] = useState(false)
+  const [lifecycleBusy, setLifecycleBusy] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [deleteConfirmThread, setDeleteConfirmThread] = useState<Extract<ChatThread, { version: 2 }> | null>(null)
   const selectedIdRef = useRef<string | null>(selectedId)
   const liveChatIdRef = useRef<string | null>(null)
   const sendingRef = useRef(false)
   const queueRef = useRef<QueuedChatTurn[]>([])
+  const preserveDraftContextRef = useRef(false)
   const conversationRef = useRef<HTMLElement | null>(null)
   const followStreamRef = useRef(true)
 
@@ -135,10 +147,15 @@ export function ChatView({
     setEffort(thread.defaultTurnConfig.effort)
     setFastMode(thread.defaultTurnConfig.fastMode)
     setSelectedContext(thread.sessionContext.selected)
+    setRenameValue(thread.title)
   }, [thread?.id])
 
   useEffect(() => {
     if (thread || legacy) return
+    if (preserveDraftContextRef.current) {
+      preserveDraftContextRef.current = false
+      return
+    }
     setSelectedContext([])
   }, [thread?.id, legacy?.id])
 
@@ -321,6 +338,10 @@ export function ChatView({
         .map((item) => ({ id: item.id, thread: undefined, legacy: item })),
     ]
   }, [history, threads])
+  const visibleItems = useMemo(() => items.filter((item) => {
+    if (!item.thread || item.thread.version === 1) return historyMode === 'active'
+    return historyMode === 'archived' ? Boolean(item.thread.archivedAt) : !item.thread.archivedAt
+  }), [historyMode, items])
 
   async function stopGeneration(): Promise<void> {
     if (!thread || thread.kind !== 'rules-generation'
@@ -368,6 +389,7 @@ export function ChatView({
   }
 
   function startDraft(): void {
+    preserveDraftContextRef.current = false
     setSelectedId(null)
     selectedIdRef.current = null
     setThread(null)
@@ -377,6 +399,23 @@ export function ChatView({
     setLiveTools([])
     setLiveUsage(null)
     liveChatIdRef.current = null
+    setError(null)
+  }
+
+  function continueAsNewChat(): void {
+    if (thread?.kind !== 'native-chat') return
+    const source = thread
+    preserveDraftContextRef.current = true
+    setSelectedId(null)
+    selectedIdRef.current = null
+    setThread(null)
+    setLegacy(null)
+    setProvider(source.provider)
+    setModel(source.defaultTurnConfig.model ?? '')
+    setEffort(source.defaultTurnConfig.effort)
+    setFastMode(source.defaultTurnConfig.fastMode)
+    setSelectedContext(source.sessionContext.selected.map((reference) => ({ ...reference })))
+    setComposer('')
     setError(null)
   }
 
@@ -471,6 +510,69 @@ export function ChatView({
     setContextTo(localDateValue(end))
   }
 
+  async function renameCurrentChat(): Promise<void> {
+    if (thread?.kind !== 'native-chat' || !renameValue.trim() || lifecycleBusy) return
+    setLifecycleBusy(true)
+    try {
+      await window.api.invoke('chat.rename', { chatId: thread.id, title: renameValue })
+      await refresh(thread.id)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  async function archiveCurrentChat(): Promise<void> {
+    if (thread?.kind !== 'native-chat' || lifecycleBusy) return
+    if (thread.status === 'running' && !window.confirm(t('archiveRunningConfirm'))) return
+    setLifecycleBusy(true)
+    try {
+      await window.api.invoke('chat.archive', { chatId: thread.id })
+      setHistoryMode('archived')
+      await refresh(thread.id)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  async function restoreCurrentChat(): Promise<void> {
+    if (thread?.kind !== 'native-chat' || lifecycleBusy) return
+    setLifecycleBusy(true)
+    try {
+      await window.api.invoke('chat.unarchive', { chatId: thread.id })
+      setHistoryMode('active')
+      await refresh(thread.id)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  async function permanentlyDeleteChat(): Promise<void> {
+    if (!deleteConfirmThread || lifecycleBusy) return
+    setLifecycleBusy(true)
+    try {
+      await window.api.invoke('chat.delete', { chatId: deleteConfirmThread.id })
+      setDeleteConfirmThread(null)
+      setThread(null)
+      setSelectedId(null)
+      selectedIdRef.current = null
+      await refresh(null)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
   function updateFollowState(): void {
     const element = conversationRef.current
     if (!element) return
@@ -524,21 +626,33 @@ export function ChatView({
       </div>
 
       <Card className="min-h-0 overflow-hidden border border-border bg-surface shadow-none">
-        <Card.Content className="grid h-full min-h-0 grid-cols-[14rem_minmax(0,1fr)_17rem] p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)] max-[1180px]:grid-rows-[minmax(0,1fr)_auto]">
+        <Card.Content className={`grid h-full min-h-0 ${railCollapsed
+          ? 'grid-cols-[3.5rem_minmax(0,1fr)_17rem]'
+          : 'grid-cols-[14rem_minmax(0,1fr)_17rem]'} p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)] max-[1180px]:grid-rows-[minmax(0,1fr)_auto]`}>
           <aside aria-label={t('threadRail')} className="min-h-0 overflow-x-hidden overflow-y-auto border-r border-border bg-sidebar/40">
-            <div className="sticky top-0 z-10 border-b border-border bg-surface px-4 py-3">
-              <Button className="mb-3 bg-primary text-primary-foreground" fullWidth onPress={startDraft}>
-                {t('newChat', { defaultValue: 'New Chat' })}
+            <div className={`sticky top-0 z-10 border-b border-border bg-surface ${railCollapsed ? 'p-2' : 'px-4 py-3'}`}>
+              <Button isIconOnly={railCollapsed} onPress={() => setRailCollapsed((value) => !value)} size="sm" variant="ghost">
+                {railCollapsed ? <PanelLeftOpen aria-label={t('expandRail')} size={16} /> : <PanelLeftClose aria-label={t('collapseRail')} size={16} />}
               </Button>
-              <strong className="text-xs font-medium uppercase tracking-wide text-muted">{t('threadRail')}</strong>
+              {!railCollapsed && (
+                <>
+                  <Button className="my-3 bg-primary text-primary-foreground" fullWidth onPress={startDraft}>
+                    {t('newChat', { defaultValue: 'New Chat' })}
+                  </Button>
+                  <div className="flex gap-1">
+                    <Button className="flex-1" onPress={() => setHistoryMode('active')} size="sm" variant={historyMode === 'active' ? 'primary' : 'ghost'}>{t('activeChats')}</Button>
+                    <Button className="flex-1" onPress={() => setHistoryMode('archived')} size="sm" variant={historyMode === 'archived' ? 'primary' : 'ghost'}>{t('archivedChats')}</Button>
+                  </div>
+                </>
+              )}
             </div>
-            {loading ? (
+            {railCollapsed ? null : loading ? (
               <div className="grid place-items-center py-12"><Spinner color="accent" /></div>
-            ) : items.length === 0 ? (
+            ) : visibleItems.length === 0 ? (
               <p className="px-4 py-8 text-xs leading-5 text-muted">{t('empty')}</p>
             ) : (
               <div>
-                {items.map((item) => {
+                {visibleItems.map((item) => {
                   const status = item.thread?.status ?? item.legacy?.status ?? 'completed'
                   const active = item.id === selectedId
                   return (
@@ -597,7 +711,7 @@ export function ChatView({
                 <LegacyConversation entry={legacy!} />
               )}
             </section>
-            {!legacy && (!thread || thread.kind === 'native-chat') && (
+            {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
               <div className="border-t border-border p-4" data-chat-composer>
                 <div className="mx-auto flex max-w-3xl items-end gap-3 rounded-xl border border-border bg-surface p-3">
                   <textarea
@@ -696,7 +810,7 @@ export function ChatView({
             )}
           </main>
 
-          <aside aria-label={t('context')} className="min-h-0 overflow-y-auto border-l border-border p-5 max-[1180px]:col-start-2 max-[1180px]:max-h-52 max-[1180px]:border-l-0 max-[1180px]:border-t">
+          <aside aria-label={t('context')} className="min-h-0 overflow-x-hidden overflow-y-auto border-l border-border p-5 max-[1180px]:col-start-2 max-[1180px]:max-h-52 max-[1180px]:border-l-0 max-[1180px]:border-t">
             <h2 className="text-sm font-medium text-foreground">{t('context')}</h2>
             {thread?.kind === 'native-chat' ? (
               <div className="mt-4 grid gap-4">
@@ -708,6 +822,39 @@ export function ChatView({
                 <ContextDetail label={t('contextWindow')} value={thread.contextUsage
                   ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
                   : '—'} />
+                <div className="grid gap-2 border-t border-border pt-4">
+                  <div className="flex gap-2">
+                    <input
+                      aria-label={t('chatTitle')}
+                      className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground"
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      value={renameValue}
+                    />
+                    <Button isDisabled={lifecycleBusy || !renameValue.trim()} isIconOnly onPress={() => void renameCurrentChat()} size="sm" variant="ghost">
+                      <Pencil aria-label={t('renameChat')} size={14} />
+                    </Button>
+                  </div>
+                  {thread.archivedAt ? (
+                    <div className="flex gap-2">
+                      <Button className="flex-1 gap-2" isDisabled={lifecycleBusy} onPress={() => void restoreCurrentChat()} size="sm" variant="ghost">
+                        <ArchiveRestore size={14} />{t('restoreChat')}
+                      </Button>
+                      <Button className="gap-2 text-danger" isDisabled={lifecycleBusy} onPress={() => setDeleteConfirmThread(thread)} size="sm" variant="ghost">
+                        <Trash2 size={14} />{t('deleteForever')}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button className="gap-2" isDisabled={lifecycleBusy} onPress={() => void archiveCurrentChat()} size="sm" variant="ghost">
+                      <Archive size={14} />{t('archiveChat')}
+                    </Button>
+                  )}
+                  {thread.nativeState === 'resume-failed' && (
+                    <div className="grid gap-2 rounded-lg border border-danger/40 p-3">
+                      <span className="text-xs text-danger">{t('resumeFailed')}</span>
+                      <Button onPress={continueAsNewChat} size="sm" variant="ghost">{t('continueAsNew')}</Button>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : thread ? (
               <div className="mt-4 grid gap-4">
@@ -763,7 +910,7 @@ export function ChatView({
                 <ContextDetail label={t('candidates')} value={String(legacy.candidateCount)} />
               </div>
             ) : null}
-            {!legacy && (!thread || thread.kind === 'native-chat') && (
+            {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
               <SessionContextPicker
                 cursor={contextCursor}
                 from={contextFrom}
@@ -790,6 +937,28 @@ export function ChatView({
           </aside>
         </Card.Content>
       </Card>
+      <Modal isOpen={Boolean(deleteConfirmThread)} onOpenChange={(open) => !open && setDeleteConfirmThread(null)}>
+        <Modal.Backdrop>
+          <Modal.Container placement="center" size="md">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{t('deleteChatTitle')}</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm leading-6 text-muted">{t('deleteChatDescription', { title: deleteConfirmThread?.title ?? '' })}</p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button isDisabled={lifecycleBusy} onPress={() => setDeleteConfirmThread(null)} variant="ghost">{t('cancel')}</Button>
+                <Button className="bg-danger text-white" isDisabled={lifecycleBusy} onPress={() => void permanentlyDeleteChat()}>
+                  {lifecycleBusy ? <Spinner color="current" size="sm" /> : <Trash2 size={14} />}
+                  {t('deleteForever')}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </section>
   )
 }
@@ -1259,7 +1428,7 @@ function SessionContextPicker({
             const item = knownItems.get(sessionReferenceKey(reference))
             return (
               <button
-                className="flex items-center gap-2 rounded-md bg-surface-hover px-2 py-1 text-left text-xs"
+                className="flex w-full min-w-0 items-center gap-2 rounded-md bg-surface-hover px-2 py-1 text-left text-xs"
                 key={sessionReferenceKey(reference)}
                 onClick={() => onSelectedChange(selected.filter(
                   (current) => sessionReferenceKey(current) !== sessionReferenceKey(reference),
