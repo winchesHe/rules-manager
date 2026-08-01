@@ -103,6 +103,8 @@ export function ChatView({
   const [selectedContextItems, setSelectedContextItems] = useState<SessionContextItem[]>([])
   const [historyMode, setHistoryMode] = useState<'active' | 'archived'>('active')
   const [railCollapsed, setRailCollapsed] = useState(false)
+  const [compactRailOpen, setCompactRailOpen] = useState(false)
+  const [compactContextOpen, setCompactContextOpen] = useState(false)
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirmThread, setDeleteConfirmThread] = useState<Extract<ChatThread, { version: 2 }> | null>(null)
@@ -395,12 +397,14 @@ export function ChatView({
   }
 
   function selectThread(id: string): void {
+    setCompactRailOpen(false)
     setSelectedId(id)
     selectedIdRef.current = id
     void refresh(id)
   }
 
   function startDraft(): void {
+    setCompactRailOpen(false)
     preserveDraftContextRef.current = false
     setSelectedId(null)
     selectedIdRef.current = null
@@ -603,6 +607,14 @@ export function ChatView({
             <h1 className="text-2xl font-semibold text-foreground">{t('title')}</h1>
             <p className="mt-1 text-sm text-muted">{t('description')}</p>
           </div>
+          <div className="ml-auto hidden gap-2 max-[1180px]:flex">
+            <Button isIconOnly onPress={() => setCompactRailOpen(true)} size="sm" variant="ghost">
+              <MessageSquareText aria-label={t('threadRail')} size={16} />
+            </Button>
+            <Button isIconOnly onPress={() => setCompactContextOpen(true)} size="sm" variant="ghost">
+              <Eye aria-label={t('context')} size={16} />
+            </Button>
+          </div>
           {thread?.kind === 'rules-generation'
             && thread.status === 'completed' && thread.candidateCount > 0 && (
             <Button
@@ -652,8 +664,16 @@ export function ChatView({
       <Card className="min-h-0 overflow-hidden border border-border bg-surface shadow-none">
         <Card.Content className={`grid h-full min-h-0 ${railCollapsed
           ? 'grid-cols-[3.5rem_minmax(0,1fr)_17rem]'
-          : 'grid-cols-[14rem_minmax(0,1fr)_17rem]'} p-0 max-[1180px]:grid-cols-[12rem_minmax(0,1fr)] max-[1180px]:grid-rows-[minmax(0,1fr)_auto]`}>
-          <aside aria-label={t('threadRail')} className="min-h-0 overflow-x-hidden overflow-y-auto border-r border-border bg-sidebar/40">
+          : 'grid-cols-[14rem_minmax(0,1fr)_17rem]'} p-0 max-[1180px]:grid-cols-1`}>
+          {(compactRailOpen || compactContextOpen) && (
+            <button
+              aria-label={t('closePanels')}
+              className="fixed inset-0 z-30 hidden cursor-default bg-black/40 max-[1180px]:block"
+              onClick={() => { setCompactRailOpen(false); setCompactContextOpen(false) }}
+              type="button"
+            />
+          )}
+          <aside aria-label={t('threadRail')} className={`min-h-0 overflow-x-hidden overflow-y-auto border-r border-border bg-sidebar/40 max-[1180px]:fixed max-[1180px]:bottom-4 max-[1180px]:left-4 max-[1180px]:top-16 max-[1180px]:z-40 max-[1180px]:w-72 max-[1180px]:rounded-xl max-[1180px]:border max-[1180px]:shadow-xl ${compactRailOpen ? 'max-[1180px]:block' : 'max-[1180px]:hidden'}`}>
             <div className={`sticky top-0 z-10 border-b border-border bg-surface ${railCollapsed ? 'p-2' : 'px-4 py-3'}`}>
               <Button isIconOnly={railCollapsed} onPress={() => setRailCollapsed((value) => !value)} size="sm" variant="ghost">
                 {railCollapsed ? <PanelLeftOpen aria-label={t('expandRail')} size={16} /> : <PanelLeftClose aria-label={t('collapseRail')} size={16} />}
@@ -834,7 +854,7 @@ export function ChatView({
             )}
           </main>
 
-          <aside aria-label={t('context')} className="min-h-0 overflow-x-hidden overflow-y-auto border-l border-border p-5 max-[1180px]:col-start-2 max-[1180px]:max-h-52 max-[1180px]:border-l-0 max-[1180px]:border-t">
+          <aside aria-label={t('context')} className={`min-h-0 overflow-x-hidden overflow-y-auto border-l border-border bg-surface p-5 max-[1180px]:fixed max-[1180px]:bottom-4 max-[1180px]:right-4 max-[1180px]:top-16 max-[1180px]:z-40 max-[1180px]:w-80 max-[1180px]:rounded-xl max-[1180px]:border max-[1180px]:shadow-xl ${compactContextOpen ? 'max-[1180px]:block' : 'max-[1180px]:hidden'}`}>
             <h2 className="text-sm font-medium text-foreground">{t('context')}</h2>
             {thread?.kind === 'native-chat' ? (
               <div className="mt-4 grid gap-4">

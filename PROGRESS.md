@@ -634,3 +634,17 @@ npm test -- --runInBand test/unit/rule-candidates-schema.test.ts test/unit/redac
   `019fbe18-c17b-76a1-885c-0ea1c89e9439` 均完成结构化生成；随后普通消息返回 `CONTINUED` 且
   Native Session ID 不变。
 - 提交信息：`feat: 将 Rules Run 迁入原生 Chat`。
+
+## Chat V1 Phase 7：响应式、兼容与全量收口（2026-08-02）
+
+- version 1 Rules Thread 继续走原只读 Conversation，不显示 Native Composer；version 2 Chat 的
+  archived、resume-failed、missing source、Provider error 和空列表均保留明确状态与恢复入口。
+- Chat 根节点固定 viewport 且禁页面级横向滚动；宽屏为 Rail / Conversation / Context 三栏，
+  1180px 以下 Conversation 独占宽度，Rail/Context 通过顶部按钮打开覆盖式 Sheet，各自独立滚动。
+- 真实 Electron 已覆盖 1024px 窄屏、默认 1309px 窗口、Rail 收起及 Context 展示；本轮窗口系统
+  再次确认 1024×768 下 App Shell 无横向溢出。Computer Use 服务未返回应用列表，未伪报其验收。
+- 最终回归：Core 26 suites / 277 tests、App 20 suites / 125 tests，skipped=0；Core/App production
+  build 与 `git diff --check` 通过。Claude/Codex Rules Run 与普通续聊真实 smoke 均通过。
+- App `npm run typecheck` 仍受既有跨 workspace `rootDir/TS6307` 与 JSON include 配置债务影响；
+  production build 能完成类型转译，本轮没有扩大该配置范围。
+- 提交信息：`chore: 收口 Chat V1 验收`。

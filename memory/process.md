@@ -1889,3 +1889,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 隔离真实 Claude/Codex 均完成 Rules → Native Chat → 普通续聊，两个 Provider 的续聊前后 Native
   ID 相同；自动化覆盖原生 schema 参数、Codex 多 Agent message 解包和 v2 Artifact 持久化。
 - 提交信息：`feat: 将 Rules Run 迁入原生 Chat`。
+
+## Chat V1 Phase 7：响应式、兼容与全量收口（2026-08-02）
+
+- V1 Generation Thread 只读兼容保持不变；Native Composer 只对 v2 且非 Archived Thread 出现。
+  `resume-failed` 保留 Native ID，missing Session 仅影响引用状态，Provider 失败保留可读投影。
+- 版面收口以 `h-[calc(100vh-4rem)] + overflow-hidden` 锁定 Chat viewport；1180px 断点让
+  Conversation 独占内容宽度，Rail/Context 改为带 backdrop 的覆盖式 Sheet，三个内容区仍独立滚动。
+- 真实窗口验收沿用 Phase 3 的 1024px Chat、Phase 5 的默认窗口生命周期操作，并在最终构建再次
+  将 Electron 调整为 1024×768 检查 App Shell。Computer Use MCP 本轮连接超时，使用窗口系统只读
+  截图补充检查，没有把未执行的 1440/1920 逐像素操作写成通过。
+- 最终自动化基线：Core 277、App 125 全绿；两端 production build 与 diff check 通过。App 独立
+  typecheck 的 `rootDir/TS6307`、跨 workspace 源导入及 JSON include 是既有工程配置 debt，继续留存。
+- 提交信息：`chore: 收口 Chat V1 验收`。

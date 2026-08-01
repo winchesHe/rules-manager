@@ -74,6 +74,9 @@ describe('home workflow layout', () => {
     expect(source).toContain('deleteConfirmThread')
     expect(source).toContain('railCollapsed')
     expect(source).toContain('continueAsNewChat')
+    expect(source).toContain('compactRailOpen')
+    expect(source).toContain('compactContextOpen')
+    expect(source).toContain('max-[1180px]:fixed')
   })
 
   it('Chat 固定 viewport 高度并把滚动限制在三段内容区', () => {

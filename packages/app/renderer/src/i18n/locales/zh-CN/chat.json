@@ -6,6 +6,7 @@
   "activeChats": "当前",
   "archivedChats": "归档",
   "collapseRail": "收起对话列表",
+  "closePanels": "关闭侧边面板",
   "expandRail": "展开对话列表",
   "message": "消息",
   "messagePlaceholder": "向 Agent 发送消息…",

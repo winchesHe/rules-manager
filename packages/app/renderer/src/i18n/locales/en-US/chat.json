@@ -6,6 +6,7 @@
   "activeChats": "Active",
   "archivedChats": "Archived",
   "collapseRail": "Collapse chat list",
+  "closePanels": "Close side panels",
   "expandRail": "Expand chat list",
   "message": "Message",
   "messagePlaceholder": "Message the Agent…",
