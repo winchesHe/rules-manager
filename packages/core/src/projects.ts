@@ -11,6 +11,7 @@ import { getDbPath, initDatabase, isDatabaseReady } from './db.js'
 import { listLinks, linkSession, moveLink } from './fs-writer.js'
 import { classify } from './classifier.js'
 import { ALL_ADAPTERS } from './adapters/index.js'
+import { resolveSessionDisplayNames } from './session-context.js'
 
 export interface ProjectListItem {
   slug: string
@@ -28,6 +29,7 @@ export interface ProjectSessionListOptions extends ProjectListOptions {
 
 export interface ProjectSessionMetadata {
   id: string
+  displayName: string
   agent: AgentName
   sourcePath: string
   workspaceLink: string
@@ -137,6 +139,7 @@ export function listProjectSessions(
 
         sessions.push({
           id: row.id,
+          displayName: `${row.slug} · ${row.agent}`,
           agent: row.agent,
           sourcePath: row.source_path,
           workspaceLink: row.workspace_link,
@@ -151,6 +154,12 @@ export function listProjectSessions(
           rulesGeneratedAt: row.rules_generated_at,
         })
       }
+    }
+
+    const displayNames = resolveSessionDisplayNames(sessions)
+    for (const session of sessions) {
+      session.displayName = displayNames.get(`${session.agent}\0${session.id}`)
+        ?? session.displayName
     }
 
     return sessions.sort((a, b) => {

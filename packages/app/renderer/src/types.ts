@@ -9,6 +9,7 @@ export type SessionStatus = 'new' | 'updated' | 'unchanged' | 'missing' | 'error
 
 export interface ProjectSession {
   id: string
+  displayName: string
   agent: AgentName
   sourcePath: string
   workspaceLink: string
@@ -37,6 +38,7 @@ export interface SessionPreviewMessage {
 
 export interface SessionPreview {
   sessionId: string
+  displayName: string
   agent: string
   messages: SessionPreviewMessage[]
 }
@@ -48,6 +50,7 @@ export interface SessionEvidenceContextMessage extends SessionPreviewMessage {
 
 export interface SessionEvidenceContext {
   sessionId: string
+  displayName: string
   agent: string
   messageIndex: number
   eligibility: 'eligible' | 'existing_rule_baseline' | 'platform_context'

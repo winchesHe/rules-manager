@@ -2247,3 +2247,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   打开和关闭历史侧栏。App 24 suites / 153 tests、Core 26 suites / 278 tests 全绿；App/Core
   production build 与 `git diff --check` 通过，既有 Core `tsdown define` 与 Markstream PURE 注释警告不变。
 - 提交信息：`fix: 修复 Chat 顶部按钮热区`
+
+## Session 名称统一展示（2026-08-02）
+
+- 项目会话列表、会话详情、规则 Evidence 预览与来源上下文统一改为“可读 Session 名称为主、
+  Agent + Session ID 为辅助”；项目会话搜索同时支持名称、ID 和来源路径。
+- 名称保持按需读取且不写入 Memory Manager DB：Claude 读取原生 `ai-title`，Codex 批量读取
+  `state_5.sqlite` 的 `name / title / first_user_message`，OpenCode 批量读取权威 SQLite `session.title`，
+  Copilot 读取 workspace `name / summary`，Cursor 与 Pi 回退到 JSONL 首条用户消息；来源失效或格式
+  不兼容时使用 `slug · agent`，不影响列表可用性。
+- 所有原生名称和首条消息在进入 UI 前统一压缩空白、限制长度并执行 secret redaction，避免 token 等
+  敏感文本因成为标题而绕过既有 Evidence 脱敏。
+- 真实 production Electron 在 `agent-workspace` 的 313 条会话中验证：原 UUID 主行已替换为 Codex
+  可读标题，ID 位于第二行；搜索 placeholder、长标题截断和详情页标题层级均符合预期。
+- `simplify` 复核收敛了批量来源分组和 Agent 类型，没有改变读取或回退行为。Core 26 suites / 279 tests、
+  App 24 suites / 153 tests 全绿；App/Core production build 与 `git diff --check` 通过，既有 Core
+  `tsdown define` 与 Markstream PURE 注释警告保持不变。
+- 提交信息：`feat: 统一展示可读 Session 名称`

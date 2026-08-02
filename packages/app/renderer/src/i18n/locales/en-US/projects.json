@@ -42,7 +42,7 @@
     "sessionsTab": "Sessions",
     "rulesTab": "Rules",
     "generate": "Generate for this project",
-    "searchSessions": "Search session ID or source path",
+    "searchSessions": "Search session name, ID, or source path",
     "agent": "Agent",
     "status": "Status",
     "allAgents": "All agents",

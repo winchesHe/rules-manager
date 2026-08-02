@@ -87,18 +87,21 @@ describe('home workflow view models', () => {
     const sessions = [
       {
         id: 'codex-123',
+        displayName: '修复规则生成',
         sourcePath: '/sessions/rules-manager.jsonl',
         agent: 'codex',
         status: 'updated',
       },
       {
         id: 'claude-456',
+        displayName: '整理工作区',
         sourcePath: '/sessions/agent-workspace.jsonl',
         agent: 'claude',
         status: 'unchanged',
       },
       {
         id: 'codex-789',
+        displayName: '检查发布流程',
         sourcePath: '/sessions/agent-workspace-2.jsonl',
         agent: 'codex',
         status: 'unchanged',
@@ -115,5 +118,10 @@ describe('home workflow view models', () => {
         (session) => session.id,
       ),
     ).toEqual(['codex-123'])
+    expect(
+      filterProjectSessions(sessions, '发布', 'all', 'all').map(
+        (session) => session.id,
+      ),
+    ).toEqual(['codex-789'])
   })
 })

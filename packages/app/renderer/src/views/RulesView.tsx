@@ -3255,7 +3255,10 @@ function EvidenceExplorer({
         ) : preview && selectedSession ? (
           <div className="mt-4 grid gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-medium text-foreground">{preview.sessionId}</span>
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">{preview.displayName}</p>
+                <p className="truncate font-mono text-xs text-muted">{preview.sessionId}</p>
+              </div>
               <Chip size="sm" variant="soft">
                 {tr('counts.messages', { count: includedMessages.length })}
               </Chip>
@@ -3499,13 +3502,18 @@ function EvidenceSourceContext({
     <article className="overflow-hidden rounded-xl border border-border bg-background">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
+          {load.status === 'loaded' && (
+            <p className="mb-2 truncate text-sm font-medium text-foreground">
+              {load.context.displayName}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {agent && <Chip size="sm" variant="soft">{agent}</Chip>}
             {reference.timestamp && (
               <span className="text-xs text-muted">{formatEvidenceTimestamp(reference.timestamp)}</span>
             )}
           </div>
-          <p className="mt-2 break-all font-mono text-xs text-foreground">{reference.sessionId}</p>
+          <p className="mt-2 break-all font-mono text-xs text-muted">{reference.sessionId}</p>
         </div>
         <span className="text-xs text-muted">{tr('review.messageIndex', { index: reference.messageIndex })}</span>
       </header>

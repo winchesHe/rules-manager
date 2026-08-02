@@ -5,7 +5,11 @@ import Database from 'better-sqlite3'
 import { afterEach, describe, expect, it } from '@jest/globals'
 import { initDatabase } from '../../src/db'
 import { resolveWorkspace } from '../../src/workspace'
-import { querySessionContext, resolveSessionContextItems } from '../../src/session-context'
+import {
+  querySessionContext,
+  resolveSessionContextItems,
+  resolveSessionDisplayNames,
+} from '../../src/session-context'
 
 const homes: string[] = []
 
@@ -76,6 +80,54 @@ describe('querySessionContext', () => {
         { id: 'ses-readable', displayName: '修复 Chat Context 布局' },
         { id: 'codex-readable', displayName: 'rules-manager · codex' },
       ])
+  })
+
+  it('按需读取 Claude、Codex、Copilot 与 JSONL Agent 的原生会话名称', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-session-names-'))
+    homes.push(root)
+    const claudePath = path.join(root, 'claude.jsonl')
+    const cursorPath = path.join(root, 'cursor.jsonl')
+    const copilotPath = path.join(root, 'workspace.yaml')
+    fs.writeFileSync(claudePath, [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: '原始问题' } }),
+      JSON.stringify({ type: 'ai-title', aiTitle: '修复项目会话名称' }),
+    ].join('\n'))
+    fs.writeFileSync(cursorPath, JSON.stringify({
+      role: 'user',
+      message: { content: [{ type: 'text', text: '检查 Cursor 会话列表' }] },
+    }))
+    fs.writeFileSync(copilotPath, 'summary: 完善 Copilot Session 展示\n')
+
+    const codexRoot = path.join(root, '.codex')
+    const codexPath = path.join(codexRoot, 'sessions', '2026', '08', '02', 'rollout.jsonl')
+    fs.mkdirSync(path.dirname(codexPath), { recursive: true })
+    fs.writeFileSync(codexPath, '')
+    const state = new Database(path.join(codexRoot, 'state_5.sqlite'))
+    state.exec(`
+      CREATE TABLE threads (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        title TEXT,
+        first_user_message TEXT
+      )
+    `)
+    state.prepare('INSERT INTO threads VALUES (?, ?, ?, ?)')
+      .run('codex-readable', '', '重构 Chat View', '首条消息')
+    state.close()
+
+    const names = resolveSessionDisplayNames([
+      { id: 'claude-readable', agent: 'claude', sourcePath: claudePath, slug: 'demo' },
+      { id: 'codex-readable', agent: 'codex', sourcePath: codexPath, slug: 'demo' },
+      { id: 'copilot-readable', agent: 'copilot', sourcePath: copilotPath, slug: 'demo' },
+      { id: 'cursor-readable', agent: 'cursor', sourcePath: cursorPath, slug: 'demo' },
+    ])
+
+    expect(Object.fromEntries(names)).toEqual({
+      'claude\0claude-readable': '修复项目会话名称',
+      'codex\0codex-readable': '重构 Chat View',
+      'copilot\0copilot-readable': '完善 Copilot Session 展示',
+      'cursor\0cursor-readable': '检查 Cursor 会话列表',
+    })
   })
 })
 

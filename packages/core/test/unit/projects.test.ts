@@ -190,6 +190,7 @@ describe('listProjectSessions', () => {
     expect(sessions).toHaveLength(linkCount)
     expect(Object.keys(sessions[0])).toEqual([
       'id',
+      'displayName',
       'agent',
       'sourcePath',
       'workspaceLink',

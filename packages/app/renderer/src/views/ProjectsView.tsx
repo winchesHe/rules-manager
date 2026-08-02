@@ -502,8 +502,12 @@ function VirtualSessionList({
                 type="button"
               >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{session.id}</p>
-                <p className="truncate text-xs text-muted">{session.sourcePath}</p>
+                <p className="truncate text-sm font-medium text-foreground" title={session.displayName}>
+                  {session.displayName}
+                </p>
+                <p className="truncate text-xs text-muted" title={session.id}>
+                  {session.agent} · {session.id}
+                </p>
               </div>
               <span className="capitalize text-sm text-muted">{session.agent}</span>
               <Chip
@@ -572,15 +576,16 @@ function SessionDetails({
         onBackToProject={onBackToProject}
         onBackToProjects={onBackToProjects}
         projectSlug={projectSlug}
-        sessionId={session.id}
+        sessionId={session.displayName}
       />
       <PageHeader
         description={`${session.agent} · ${session.status}`}
-        title={session.id}
+        title={session.displayName}
       />
       <Card className="mb-4 border border-border bg-surface shadow-none">
         <Card.Content className="grid gap-2 p-4">
           <p className="break-all text-sm text-muted">{session.sourcePath}</p>
+          <p className="break-all font-mono text-xs text-muted">{session.id}</p>
           <div className="flex flex-wrap gap-2">
             <Chip size="sm" variant="soft">{session.agent}</Chip>
             <Chip size="sm" variant="soft">

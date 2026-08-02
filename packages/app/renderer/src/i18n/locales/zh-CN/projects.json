@@ -42,7 +42,7 @@
     "sessionsTab": "会话",
     "rulesTab": "规则",
     "generate": "为此项目生成规则",
-    "searchSessions": "搜索会话 ID 或来源路径",
+    "searchSessions": "搜索会话名称、ID 或来源路径",
     "agent": "Agent",
     "status": "状态",
     "allAgents": "全部 Agent",

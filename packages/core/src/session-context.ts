@@ -1,6 +1,10 @@
 import Database from 'better-sqlite3'
+import fs from 'node:fs'
+import path from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import { getDbPath, isDatabaseReady } from './db.js'
 import type { AgentName, SessionStatus } from './types.js'
+import { redactSecrets } from './redaction.js'
 
 export interface SessionContextQuery {
   homeDir?: string
@@ -38,6 +42,13 @@ interface SessionContextRow {
   slug: string
   updated_at: string
   status: SessionStatus
+}
+
+export interface SessionDisplayNameSource {
+  id: string
+  agent: AgentName
+  sourcePath: string
+  slug: string
 }
 
 interface DecodedCursor {
@@ -127,11 +138,16 @@ export function resolveSessionContextItems(
 }
 
 function mapRows(rows: SessionContextRow[]): SessionContextItem[] {
-  const openCodeTitles = readOpenCodeTitles(rows)
+  const displayNames = resolveSessionDisplayNames(rows.map((row) => ({
+    id: row.id,
+    agent: row.agent,
+    sourcePath: row.source_path,
+    slug: row.slug,
+  })))
   return rows.map((row) => ({
     id: row.id,
     agent: row.agent,
-    displayName: openCodeTitles.get(`${row.source_path}\0${row.id}`)
+    displayName: displayNames.get(sessionKey(row.agent, row.id))
       ?? `${row.slug} · ${row.agent}`,
     slug: row.slug,
     updatedAt: row.updated_at,
@@ -152,13 +168,34 @@ function missingReference(reference: SessionContextReference): SessionContextIte
   }
 }
 
-function readOpenCodeTitles(rows: SessionContextRow[]): Map<string, string> {
+export function resolveSessionDisplayNames(
+  sessions: SessionDisplayNameSource[],
+): Map<string, string> {
+  const names = new Map<string, string>()
+  readOpenCodeTitles(sessions, names)
+  readCodexTitles(sessions, names)
+  for (const session of sessions) {
+    const key = sessionKey(session.agent, session.id)
+    if (names.has(key)) continue
+    const title = session.agent === 'copilot'
+      ? readCopilotTitle(session.sourcePath)
+      : readJsonlTitle(session.sourcePath, session.agent)
+    if (title) names.set(key, title)
+  }
+  return names
+}
+
+function readOpenCodeTitles(
+  rows: SessionDisplayNameSource[],
+  titles: Map<string, string>,
+): void {
   const bySource = new Map<string, string[]>()
   for (const row of rows) {
     if (row.agent !== 'opencode') continue
-    bySource.set(row.source_path, [...(bySource.get(row.source_path) ?? []), row.id])
+    const ids = bySource.get(row.sourcePath) ?? []
+    ids.push(row.id)
+    bySource.set(row.sourcePath, ids)
   }
-  const titles = new Map<string, string>()
   for (const [sourcePath, ids] of bySource) {
     try {
       const source = new Database(sourcePath, { readonly: true, fileMustExist: true })
@@ -168,7 +205,7 @@ function readOpenCodeTitles(rows: SessionContextRow[]): Map<string, string> {
           .all(...ids) as Array<{ id: string; title?: unknown }>
         for (const record of records) {
           if (typeof record.title === 'string' && record.title.trim()) {
-            titles.set(`${sourcePath}\0${record.id}`, record.title.trim())
+            titles.set(sessionKey('opencode', record.id), normalizeTitle(record.title))
           }
         }
       } finally {
@@ -178,7 +215,152 @@ function readOpenCodeTitles(rows: SessionContextRow[]): Map<string, string> {
       // A missing or incompatible source falls back to the project and agent label.
     }
   }
-  return titles
+}
+
+function readCodexTitles(
+  sessions: SessionDisplayNameSource[],
+  titles: Map<string, string>,
+): void {
+  const byRoot = new Map<string, string[]>()
+  for (const session of sessions) {
+    if (session.agent !== 'codex') continue
+    const root = codexRoot(session.sourcePath)
+    if (!root) continue
+    const ids = byRoot.get(root) ?? []
+    ids.push(session.id)
+    byRoot.set(root, ids)
+  }
+  for (const [root, ids] of byRoot) {
+    const statePath = path.join(root, 'state_5.sqlite')
+    try {
+      const db = new Database(statePath, { readonly: true, fileMustExist: true })
+      try {
+        const columns = new Set(
+          (db.prepare('PRAGMA table_info(threads)').all() as Array<{ name: string }>)
+            .map(({ name }) => name),
+        )
+        const titleColumns = ['name', 'title', 'first_user_message']
+          .filter((column) => columns.has(column))
+        if (titleColumns.length === 0) continue
+        for (let offset = 0; offset < ids.length; offset += 200) {
+          const batch = ids.slice(offset, offset + 200)
+          const placeholders = batch.map(() => '?').join(', ')
+          const records = db.prepare(
+            `SELECT id, ${titleColumns.join(', ')} FROM threads WHERE id IN (${placeholders})`,
+          ).all(...batch) as Array<Record<string, unknown> & { id: string }>
+          for (const record of records) {
+            const title = titleColumns
+              .map((column) => record[column])
+              .find((value) => typeof value === 'string' && value.trim())
+            if (typeof title === 'string') {
+              titles.set(sessionKey('codex', record.id), normalizeTitle(title))
+            }
+          }
+        }
+      } finally {
+        db.close()
+      }
+    } catch {
+      // Missing or incompatible Codex state falls back to its rollout JSONL.
+    }
+  }
+}
+
+function codexRoot(sourcePath: string): string | null {
+  for (const marker of [`${path.sep}sessions${path.sep}`, `${path.sep}archived_sessions${path.sep}`]) {
+    const index = sourcePath.indexOf(marker)
+    if (index >= 0) return sourcePath.slice(0, index)
+  }
+  return null
+}
+
+function readCopilotTitle(sourcePath: string): string | null {
+  try {
+    const document = parseYaml(fs.readFileSync(sourcePath, 'utf8')) as Record<string, unknown>
+    for (const key of ['name', 'summary']) {
+      if (typeof document[key] === 'string' && document[key].trim()) {
+        return normalizeTitle(document[key])
+      }
+    }
+  } catch {
+    // Missing or malformed workspaces use the stable project/agent fallback.
+  }
+  return null
+}
+
+function readJsonlTitle(sourcePath: string, agent: AgentName): string | null {
+  if (!sourcePath.endsWith('.jsonl')) return null
+  try {
+    const descriptor = fs.openSync(sourcePath, 'r')
+    try {
+      const buffer = Buffer.allocUnsafe(512 * 1024)
+      const bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, 0)
+      const lines = buffer.toString('utf8', 0, bytesRead).split(/\r?\n/)
+      let firstUserMessage: string | null = null
+      for (const line of lines) {
+        if (!line.trim()) continue
+        let record: Record<string, unknown>
+        try {
+          record = JSON.parse(line) as Record<string, unknown>
+        } catch {
+          continue
+        }
+        if (agent === 'claude' && record.type === 'ai-title') {
+          const aiTitle = record.aiTitle
+          if (typeof aiTitle === 'string' && aiTitle.trim()) return normalizeTitle(aiTitle)
+        }
+        firstUserMessage ??= userMessageText(record)
+      }
+      return firstUserMessage
+    } finally {
+      fs.closeSync(descriptor)
+    }
+  } catch {
+    return null
+  }
+}
+
+function userMessageText(record: Record<string, unknown>): string | null {
+  const message = asRecord(record.message)
+  const payload = asRecord(record.payload)
+  const role = record.role ?? message.role ?? payload.role
+  const isCodexUserEvent = record.type === 'event_msg' && payload.type === 'user_message'
+  if (role !== 'user' && record.type !== 'user' && !isCodexUserEvent) return null
+  return firstText(
+    isCodexUserEvent ? payload.message : record.content ?? message.content ?? payload.content,
+  )
+}
+
+function firstText(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() ? normalizeTitle(value) : null
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const text = firstText(item)
+      if (text) return text
+    }
+    return null
+  }
+  const record = asRecord(value)
+  for (const key of ['text', 'input_text', 'content']) {
+    const text = firstText(record[key])
+    if (text) return text
+  }
+  return null
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function normalizeTitle(value: string): string {
+  const normalized = redactSecrets(value).replace(/\s+/g, ' ').trim()
+  return normalized.length <= 160 ? normalized : `${normalized.slice(0, 159)}…`
+}
+
+function sessionKey(agent: string, id: string): string {
+  return `${agent}\0${id}`
 }
 
 function optionalIso(value: string | undefined, label: string): string | undefined {

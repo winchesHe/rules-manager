@@ -6,6 +6,8 @@ import { collectFilesRecursive } from './adapters/shared.js'
 import { redactSecrets } from './redaction.js'
 import { resolveWorkspace } from './workspace.js'
 import { throwIfAborted } from './abort.js'
+import { resolveSessionDisplayNames } from './session-context.js'
+import type { AgentName } from './types.js'
 
 export interface RawEvidenceMessage {
   role?: unknown
@@ -58,6 +60,7 @@ export interface SessionPreviewMessage {
 
 export interface SessionPreview {
   sessionId: string
+  displayName: string
   agent: string
   messages: SessionPreviewMessage[]
 }
@@ -69,6 +72,7 @@ export interface SessionEvidenceContextMessage extends SessionPreviewMessage {
 
 export interface SessionEvidenceContext {
   sessionId: string
+  displayName: string
   agent: string
   messageIndex: number
   eligibility: EvidenceEligibility
@@ -98,7 +102,7 @@ export interface EvidenceOptions {
 
 interface StoredSession {
   id: string
-  agent: string
+  agent: AgentName
   slug: string
   source_path: string
   updated_at: string
@@ -478,7 +482,7 @@ async function loadStoredSessionMessages(
   sessionId: string,
   homeDir?: string,
 ): Promise<{
-  session: Pick<StoredSession, 'id' | 'agent' | 'source_path'>
+  session: Pick<StoredSession, 'id' | 'agent' | 'source_path' | 'slug'>
   rawMessages: RawEvidenceMessage[]
 }> {
   if (!sessionId.trim()) throw new Error('session id 不能为空')
@@ -487,13 +491,13 @@ async function loadStoredSessionMessages(
     readonly: true,
     fileMustExist: true,
   })
-  let session: Pick<StoredSession, 'id' | 'agent' | 'source_path'> | undefined
+  let session: Pick<StoredSession, 'id' | 'agent' | 'source_path' | 'slug'> | undefined
   try {
     session = db.prepare(`
-      SELECT id, agent, source_path
+      SELECT id, agent, source_path, slug
       FROM sessions
       WHERE id = ?
-    `).get(sessionId) as Pick<StoredSession, 'id' | 'agent' | 'source_path'> | undefined
+    `).get(sessionId) as Pick<StoredSession, 'id' | 'agent' | 'source_path' | 'slug'> | undefined
   } finally {
     db.close()
   }
@@ -553,9 +557,11 @@ export async function readSessionPreview(
   const { session, rawMessages } = await loadStoredSessionMessages(sessionId, homeDir)
   const messages = previewMessagesWithSourceIndex(rawMessages)
     .map(({ messageIndex: _messageIndex, ...message }) => message)
+  const displayName = sessionDisplayName(session)
 
   return {
     sessionId: session.id,
+    displayName,
     agent: session.agent,
     messages,
   }
@@ -603,11 +609,23 @@ export async function readSessionEvidenceContext(
 
   return {
     sessionId: session.id,
+    displayName: sessionDisplayName(session),
     agent: session.agent,
     messageIndex,
     eligibility: evidenceEligibility(matchedRawMessage),
     messages,
   }
+}
+
+function sessionDisplayName(
+  session: Pick<StoredSession, 'id' | 'agent' | 'source_path' | 'slug'>,
+): string {
+  return resolveSessionDisplayNames([{
+    id: session.id,
+    agent: session.agent,
+    sourcePath: session.source_path,
+    slug: session.slug,
+  }]).get(`${session.agent}\0${session.id}`) ?? `${session.slug} · ${session.agent}`
 }
 
 export async function extractEvidence(opts: EvidenceOptions = {}): Promise<EvidenceBundle[]> {

@@ -74,6 +74,7 @@ export function filterProjectRows<T extends FilterableProjectRow>(
 
 export interface FilterableProjectSession {
   id: string
+  displayName: string
   sourcePath: string
   agent: string
   status: string
@@ -88,6 +89,7 @@ export function filterProjectSessions<T extends FilterableProjectSession>(
   const normalizedQuery = query.trim().toLocaleLowerCase()
   return sessions.filter((session) => {
     const matchesQuery = !normalizedQuery
+      || session.displayName.toLocaleLowerCase().includes(normalizedQuery)
       || session.id.toLocaleLowerCase().includes(normalizedQuery)
       || session.sourcePath.toLocaleLowerCase().includes(normalizedQuery)
     const matchesAgent = agent === 'all' || session.agent === agent
