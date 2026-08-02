@@ -321,6 +321,7 @@ export interface ChatMessage {
   completedAt?: string
   turnConfig?: ChatTurnConfig
   toolActivities?: NativeToolActivity[]
+  timeline?: NativeTurnTimelineItem[]
 }
 
 export interface NativeToolActivity {
@@ -336,8 +337,25 @@ export interface NativeToolActivity {
   }
 }
 
+export type NativeTurnTimelineItem =
+  | { type: 'assistant'; itemId: string; content: string }
+  | {
+      type: 'thinking'
+      itemId: string
+      content: string
+      status: 'running' | 'completed'
+    }
+  | { type: 'tool'; itemId: string; activity: NativeToolActivity }
+
 export type NativeChatEvent =
-  | { type: 'assistant_delta'; text: string; content?: string }
+  | { type: 'assistant_delta'; itemId: string; text: string; content?: string }
+  | {
+      type: 'thinking_delta'
+      itemId: string
+      text: string
+      content?: string
+      status?: 'running' | 'completed'
+    }
   | { type: 'tool_activity'; activity: NativeToolActivity }
   | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
 

@@ -40,6 +40,7 @@ interface ActiveCodexTurn {
   turnId: string | null
   content: string
   agentMessages: Map<string, string>
+  reasoningMessages: Map<string, string>
   toolIndexes: Map<string, number>
   contextUsage?: { usedTokens: number; maxTokens: number }
   resolve: (value: NativeTurnResult) => void
@@ -227,6 +228,7 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         turnId: null,
         content: '',
         agentMessages: new Map(),
+        reasoningMessages: new Map(),
         toolIndexes: new Map(),
         resolve,
         reject,
@@ -291,7 +293,22 @@ export class CodexChatAdapter implements ChatProviderAdapter {
           itemId,
           `${active.agentMessages.get(itemId) ?? ''}${params.delta}`,
         )
-        active.onEvent?.({ type: 'assistant_delta', text: params.delta })
+        active.onEvent?.({ type: 'assistant_delta', itemId, text: params.delta })
+      }
+      return
+    }
+    if (
+      method === 'item/reasoning/summaryTextDelta'
+      || method === 'item/reasoning/textDelta'
+      || method === 'item/reasoning/delta'
+    ) {
+      if (typeof params.delta === 'string') {
+        const itemId = asString(params.itemId) ?? `reasoning-${active.reasoningMessages.size}`
+        active.reasoningMessages.set(
+          itemId,
+          `${active.reasoningMessages.get(itemId) ?? ''}${params.delta}`,
+        )
+        active.onEvent?.({ type: 'thinking_delta', itemId, text: params.delta })
       }
       return
     }
@@ -299,6 +316,21 @@ export class CodexChatAdapter implements ChatProviderAdapter {
       const item = asRecord(params.item)
       const itemType = asString(item.type)
       if (itemType === 'userMessage' || itemType === 'agentMessage') return
+      if (itemType === 'reasoning') {
+        const itemId = asString(item.id) ?? `reasoning-${active.reasoningMessages.size}`
+        const streamed = active.reasoningMessages.get(itemId) ?? ''
+        const completedContent = reasoningText(item)
+        const content = streamed || completedContent
+        if (content) active.reasoningMessages.set(itemId, content)
+        active.onEvent?.({
+          type: 'thinking_delta',
+          itemId,
+          text: streamed ? '' : completedContent,
+          ...(content ? { content } : {}),
+          status: method === 'item/started' ? 'running' : 'completed',
+        })
+        return
+      }
       const activity = safeToolActivity({
         itemId: item.id,
         name: itemType,
@@ -380,6 +412,17 @@ function asString(value: unknown): string | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+function reasoningText(item: Record<string, unknown>): string {
+  const fragments = [item.summary, item.content]
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .flatMap((value) => {
+      if (typeof value === 'string') return [value]
+      const record = asRecord(value)
+      return [record.text, record.content].filter((text): text is string => typeof text === 'string')
+    })
+  return fragments.join('\n').trim()
 }
 
 function rpcError(value: unknown): string {

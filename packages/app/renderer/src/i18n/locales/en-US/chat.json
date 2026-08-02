@@ -15,6 +15,7 @@
   "send": "Send",
   "copyResponse": "Copy response",
   "workedFor": "Worked for {{elapsed}}",
+  "thinking": "Thinking",
   "stopChat": "Stop turn",
   "queue_one": "Queue",
   "queue_other": "Queue ({{count}})",

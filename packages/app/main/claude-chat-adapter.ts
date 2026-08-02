@@ -117,6 +117,7 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
     let contextUsage: NativeTurnResult['contextUsage']
     let structuredOutput: unknown
     const toolActivities = new Map<number, NonNullable<ReturnType<typeof safeToolActivity>>>()
+    const thinkingItems = new Map<number, { itemId: string; content: string }>()
     try {
       for await (const value of stream) {
         const message = asRecord(value)
@@ -162,10 +163,38 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
             && delta.type === 'text_delta'
             && typeof delta.text === 'string'
           ) {
-            request.onEvent?.({ type: 'assistant_delta', text: delta.text })
+            const index = typeof event.index === 'number' ? event.index : 0
+            request.onEvent?.({
+              type: 'assistant_delta', itemId: `assistant-${index}`, text: delta.text,
+            })
+          }
+          if (
+            event.type === 'content_block_delta'
+            && delta.type === 'thinking_delta'
+            && typeof delta.thinking === 'string'
+          ) {
+            const index = typeof event.index === 'number' ? event.index : thinkingItems.size
+            const item = thinkingItems.get(index) ?? {
+              itemId: `thinking-${index}`,
+              content: '',
+            }
+            item.content += delta.thinking
+            thinkingItems.set(index, item)
+            request.onEvent?.({
+              type: 'thinking_delta', itemId: item.itemId, text: delta.thinking,
+            })
           }
           if (event.type === 'content_block_start') {
             const block = asRecord(event.content_block)
+            if (block.type === 'thinking') {
+              const index = typeof event.index === 'number' ? event.index : thinkingItems.size
+              const content = typeof block.thinking === 'string' ? block.thinking : ''
+              const item = { itemId: `thinking-${index}`, content }
+              thinkingItems.set(index, item)
+              request.onEvent?.({
+                type: 'thinking_delta', itemId: item.itemId, text: content, status: 'running',
+              })
+            }
             if (block.type === 'tool_use') {
               const activity = safeToolActivity({
                 itemId: block.id,
@@ -182,6 +211,13 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
           }
           if (event.type === 'content_block_stop') {
             const index = typeof event.index === 'number' ? event.index : -1
+            const thinking = thinkingItems.get(index)
+            if (thinking) {
+              request.onEvent?.({
+                type: 'thinking_delta', itemId: thinking.itemId, text: '',
+                content: thinking.content, status: 'completed',
+              })
+            }
             const activity = toolActivities.get(index)
             if (activity) {
               request.onEvent?.({

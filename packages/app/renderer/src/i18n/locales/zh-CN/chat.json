@@ -15,6 +15,7 @@
   "send": "发送",
   "copyResponse": "复制回复",
   "workedFor": "用时 {{elapsed}}",
+  "thinking": "思考",
   "stopChat": "停止本轮",
   "queue_one": "加入队列",
   "queue_other": "加入队列（{{count}}）",

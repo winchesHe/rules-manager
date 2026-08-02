@@ -44,6 +44,7 @@ import type {
   NativeChatEvent,
   NativeToolActivity,
   NativeToolItemPage,
+  NativeTurnTimelineItem,
   ProviderId,
   ProviderSnapshot,
   Project,
@@ -73,6 +74,7 @@ import {
   consumeSkillPickerTrigger,
   updateRecentSkillNames,
 } from './chat-skill-picker-model'
+import { mergeLiveTimeline } from './chat-timeline-model'
 
 interface QueuedChatTurn {
   message: string
@@ -120,9 +122,8 @@ export function ChatView({
   const [skills, setSkills] = useState<ChatSkillOption[]>([])
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [recentSkills, setRecentSkills] = useState<string[]>(() => readRecentSkills(window.localStorage))
-  const [liveAssistant, setLiveAssistant] = useState('')
+  const [liveTimeline, setLiveTimeline] = useState<NativeTurnTimelineItem[]>([])
   const [liveStartedAt, setLiveStartedAt] = useState<string | null>(null)
-  const [liveTools, setLiveTools] = useState<NativeToolActivity[]>([])
   const [liveUsage, setLiveUsage] = useState<{ usedTokens: number; maxTokens: number } | null>(null)
   const [queuedCount, setQueuedCount] = useState(0)
   const [projects, setProjects] = useState<Project[]>([])
@@ -294,12 +295,10 @@ export function ChatView({
       if (selectedIdRef.current && selectedIdRef.current !== envelope.chatId) return
       if (!selectedIdRef.current && !sendingRef.current) return
       liveChatIdRef.current = envelope.chatId
-      if (event.type === 'assistant_delta') {
-        setLiveAssistant((current) => event.content ?? `${current}${event.text}`)
-      } else if (event.type === 'tool_activity') {
-        setLiveTools((current) => mergeNativeToolActivity(current, event.activity))
-      } else {
+      if (event.type === 'usage') {
         setLiveUsage(event.contextUsage)
+      } else {
+        setLiveTimeline((current) => mergeLiveTimeline(current, event))
       }
     }
     window.api.onEvent('chat.event', onChatEvent)
@@ -552,9 +551,8 @@ export function ChatView({
     setLegacy(null)
     setComposer('')
     setSelectedSkills([])
-    setLiveAssistant('')
+    setLiveTimeline([])
     setLiveStartedAt(null)
-    setLiveTools([])
     setLiveUsage(null)
     liveChatIdRef.current = null
     setError(null)
@@ -611,8 +609,7 @@ export function ChatView({
     sendingRef.current = true
     setIsSending(true)
     setError(null)
-    setLiveAssistant('')
-    setLiveTools([])
+    setLiveTimeline([])
     setLiveStartedAt(new Date().toISOString())
     let next: QueuedChatTurn | undefined = first
     let currentChatId = thread?.kind === 'native-chat' ? thread.id : undefined
@@ -632,8 +629,7 @@ export function ChatView({
         selectedIdRef.current = result.chatId
         setSelectedId(result.chatId)
         await refresh(result.chatId)
-        setLiveAssistant('')
-        setLiveTools([])
+        setLiveTimeline([])
         next = queueRef.current.shift()
         setLiveStartedAt(next ? new Date().toISOString() : null)
         setQueuedCount(queueRef.current.length)
@@ -959,9 +955,9 @@ export function ChatView({
               {!thread && !legacy && !isSending ? (
                 <div className="grid h-full place-items-center text-sm text-muted">{loading ? t('loading') : t('emptySelection')}</div>
               ) : thread?.kind === 'native-chat' ? (
-                <NativeConversation liveAssistant={liveAssistant} liveStartedAt={liveStartedAt} liveTools={liveTools} thread={thread} />
+                <NativeConversation liveStartedAt={liveStartedAt} liveTimeline={liveTimeline} thread={thread} />
               ) : !thread && isSending ? (
-                <LiveTurn assistant={liveAssistant} startedAt={liveStartedAt ?? undefined} tools={liveTools} />
+                <LiveTurn startedAt={liveStartedAt ?? undefined} timeline={liveTimeline} />
               ) : thread ? (
                 <PersistedConversation thread={thread} />
               ) : (
@@ -1275,14 +1271,12 @@ export function ChatView({
 
 function NativeConversation({
   thread,
-  liveAssistant,
   liveStartedAt,
-  liveTools,
+  liveTimeline,
 }: {
   thread: Extract<ChatThread, { version: 2 }>
-  liveAssistant: string
   liveStartedAt: string | null
-  liveTools: NativeToolActivity[]
+  liveTimeline: NativeTurnTimelineItem[]
 }) {
   return (
     <div className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-7 py-4">
@@ -1295,17 +1289,22 @@ function NativeConversation({
         </div>
       ) : (
         <article className="grid min-w-0 max-w-full gap-3 overflow-hidden text-sm leading-7 text-foreground" key={message.id}>
-          <MarkdownMessage content={message.content} final />
-          <ToolActivityList activities={message.toolActivities ?? []} chatId={thread.id} />
+          {message.timeline && message.timeline.length > 0 ? (
+            <NativeTurnTimeline chatId={thread.id} final timeline={message.timeline} />
+          ) : (
+            <>
+              <ToolActivityList activities={message.toolActivities ?? []} chatId={thread.id} />
+              {message.content && <MarkdownMessage content={message.content} final />}
+            </>
+          )}
           <MessageFooter message={message} startedAt={assistantTurnStartedAt(thread.messages, index)} />
         </article>
       ))}
       {thread.status === 'running' && (
         <LiveTurn
-          assistant={liveAssistant}
           chatId={thread.id}
           startedAt={assistantTurnStartedAt(thread.messages, thread.messages.length) ?? liveStartedAt ?? undefined}
-          tools={liveTools}
+          timeline={liveTimeline}
         />
       )}
       {thread.lastError && <Alert status="danger"><Alert.Description>{thread.lastError}</Alert.Description></Alert>}
@@ -1314,24 +1313,81 @@ function NativeConversation({
 }
 
 function LiveTurn({
-  assistant,
-  tools,
+  timeline,
   chatId,
   startedAt,
 }: {
-  assistant: string
-  tools: NativeToolActivity[]
+  timeline: NativeTurnTimelineItem[]
   chatId?: string
   startedAt?: string
 }) {
   return (
     <article className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-3 py-4 text-sm leading-7 text-foreground">
-      {assistant && <MarkdownMessage content={assistant} final={false} />}
-      <ToolActivityList activities={tools} chatId={chatId} />
+      <NativeTurnTimeline chatId={chatId} final={false} timeline={timeline} />
       {startedAt
         ? <RunningElapsed showLabel startedAt={startedAt} />
         : <Spinner color="accent" size="sm" />}
     </article>
+  )
+}
+
+function NativeTurnTimeline({ timeline, chatId, final }: {
+  timeline: NativeTurnTimelineItem[]
+  chatId?: string
+  final: boolean
+}) {
+  if (timeline.length === 0) return null
+  return (
+    <div className="grid min-w-0 max-w-full gap-3" data-native-turn-timeline>
+      {timeline.map((item) => {
+        if (item.type === 'assistant') {
+          return item.content
+            ? <MarkdownMessage content={item.content} final={final} key={`assistant-${item.itemId}`} />
+            : null
+        }
+        if (item.type === 'thinking') {
+          return <NativeThinkingRow item={item} key={`thinking-${item.itemId}`} />
+        }
+        return (
+          <ToolActivityList
+            activities={[item.activity]}
+            chatId={chatId}
+            key={`tool-${item.itemId}`}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+function NativeThinkingRow({ item }: {
+  item: Extract<NativeTurnTimelineItem, { type: 'thinking' }>
+}) {
+  const { t } = useTranslation('chat')
+  const [expanded, setExpanded] = useState(false)
+  const expandable = Boolean(item.content)
+  return (
+    <div className="min-w-0 text-sm text-muted">
+      <button
+        aria-expanded={expandable ? expanded : undefined}
+        className={`grid min-h-8 w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1 text-left transition-colors ${expandable ? 'hover:bg-surface-hover' : 'cursor-default'}`}
+        disabled={!expandable}
+        onClick={() => setExpanded((current) => !current)}
+        type="button"
+      >
+        <Brain aria-hidden="true" size={15} />
+        <strong className="text-xs font-medium text-foreground">{t('thinking')}</strong>
+        <span />
+        {item.status === 'running'
+          ? <Spinner color="accent" size="sm" />
+          : expandable && <ChevronRight className={`transition-transform ${expanded ? 'rotate-90' : ''}`} size={14} />}
+      </button>
+      {expanded && item.content && (
+        <p className="ml-[1.6rem] mt-1 whitespace-pre-wrap border-l border-border py-1 pl-3 text-xs leading-5 text-muted">
+          {item.content}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -2003,19 +2059,14 @@ function confidenceColor(
   return 'default'
 }
 
-function mergeNativeToolActivity(
-  current: NativeToolActivity[],
-  incoming: NativeToolActivity,
-): NativeToolActivity[] {
-  const index = current.findIndex((activity) => activity.itemId === incoming.itemId)
-  if (index < 0) return [...current, incoming]
-  return current.map((activity, itemIndex) => itemIndex === index ? incoming : activity)
-}
-
 function isNativeChatEvent(value: unknown): value is NativeChatEvent {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const event = value as Record<string, unknown>
-  if (event.type === 'assistant_delta') return typeof event.text === 'string'
+  if (event.type === 'assistant_delta' || event.type === 'thinking_delta') {
+    return typeof event.itemId === 'string'
+      && typeof event.text === 'string'
+      && (event.content === undefined || typeof event.content === 'string')
+  }
   if (event.type === 'usage') {
     if (!event.contextUsage || typeof event.contextUsage !== 'object') return false
     const usage = event.contextUsage as Record<string, unknown>

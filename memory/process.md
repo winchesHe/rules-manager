@@ -2295,3 +2295,23 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   以及底栏 Fast Mode 的开关和 Picker 职责分离；App 26 suites / 162 tests 与 production build 通过，
   build 仅保留既有 Markstream PURE 注释警告。
 - 提交信息：`feat: 优化 Chat Skill 多选体验`
+
+## Chat Assistant 原生时间线顺序修复（2026-08-03）
+
+- 根因是 Native Chat 将一轮输出压成单个 `content` 和独立 `toolActivities`，Renderer 又固定先渲染
+  正文再渲染全部 Tool，导致中间 Assistant 说明、Thinking 和 Tool 的原始事件顺序在持久化前就丢失。
+- 新增按首次出现顺序保存的 `assistant / thinking / tool` timeline。Codex 与 Claude Adapter 为正文和
+  reasoning 增量提供稳定 item ID；同一 Tool 的 running / completed 只原位更新，不会重复或移动。
+- Main Controller 用 timeline reducer 同时驱动实时 IPC 和最终 Chat JSONL；Renderer 以同一顺序渲染
+  实时与历史内容。Tool output、原始 Tool input、隐藏 Prompt 和 Session 原文仍不进入 Chat 文件。
+- 旧消息保持无需迁移可读；由于旧格式已经无法恢复中间顺序，统一回退为 Tool 在前、最终正文在后，
+  至少不再出现“结论先于执行过程”。Thinking 正文仅在 Provider 明确给出时保存，限制为 16,000 字符并
+  使用可展开的紧凑行展示。
+- 真实 Electron 使用 Codex 构造交错输出，实测顺序为“准备检查一 → Command(pwd) → 继续检查二 →
+  Command(git status) → 思考 → 顺序验收完成”；刷新应用后顺序一致，旧截图会话也已改为 Tool 在前、
+  结论在后。临时验收对话完成后已归档。
+- `simplify` 复核将 Renderer 的事件转换改为显式分支并移除测试类型绕过。App 27 suites / 170 tests、
+  Core 26 suites / 279 tests 全绿；App/Core production build 与 `git diff --check` 通过。App 独立
+  typecheck 仍仅受既有 `rootDir/files` 配置边界和既有 RulesView 类型错误阻断；build 保留既有
+  Markstream PURE 注释与 Core `tsdown define` 警告。
+- 提交信息：`fix: 按原生顺序展示 Chat Assistant 时间线`

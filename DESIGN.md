@@ -212,6 +212,10 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 - Agent 执行过程参照 Paseo P1，使用无卡片的紧凑 Activity timeline。
   Provider 事件统一映射为 Thinking / Read / Search / Shell / Tool，不直接渲染
   Provider 原始 payload。
+- 同一 Assistant Turn 的正文片段、Thinking 与 Tool 必须按 Provider 首次发出事件的顺序组成统一
+  timeline；Tool 的 running / completed 只更新原位置，不能将所有正文或 Tool 分组后重新排序。
+- 新消息持久化上述 timeline，刷新前后顺序一致；缺少 timeline 的旧消息无法恢复已经丢失的中间顺序，
+  统一回退为 Tool 在前、最终正文在后。
 - Activity 摘要只允许单行、定长的可见上下文：文件路径、搜索词、命令摘要或
   tool 名称。tool output、原始 input 对象、隐藏 Prompt 和 Session 原文禁止进入
   Renderer 或 Chat 文件。

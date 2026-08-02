@@ -7,7 +7,7 @@ import type {
 } from './generation-controller.js'
 import type { ProjectGenerationResponse } from '../../core/src/commands/rules-generate.js'
 import type { RunState } from './background-run.js'
-import type { NativeToolActivity } from './chat-runtime.js'
+import type { NativeToolActivity, NativeTurnTimelineItem } from './chat-runtime.js'
 import { canonicalReferences } from './session-context-prompt.js'
 
 export type ChatThreadStatus = Exclude<RunState, 'idle'>
@@ -22,6 +22,7 @@ export interface ChatMessage {
   completedAt?: string
   turnConfig?: NativeTurnConfig
   toolActivities?: NativeToolActivity[]
+  timeline?: NativeTurnTimelineItem[]
 }
 
 export interface GenerationChatThreadSummary {
@@ -634,14 +635,20 @@ function isChatMessage(value: unknown): value is ChatMessage {
 }
 
 function visibleChatMessage(message: ChatMessage): ChatMessage {
-  if (!message.toolActivities) return message
-  const toolActivities = message.toolActivities.filter((activity) => {
+  const toolActivities = message.toolActivities?.filter((activity) => {
     const name = activity.name.toLowerCase()
     return name !== 'usermessage' && name !== 'agentmessage'
   })
-  return toolActivities.length === message.toolActivities.length
-    ? message
-    : { ...message, toolActivities }
+  const timeline = message.timeline?.filter((item) => {
+    if (item.type !== 'tool') return true
+    const name = item.activity.name.toLowerCase()
+    return name !== 'usermessage' && name !== 'agentmessage'
+  })
+  return {
+    ...message,
+    ...(toolActivities ? { toolActivities } : {}),
+    ...(timeline ? { timeline } : {}),
+  }
 }
 
 function sameReferences(

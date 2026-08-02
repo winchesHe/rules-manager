@@ -78,7 +78,7 @@ describe('ClaudeChatAdapter', () => {
           summary: '/workspace/README.md',
         },
       },
-      { type: 'assistant_delta', text: '你' },
+      { type: 'assistant_delta', itemId: 'assistant-1', text: '你' },
       {
         type: 'tool_activity',
         activity: {
@@ -109,6 +109,54 @@ describe('ClaudeChatAdapter', () => {
     expect(result.nativeSessionId).toBe('claude-session-1')
     expect(calls[0]).toMatchObject({ resume: 'claude-session-1', cwd: '/workspace' })
     expect(calls[0]).not.toHaveProperty('systemPrompt')
+  })
+
+  it('按 Content Block 顺序区分 Assistant、Thinking 与 Tool', async () => {
+    const events: unknown[] = []
+    const adapter = new ClaudeChatAdapter(() => (async function* () {
+      yield { type: 'stream_event', session_id: 'claude-order', event: {
+        type: 'content_block_delta', index: 0,
+        delta: { type: 'text_delta', text: '先检查。' },
+      } }
+      yield { type: 'stream_event', session_id: 'claude-order', event: {
+        type: 'content_block_start', index: 1,
+        content_block: { type: 'tool_use', id: 'tool-order', name: 'Read', input: { file_path: 'a.md' } },
+      } }
+      yield { type: 'stream_event', session_id: 'claude-order', event: {
+        type: 'content_block_start', index: 2,
+        content_block: { type: 'thinking', thinking: '' },
+      } }
+      yield { type: 'stream_event', session_id: 'claude-order', event: {
+        type: 'content_block_delta', index: 2,
+        delta: { type: 'thinking_delta', thinking: '继续确认。' },
+      } }
+      yield { type: 'stream_event', session_id: 'claude-order', event: {
+        type: 'content_block_stop', index: 2,
+      } }
+      yield { type: 'stream_event', session_id: 'claude-order', event: {
+        type: 'content_block_delta', index: 3,
+        delta: { type: 'text_delta', text: '最终结论。' },
+      } }
+      yield { type: 'result', subtype: 'success', session_id: 'claude-order', result: '先检查。最终结论。' }
+    })())
+    await adapter.start({
+      chatId: 'chat-order', provider: 'claude', message: 'inspect', workingDirectory: '/workspace',
+      config: { effort: 'high', fastMode: false }, onEvent: (event) => events.push(event),
+    })
+
+    expect(events).toEqual([
+      { type: 'assistant_delta', itemId: 'assistant-0', text: '先检查。' },
+      { type: 'tool_activity', activity: {
+        itemId: 'tool-order', kind: 'read', name: 'Read', status: 'running', summary: 'a.md',
+      } },
+      { type: 'thinking_delta', itemId: 'thinking-2', text: '', status: 'running' },
+      { type: 'thinking_delta', itemId: 'thinking-2', text: '继续确认。' },
+      {
+        type: 'thinking_delta', itemId: 'thinking-2', text: '',
+        content: '继续确认。', status: 'completed',
+      },
+      { type: 'assistant_delta', itemId: 'assistant-3', text: '最终结论。' },
+    ])
   })
 
   it('Rules turn 使用原生 outputFormat 并返回 structured output', async () => {

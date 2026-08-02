@@ -25,7 +25,7 @@ describe('NativeChatController', () => {
     const adapter = (): ChatProviderAdapter => ({
       start: async (request) => {
         calls.push(`start:${request.message}`)
-        request.onEvent?.({ type: 'assistant_delta', text: 'first ' })
+        request.onEvent?.({ type: 'assistant_delta', itemId: 'message-1', text: 'first ' })
         request.onEvent?.({
           type: 'tool_activity',
           activity: {
@@ -75,7 +75,7 @@ describe('NativeChatController', () => {
     })
     expect(streamed).toContainEqual({
       chatId: 'chat-fixed',
-      event: { type: 'assistant_delta', text: 'first ', content: 'first ' },
+      event: { type: 'assistant_delta', itemId: 'message-1', text: 'first ', content: 'first ' },
     })
 
     await createController().send({
@@ -126,8 +126,8 @@ describe('NativeChatController', () => {
     const providerGate = new Promise<void>((resolve) => { release = resolve })
     const adapter: ChatProviderAdapter = {
       start: async (request) => {
-        request.onEvent?.({ type: 'assistant_delta', text: '你' })
-        request.onEvent?.({ type: 'assistant_delta', text: '好' })
+        request.onEvent?.({ type: 'assistant_delta', itemId: 'message-1', text: '你' })
+        request.onEvent?.({ type: 'assistant_delta', itemId: 'message-1', text: '好' })
         await providerGate
         return { nativeSessionId: 'native-live', content: '你好' }
       },
@@ -166,8 +166,8 @@ describe('NativeChatController', () => {
       messages: [{ role: 'user', content: '开始', createdAt: '2026-08-02T12:00:01.000Z' }],
     })
     expect(streamed).toEqual([
-      { chatId: 'chat-live', event: { type: 'assistant_delta', text: '你', content: '你' } },
-      { chatId: 'chat-live', event: { type: 'assistant_delta', text: '好', content: '你好' } },
+      { chatId: 'chat-live', event: { type: 'assistant_delta', itemId: 'message-1', text: '你', content: '你' } },
+      { chatId: 'chat-live', event: { type: 'assistant_delta', itemId: 'message-1', text: '好', content: '你好' } },
     ])
 
     release()
@@ -247,6 +247,61 @@ describe('NativeChatController', () => {
     await expect(controller.readToolItem({
       chatId: 'chat-tool', itemId: 'message-item', cursor: 0, limit: 128,
     })).rejects.toThrow('tool item was not found')
+  })
+
+  it('将交错的 Assistant、Thinking 与 Tool 按发生顺序持久化', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-order-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const adapter: ChatProviderAdapter = {
+      start: async (request) => {
+        request.onEvent?.({
+          type: 'assistant_delta', itemId: 'commentary', text: '先检查。',
+        })
+        request.onEvent?.({
+          type: 'tool_activity',
+          activity: { itemId: 'tool-1', kind: 'read', name: 'Read', status: 'running' },
+        })
+        request.onEvent?.({
+          type: 'thinking_delta', itemId: 'thinking-1', text: '继续确认。',
+        })
+        request.onEvent?.({
+          type: 'tool_activity',
+          activity: { itemId: 'tool-1', kind: 'read', name: 'Read', status: 'completed' },
+        })
+        request.onEvent?.({
+          type: 'assistant_delta', itemId: 'final', text: '最终结论。',
+        })
+        return { nativeSessionId: 'native-order', content: '先检查。最终结论。' }
+      },
+      resume: async () => { throw new Error('unexpected resume') },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }
+    const controller = new NativeChatController({
+      store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
+      createId: () => 'chat-order', now: () => '2026-08-03T01:00:00.000Z',
+    })
+
+    await controller.send({
+      provider: 'codex', message: '检查', config: { effort: 'high', fastMode: false },
+    })
+
+    const assistant = store.readThread('chat-order')?.messages.at(-1)
+    expect(assistant?.timeline?.map((item) => `${item.type}:${item.itemId}`)).toEqual([
+      'assistant:commentary',
+      'tool:tool-1',
+      'thinking:thinking-1',
+      'assistant:final',
+    ])
+    expect(assistant?.timeline?.[1]).toMatchObject({
+      type: 'tool', activity: { status: 'completed' },
+    })
+    expect(assistant?.timeline?.[2]).toMatchObject({ status: 'completed' })
   })
 
   it('只在首次选择或集合变化后注入完整 Session Context，且隐藏块不落可见消息', async () => {

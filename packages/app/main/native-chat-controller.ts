@@ -24,8 +24,13 @@ import type {
   NativeChatEvent,
   NativeToolActivity,
   NativeToolItemPage,
+  NativeTurnTimelineItem,
 } from './chat-runtime.js'
 import { buildSessionContextPrompt } from './session-context-prompt.js'
+import {
+  completeNativeTimeline,
+  mergeNativeTimelineEvent,
+} from './native-chat-timeline.js'
 
 export interface NativeChatSendRequest {
   chatId?: string
@@ -119,8 +124,7 @@ export class NativeChatController {
       turnConfig: request.config,
     }))
     this.options.onThreadChanged?.(chatId)
-    const toolActivities = new Map<string, NativeToolActivity>()
-    let assistantContent = ''
+    let timeline: NativeTurnTimelineItem[] = []
     try {
       const result = await this.options.runtime.sendTurn({
         chatId,
@@ -130,14 +134,17 @@ export class NativeChatController {
         workingDirectory: this.options.workingDirectory,
         config: request.config,
         onEvent: (event) => {
-          if (event.type === 'tool_activity') {
-            toolActivities.set(event.activity.itemId, event.activity)
-          }
-          if (event.type === 'assistant_delta') {
-            assistantContent += event.text
+          timeline = mergeNativeTimelineEvent(timeline, event)
+          if (event.type === 'assistant_delta' || event.type === 'thinking_delta') {
+            const item = timeline.find((current) =>
+              current.itemId === event.itemId
+              && current.type === (event.type === 'assistant_delta' ? 'assistant' : 'thinking'),
+            )
             this.options.onEvent?.({
               chatId,
-              event: { ...event, content: assistantContent },
+              event: { ...event, content: item?.type === 'assistant' || item?.type === 'thinking'
+                ? item.content
+                : event.text },
             })
           } else {
             this.options.onEvent?.({ chatId, event })
@@ -154,13 +161,15 @@ export class NativeChatController {
       if (result.contextUsage) {
         this.options.store.updateContextUsage(chatId, result.contextUsage, completedAt)
       }
+      timeline = completeNativeTimeline(timeline, result.content)
       this.options.store.appendNativeMessage(chatId, visibleMessage({
         id: randomUUID(),
         role: 'assistant',
         content: result.content,
         at: completedAt,
         startedAt,
-        toolActivities: [...toolActivities.values()],
+        timeline,
+        toolActivities: timeline.flatMap((item) => item.type === 'tool' ? [item.activity] : []),
       }))
       return { chatId, nativeSessionId: result.nativeSessionId }
     } catch (error) {
@@ -213,7 +222,7 @@ export class NativeChatController {
     let nativeSessionId: string | null = null
     let evidence: EvidenceSnapshot | undefined
     const projectResponses: ProjectGenerationResponse[] = []
-    const toolActivities = new Map<string, NativeToolActivity>()
+    let timeline: NativeTurnTimelineItem[] = []
     let firstProviderTurn = true
     let contextRevision = 0
     let contextSelected: NativeSessionReference[] = []
@@ -258,8 +267,8 @@ export class NativeChatController {
             config: input.config,
             outputSchema,
             onEvent: (event) => {
-              if (event.type === 'tool_activity') {
-                toolActivities.set(event.activity.itemId, event.activity)
+              timeline = mergeNativeTimelineEvent(timeline, event)
+              if (event.type === 'tool_activity' || event.type === 'thinking_delta') {
                 this.options.onEvent?.({ chatId: input.chatId, event })
               } else if (event.type === 'usage') {
                 this.options.onEvent?.({ chatId: input.chatId, event })
@@ -287,12 +296,18 @@ export class NativeChatController {
       const candidateCount = projectResponses.reduce(
         (count, response) => count + response.candidates.length, 0,
       )
+      const summary = rulesArtifactSummary(projectResponses, candidateCount)
+      timeline = completeNativeTimeline(
+        timeline.filter((item) => item.type !== 'assistant'),
+        summary,
+      )
       this.options.store.appendNativeMessage(input.chatId, visibleMessage({
         id: randomUUID(),
         role: 'assistant',
-        content: rulesArtifactSummary(projectResponses, candidateCount),
+        content: summary,
         at: completedAt,
-        toolActivities: [...toolActivities.values()],
+        timeline,
+        toolActivities: timeline.flatMap((item) => item.type === 'tool' ? [item.activity] : []),
       }))
       this.options.store.completeNativeRulesRun(input.chatId, {
         runId: input.runId,
@@ -431,6 +446,7 @@ function visibleMessage(input: {
   startedAt?: string
   turnConfig?: NativeTurnConfig
   toolActivities?: NativeToolActivity[]
+  timeline?: NativeTurnTimelineItem[]
 }): ChatMessage {
   return {
     id: input.id,
@@ -443,6 +459,11 @@ function visibleMessage(input: {
     ...(input.turnConfig ? { turnConfig: { ...input.turnConfig } } : {}),
     ...(input.toolActivities && input.toolActivities.length > 0
       ? { toolActivities: input.toolActivities.map((activity) => ({ ...activity })) }
+      : {}),
+    ...(input.timeline && input.timeline.length > 0
+      ? { timeline: input.timeline.map((item) => item.type === 'tool'
+          ? { ...item, activity: { ...item.activity } }
+          : { ...item }) }
       : {}),
   }
 }

@@ -115,7 +115,7 @@ describe('CodexChatAdapter', () => {
         sourceLocator: { turnId: 'codex-turn-1', toolIndex: 0 },
       },
     })
-    expect(events).toContainEqual({ type: 'assistant_delta', text: 'hello ' })
+    expect(events).toContainEqual({ type: 'assistant_delta', itemId: 'msg-1', text: 'hello ' })
     expect(JSON.stringify(events)).not.toContain('userMessage')
     expect(JSON.stringify(events)).not.toContain('agentMessage')
     expect(events).toContainEqual({
@@ -152,6 +152,48 @@ describe('CodexChatAdapter', () => {
     })
     expect(server.requests.find((item) => item.method === 'turn/start')?.params)
       .toMatchObject({ outputSchema: schema })
+  })
+
+  it('为多段 Assistant 与明确 Reasoning 保留稳定 Item ID 和源事件顺序', async () => {
+    const server = fakeServer(false)
+    const adapter = new CodexChatAdapter(() => server.child)
+    const events: Array<{ type: string; itemId?: string }> = []
+    const pending = adapter.start({
+      chatId: 'chat-order', provider: 'codex', message: 'inspect',
+      workingDirectory: '/fixed-workspace', config: { effort: 'high', fastMode: false },
+      onEvent: (event) => events.push(event),
+    })
+    while (!server.requests.some((item) => item.method === 'turn/start')) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    await new Promise((resolve) => setImmediate(resolve))
+    server.notify('item/agentMessage/delta', {
+      threadId: 'codex-thread-1', itemId: 'commentary', delta: '先检查。',
+    })
+    server.notify('item/started', {
+      threadId: 'codex-thread-1', item: { id: 'cmd-order', type: 'commandExecution', command: 'pwd' },
+    })
+    server.notify('item/reasoning/summaryTextDelta', {
+      threadId: 'codex-thread-1', itemId: 'reasoning-1', delta: '继续确认。',
+    })
+    server.notify('item/completed', {
+      threadId: 'codex-thread-1', item: { id: 'reasoning-1', type: 'reasoning' },
+    })
+    server.notify('item/agentMessage/delta', {
+      threadId: 'codex-thread-1', itemId: 'final', delta: '最终结论。',
+    })
+    server.notify('turn/completed', {
+      threadId: 'codex-thread-1', turn: { id: 'codex-turn-1', status: 'completed' },
+    })
+
+    await expect(pending).resolves.toMatchObject({ content: '先检查。最终结论。' })
+    expect(events.map((event) => `${event.type}:${event.itemId ?? ''}`)).toEqual([
+      'assistant_delta:commentary',
+      'tool_activity:',
+      'thinking_delta:reasoning-1',
+      'thinking_delta:reasoning-1',
+      'assistant_delta:final',
+    ])
   })
 
   it('Rules turn 从多个 Agent message 中选择最后一个合法结构化结果', async () => {
