@@ -202,6 +202,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 
 - Chat 页面固定为 viewport 内可用高度，页面级容器不滚动；Conversation、Context 和历史栏分别
   拥有内部滚动区。
+- Assistant 历史正文与运行中增量统一使用 React 流式 Markdown 渲染；标题、列表、链接、引用、
+  行内代码和代码块按语义展示，用户消息保持纯文本，复制操作继续使用原始 Markdown。
 - Agent 执行过程参照 Paseo P1，使用无卡片的紧凑 Activity timeline。
   Provider 事件统一映射为 Thinking / Read / Search / Shell / Tool，不直接渲染
   Provider 原始 payload。

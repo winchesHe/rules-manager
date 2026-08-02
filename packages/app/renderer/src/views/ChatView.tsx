@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Switch, Tooltip } from '@heroui/react'
+import MarkdownRender from 'markstream-react'
 import { useTranslation } from 'react-i18next'
 import {
   Brain,
@@ -1239,8 +1240,8 @@ function NativeConversation({
           {message.turnConfig && <TurnConfigLine config={message.turnConfig} />}
         </div>
       ) : (
-        <article className="grid min-w-0 max-w-full gap-3 overflow-hidden whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
-          {message.content}
+        <article className="grid min-w-0 max-w-full gap-3 overflow-hidden text-sm leading-7 text-foreground" key={message.id}>
+          <MarkdownMessage content={message.content} final />
           <ToolActivityList activities={message.toolActivities ?? []} chatId={thread.id} />
           <MessageFooter message={message} startedAt={assistantTurnStartedAt(thread.messages, index)} />
         </article>
@@ -1271,7 +1272,7 @@ function LiveTurn({
 }) {
   return (
     <article className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-3 py-4 text-sm leading-7 text-foreground">
-      {assistant && <p className="whitespace-pre-wrap">{assistant}</p>}
+      {assistant && <MarkdownMessage content={assistant} final={false} />}
       <ToolActivityList activities={tools} chatId={chatId} />
       {startedAt
         ? <RunningElapsed showLabel startedAt={startedAt} />
@@ -1414,11 +1415,7 @@ function PersistedConversation({ thread }: { thread: GenerationChatThread }) {
       </div>
       <article className="min-w-0">
         <div className="min-w-0">
-          {assistantContent ? (
-            <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">
-              {assistantContent}
-            </p>
-          ) : null}
+          {assistantContent ? <MarkdownMessage content={assistantContent} final /> : null}
           <ActivityTimeline thread={thread} />
           <div className="mt-5 grid gap-3">
             {projectResponses.flatMap((response) =>
@@ -1461,6 +1458,26 @@ function PersistedConversation({ thread }: { thread: GenerationChatThread }) {
           {assistantMessage && <div className="mt-4"><MessageFooter message={assistantMessage} /></div>}
         </div>
       </article>
+    </div>
+  )
+}
+
+interface MarkdownMessageProps {
+  content: string
+  final: boolean
+}
+
+function MarkdownMessage({ content, final }: MarkdownMessageProps) {
+  const isDark = document.documentElement.classList.contains('dark')
+  return (
+    <div className="chat-markdown text-sm leading-7 text-foreground">
+      <MarkdownRender
+        content={content}
+        fade={false}
+        final={final}
+        isDark={isDark}
+        renderCodeBlocksAsPre
+      />
     </div>
   )
 }

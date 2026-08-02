@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@heroui/react/styles";
+@import "markstream-react/index.css";
 
 @theme inline {
   --color-background: hsl(var(--theme-background));
@@ -150,6 +151,61 @@ body,
 
 body {
   margin: 0;
+}
+
+.chat-markdown {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-markdown .markstream-react {
+  --background: var(--theme-background);
+  --border: var(--theme-border);
+  --foreground: var(--theme-foreground);
+  --link-color: hsl(var(--theme-primary));
+  --muted: var(--theme-primary-soft);
+  --muted-foreground: var(--theme-muted);
+  --secondary: var(--theme-surface-hover);
+  --blockquote-border-color: hsl(var(--theme-border));
+  color: hsl(var(--theme-foreground));
+  font: inherit;
+  line-height: inherit;
+}
+
+.chat-markdown .markstream-react .paragraph-node {
+  margin-block: 0.75em;
+}
+
+.chat-markdown .markstream-react .heading-1 {
+  margin-block: 1.25em 0.6em;
+  font-size: 1.5rem;
+  line-height: 1.35;
+}
+
+.chat-markdown .markstream-react .heading-2 {
+  margin-block: 1.2em 0.55em;
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+
+.chat-markdown .markstream-react .heading-3 {
+  margin-block: 1.1em 0.5em;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.chat-markdown .markstream-react .inline-code {
+  background: hsl(var(--theme-primary-soft));
+  color: hsl(var(--theme-foreground));
+}
+
+.chat-markdown .markstream-react :where(pre, .table-node-wrapper) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-markdown .markstream-react img {
+  max-width: 100%;
 }
 
 .window-drag-region {

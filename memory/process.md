@@ -2202,3 +2202,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终基线：App 23 suites / 150 tests、Core 26 suites / 278 tests 全绿；App/Core production build 与
   `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
 - 提交信息：`fix: 恢复 Codex 工具详情读取`
+
+## Chat Assistant 流式 Markdown 渲染（2026-08-02）
+
+- 当前 Renderer 是 React 19，因此未引入仅面向 Vue 的 `markstream-vue`，而是使用同一 Markstream
+  项目提供的 `markstream-react@0.0.55`；该实现面向 LLM 增量输出，能处理未闭合 Markdown 中间态。
+- Native Chat 的历史 Assistant、运行中 Assistant 与 Rules Generation 终态摘要统一经过
+  `MarkdownMessage`：完成消息传 `final=true`，流式消息传 `final=false`；用户气泡仍按纯文本渲染，
+  复制按钮继续复制 ChatStore 中的原始 Markdown，不持久化渲染 HTML。
+- 默认使用轻量 `pre` 代码块，不安装 Monaco、Mermaid、KaTeX 等可选 peer；主题样式映射现有 dark/light
+  token，并限制代码块、表格和图片宽度，避免撑破 820px Conversation 阅读线。
+- `simplify` 复核后保留单一 `MarkdownMessageProps` 与组件边界，没有将 Markdown 状态扩散到 Chat
+  Controller 或 Store。真实 Electron 验证标题、列表、链接、行内代码和代码块均已按语义展示，Tool
+  Activity、复制和耗时布局保持原位。
+- 最终基线：App 24 suites / 152 tests、Core 26 suites / 278 tests 全绿；App/Core production build 与
+  `git diff --check` 通过。App 独立 typecheck 仍被既有 tsconfig `rootDir/files` 边界和既有 RulesView
+  类型错误阻断，本轮 production build 已通过；build 另有 Markstream 产物 PURE 注释位置警告。
+- 提交信息：`feat: 支持 Chat 流式 Markdown 渲染`
