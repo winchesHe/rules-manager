@@ -5,6 +5,7 @@
   "rules": "规则",
   "settings": "设置",
   "workspace": "本地工作区",
+  "localSessions": "本地 Agent Session",
   "mainLabel": "主导航",
   "rulesLabel": "规则导航",
   "rulesOverview": "概览",

@@ -2015,3 +2015,29 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 验证结果：Core 26 suites / 277 tests、App 22 suites / 135 tests 全绿；HTML 无远程资源，
   `git diff --check` 通过。
 - 提交信息：`docs: 按标注精简 Chat 布局原型`
+
+## Chat · Codex / Paseo 布局真实实现（2026-08-02）
+
+- 以已确认的 `docs/prototypes/chat-codex-paseo-layout.html` 为真实 Renderer 验收契约，并新增
+  `docs/plans/chat-codex-paseo-layout-implementation.md` 固化完整范围、非回归能力和验证方式。
+- App Shell 保留唯一 14rem 产品导航，品牌改为图标与 Memory Manager 名称同一行，副标题明确为
+  “本地 Agent Session”；Chat 去掉页面 padding、外层 Card 和常驻 Thread Rail。
+- Chat Header 标题改为 18rem 覆盖式历史 Drawer 入口，保留 New Chat、Active/Archived、对话选择
+  与管理能力；Conversation 与 Composer 统一为 820px 阅读线，Tool Activity 改为紧凑可展开行。
+- Session Context 保持 22rem，重排为已选、筛选、可选列表，Header/Composer 均可开关；桌面展开
+  偏好写入 `memory-manager.chat.context-pane-open`，存储异常不阻断使用。1600px 及以下转为带遮罩、
+  Escape 和 `inert` 的覆盖式 Drawer。
+- Composer 保留 Provider/model/effort、发送/停止/队列、Full access 和 Provider 权威 Context Window；
+  Fast Mode 与 Skills 收入 `+` 次级菜单，避免视觉对齐造成能力删除。复制/耗时 Footer 和 Rules Run
+  操作继续保留；本轮未改 ChatStore、Native Adapter、IPC 或 Session Context 注入协议。
+- 真实 Electron 使用已有本地 Chat/Session 数据验收：1728×979 实测 `224 + 1152 + 352`、Composer
+  820px，Context 收起后中央区扩为 1504px，历史 Drawer 宽 288px；1440×900 Context 为 352px
+  覆盖式 Drawer；1024×768 Composer 718px，三档均无页面横向溢出。
+- 真实交互 smoke 覆盖历史 Drawer、Escape 关闭、Composer 次级菜单、Context 展开/收起、桌面偏好、
+  草稿 Session 选择与清空；未发送真实 Provider 消息，避免产生无意义外部调用，发送/流式/停止/队列
+  继续由现有 Controller、Runtime 与 Adapter 自动化测试覆盖。
+- 最终真实 App 截图为 `chat-implementation-preview.png`、
+  `chat-implementation-context-collapsed.png`、`chat-implementation-history-drawer.png`，逐项确认与 HTML
+  三张基线同构。Core 26 suites / 277 tests、App 23 suites / 140 tests 全绿；Core/App production
+  build 与 `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
+- 提交信息：`refactor: 落地 Chat Codex Paseo 布局`

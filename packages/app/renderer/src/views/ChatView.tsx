@@ -8,25 +8,30 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Copy,
   Eye,
   FilePenLine,
-  MessageSquareText,
   MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
+  PanelRight,
   Pencil,
+  Plus,
   RotateCcw,
   Search,
+  Send,
+  ShieldCheck,
+  SlidersHorizontal,
   Square,
   SquareTerminal,
   Trash2,
   Wrench,
+  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { currentLocale } from '../i18n'
 import { formatDateTime } from '../i18n/format'
 import type {
   ChatThread,
+  ChatMessage,
   ChatThreadSummary,
   GenerationChatThread,
   GenerationHistoryEntry,
@@ -49,6 +54,10 @@ import {
   shouldFollowStream,
   visibleProjectResponses,
 } from './chat-view-model'
+import {
+  readStoredContextPaneOpen,
+  writeStoredContextPaneOpen,
+} from './chat-layout-preference'
 
 interface QueuedChatTurn {
   message: string
@@ -103,10 +112,13 @@ export function ChatView({
   const [selectedContext, setSelectedContext] = useState<NativeSessionReference[]>([])
   const [selectedContextItems, setSelectedContextItems] = useState<SessionContextItem[]>([])
   const [historyMode, setHistoryMode] = useState<'active' | 'archived'>('active')
-  const [railCollapsed, setRailCollapsed] = useState(false)
-  const [compactRailOpen, setCompactRailOpen] = useState(false)
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false)
+  const [contextPaneOpen, setContextPaneOpen] = useState(
+    () => readStoredContextPaneOpen(window.localStorage),
+  )
   const [compactContextOpen, setCompactContextOpen] = useState(false)
   const [compactLayout, setCompactLayout] = useState(false)
+  const [composerOptionsOpen, setComposerOptionsOpen] = useState(false)
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
   const [managementOpen, setManagementOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -132,15 +144,16 @@ export function ChatView({
   }, [])
 
   useEffect(() => {
-    if (!compactRailOpen && !compactContextOpen) return
+    if (!historyDrawerOpen && !compactContextOpen && !composerOptionsOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      setCompactRailOpen(false)
+      setHistoryDrawerOpen(false)
       setCompactContextOpen(false)
+      setComposerOptionsOpen(false)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [compactContextOpen, compactRailOpen])
+  }, [compactContextOpen, composerOptionsOpen, historyDrawerOpen])
 
   useEffect(() => {
     void Promise.all([
@@ -419,14 +432,14 @@ export function ChatView({
   }
 
   function selectThread(id: string): void {
-    setCompactRailOpen(false)
+    setHistoryDrawerOpen(false)
     setSelectedId(id)
     selectedIdRef.current = id
     void refresh(id)
   }
 
   function startDraft(): void {
-    setCompactRailOpen(false)
+    setHistoryDrawerOpen(false)
     preserveDraftContextRef.current = false
     setSelectedId(null)
     selectedIdRef.current = null
@@ -548,6 +561,15 @@ export function ChatView({
     setContextTo(localDateValue(end))
   }
 
+  function setContextOpen(open: boolean): void {
+    if (compactLayout) {
+      setCompactContextOpen(open)
+      return
+    }
+    setContextPaneOpen(open)
+    writeStoredContextPaneOpen(window.localStorage, open)
+  }
+
   async function renameCurrentChat(): Promise<void> {
     if (thread?.kind !== 'native-chat' || !renameValue.trim() || lifecycleBusy) return
     setLifecycleBusy(true)
@@ -621,196 +643,125 @@ export function ChatView({
     })
   }
 
+  const currentTitle = thread?.title
+    ?? (legacy ? legacyTitle(legacy, t) : t('newChat'))
+  let currentSubtitle = t('draft')
+  if (legacy) currentSubtitle = t('legacy')
+  if (thread?.kind === 'rules-generation') currentSubtitle = t('rulesRun')
+  if (thread?.kind === 'native-chat') currentSubtitle = thread.provider
+  const contextUsage = liveUsage
+    ?? (thread?.kind === 'native-chat' ? thread.contextUsage : null)
+  const contextPercent = contextUsage && contextUsage.maxTokens > 0
+    ? Math.min(100, Math.round((contextUsage.usedTokens / contextUsage.maxTokens) * 100))
+    : 0
+  const contextPanelOpen = compactLayout ? compactContextOpen : contextPaneOpen
+  let contextVisibilityClass = 'translate-x-0 opacity-100'
+  if (compactLayout && !compactContextOpen) {
+    contextVisibilityClass = 'pointer-events-none translate-x-[calc(100%+2rem)] opacity-0'
+  } else if (!compactLayout && !contextPaneOpen) {
+    contextVisibilityClass = 'pointer-events-none translate-x-7 opacity-0'
+  }
+  const overlayOpen = historyDrawerOpen || compactContextOpen
+
   return (
-    <section aria-label={t('title')} className="relative h-[calc(100vh-4rem)] min-h-0 overflow-hidden">
-      <div className="pointer-events-none absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-3">
-        <div className="pointer-events-auto hidden gap-2 max-[1600px]:flex">
-            <Button isIconOnly onPress={() => setCompactRailOpen(true)} size="sm" variant="ghost">
-              <MessageSquareText aria-label={t('threadRail')} size={16} />
-            </Button>
-            <Button isIconOnly onPress={() => setCompactContextOpen(true)} size="sm" variant="ghost">
-              <Eye aria-label={t('context')} size={16} />
-            </Button>
-        </div>
-        <div className="pointer-events-auto ml-auto flex gap-2">
-          {thread?.kind === 'rules-generation'
-            && thread.status === 'completed' && thread.candidateCount > 0 && (
+    <section aria-label={t('title')} className="relative h-screen min-h-0 overflow-hidden bg-background">
+      <div
+        className={`grid h-full min-h-0 transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${contextPaneOpen
+          ? 'grid-cols-[minmax(0,1fr)_22rem]'
+          : 'grid-cols-[minmax(0,1fr)_0rem]'} max-[1600px]:grid-cols-1`}
+        data-chat-workspace
+      >
+        <main aria-label={t('conversation')} className="grid min-h-0 min-w-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden bg-background">
+          <header className="window-no-drag relative z-20 flex min-w-0 items-center gap-1 border-b border-border px-3" data-chat-header>
             <Button
-              className="gap-2 bg-primary text-primary-foreground"
-              onPress={() => onOpenGeneratedRules(thread.runId)}
-            >
-              {t('openGeneratedRules')}
-              <ChevronRight aria-hidden="true" size={17} />
-            </Button>
-          )}
-          {thread?.kind === 'native-chat'
-            && thread.origin === 'rules'
-            && thread.rulesArtifact
-            && thread.rulesArtifact.candidateCount > 0 && (
-            <Button
-              className="gap-2 bg-primary text-primary-foreground"
-              onPress={() => onOpenGeneratedRules(thread.rulesArtifact!.runId)}
-            >
-              {t('openGeneratedRules')}
-              <ChevronRight aria-hidden="true" size={17} />
-            </Button>
-          )}
-          {thread?.kind === 'rules-generation' && canRegenerate(thread.status) && (
-            <Button
-              className="gap-2 bg-primary text-primary-foreground"
-              isDisabled={isRegenerating}
-              onPress={() => void regenerate()}
-            >
-              {isRegenerating
-                ? <Spinner color="current" size="sm" />
-                : <RotateCcw aria-hidden="true" size={17} />}
-              {isRegenerating ? t('regenerating') : t('regenerate')}
-            </Button>
-          )}
-          {thread?.kind === 'rules-generation'
-            && (thread.status === 'running' || thread.status === 'cancelling') && (
-            <Button
-              className="gap-2"
-              isDisabled={thread.status === 'cancelling'}
-              onPress={() => void stopGeneration()}
+              className="min-w-0 justify-start gap-2 px-2 text-sm text-foreground"
+              data-chat-history-trigger
+              onPress={() => {
+                setCompactContextOpen(false)
+                setHistoryDrawerOpen(true)
+              }}
               variant="ghost"
             >
-              {thread.status === 'cancelling'
-                ? <Spinner color="current" size="sm" />
-                : <Square aria-hidden="true" size={14} />}
-              {thread.status === 'cancelling' ? t('cancelling') : t('stopGeneration')}
+              <strong className="min-w-0 truncate font-semibold">{currentTitle}</strong>
+              <span className="shrink-0 text-xs font-normal text-muted">{currentSubtitle}</span>
             </Button>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <Alert className="absolute left-1/2 top-3 z-30 w-[min(42rem,calc(100%-7rem))] -translate-x-1/2 shadow-xl" status="danger">
-          <Alert.Content>
-            <Alert.Title>{t(errorTitle)}</Alert.Title>
-            <Alert.Description>{error}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      )}
-
-      <Card className="h-full min-h-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-none">
-        <Card.Content
-          className={`grid h-full min-h-0 transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${railCollapsed
-            ? 'grid-cols-[4rem_minmax(0,1fr)_22rem]'
-            : 'grid-cols-[16rem_minmax(0,1fr)_22rem]'} p-0 max-[1600px]:grid-cols-1`}
-          data-chat-workspace
-        >
-          <button
-            aria-hidden={!compactRailOpen && !compactContextOpen}
-            aria-label={t('closePanels')}
-            className={`fixed inset-0 z-30 hidden cursor-default bg-black/45 backdrop-blur-[1px] transition-opacity duration-200 motion-reduce:transition-none max-[1600px]:block ${
-              compactRailOpen || compactContextOpen ? 'max-[1600px]:opacity-100' : 'max-[1600px]:pointer-events-none max-[1600px]:opacity-0'
-            }`}
-            onClick={() => { setCompactRailOpen(false); setCompactContextOpen(false) }}
-            tabIndex={compactRailOpen || compactContextOpen ? 0 : -1}
-            type="button"
-          />
-          <aside
-            aria-hidden={compactLayout && !compactRailOpen ? true : undefined}
-            aria-label={t('threadRail')}
-            className={`min-h-0 overflow-x-hidden overflow-y-auto border-r border-border bg-sidebar/40 transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1600px]:fixed max-[1600px]:bottom-4 max-[1600px]:left-4 max-[1600px]:top-16 max-[1600px]:z-40 max-[1600px]:w-72 max-[1600px]:rounded-2xl max-[1600px]:border max-[1600px]:bg-surface max-[1600px]:shadow-2xl ${
-              compactRailOpen
-                ? 'max-[1600px]:translate-x-0 max-[1600px]:opacity-100'
-                : 'max-[1600px]:pointer-events-none max-[1600px]:-translate-x-[calc(100%+2rem)] max-[1600px]:opacity-0'
-            }`}
-            inert={compactLayout && !compactRailOpen ? true : undefined}
-          >
-            <div className={`sticky top-0 z-10 border-b border-border bg-surface ${railCollapsed ? 'p-2' : 'px-4 py-3'}`}>
-              <div className="flex items-center justify-between gap-2">
-                <Button isIconOnly={railCollapsed} onPress={() => setRailCollapsed((value) => !value)} size="sm" variant="ghost">
-                  {railCollapsed ? <PanelLeftOpen aria-label={t('expandRail')} size={16} /> : <PanelLeftClose aria-label={t('collapseRail')} size={16} />}
-                </Button>
-                {!railCollapsed && thread?.kind === 'native-chat' && (
-                  <Button
-                    data-chat-management-trigger
-                    isIconOnly
-                    onPress={() => setManagementOpen(true)}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    <MoreHorizontal aria-label={t('chatManagement')} size={16} />
-                  </Button>
-                )}
-              </div>
-              {!railCollapsed && (
-                <>
-                  <Button className="my-3 bg-primary text-primary-foreground" fullWidth onPress={startDraft}>
-                    {t('newChat', { defaultValue: 'New Chat' })}
-                  </Button>
-                  <div className="flex gap-1">
-                    <Button className="flex-1" onPress={() => setHistoryMode('active')} size="sm" variant={historyMode === 'active' ? 'primary' : 'ghost'}>{t('activeChats')}</Button>
-                    <Button className="flex-1" onPress={() => setHistoryMode('archived')} size="sm" variant={historyMode === 'archived' ? 'primary' : 'ghost'}>{t('archivedChats')}</Button>
-                  </div>
-                </>
-              )}
-            </div>
-            {railCollapsed ? null : loading ? (
-              <div className="grid place-items-center py-12"><Spinner color="accent" /></div>
-            ) : visibleItems.length === 0 ? (
-              <p className="px-4 py-8 text-xs leading-5 text-muted">{t('empty')}</p>
-            ) : (
-              <div>
-                {visibleItems.map((item) => {
-                  const status = item.thread?.status ?? item.legacy?.status ?? 'completed'
-                  const active = item.id === selectedId
-                  return (
-                    <button
-                      aria-current={active ? 'page' : undefined}
-                      className={`grid w-full cursor-pointer gap-1 border-b border-border px-4 py-3 text-left transition-colors hover:bg-surface-hover ${
-                        active ? 'bg-primary-soft' : ''
-                      }`}
-                      key={item.id}
-                      onClick={() => selectThread(item.id)}
-                      type="button"
-                    >
-                      <span className="flex items-center gap-2">
-                        {status === 'running' || status === 'cancelling'
-                          ? <Spinner color="accent" size="sm" />
-                          : <MessageSquareText aria-hidden="true" className="text-muted" size={15} />}
-                        <strong className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                          {item.thread
-                            ? item.thread.kind === 'native-chat'
-                              ? item.thread.title
-                              : threadTitle(item.thread.request, t)
-                            : legacyTitle(item.legacy!, t)}
-                        </strong>
-                      </span>
-                      <span className="flex items-center justify-between gap-2 pl-6 text-xs text-muted">
-                        <span>{t(`status.${status}`, { defaultValue: status })}</span>
-                        {!item.thread && <span>{t('legacy')}</span>}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+            {thread?.kind === 'native-chat' && (
+              <Button
+                data-chat-management-trigger
+                isIconOnly
+                onPress={() => setManagementOpen(true)}
+                size="sm"
+                variant="ghost"
+              >
+                <MoreHorizontal aria-label={t('chatManagement')} size={16} />
+              </Button>
             )}
-          </aside>
+            <div className="ml-auto flex min-w-0 items-center gap-1">
+              {thread?.kind === 'rules-generation'
+                && thread.status === 'completed' && thread.candidateCount > 0 && (
+                <Button className="gap-1 bg-primary text-primary-foreground" onPress={() => onOpenGeneratedRules(thread.runId)} size="sm">
+                  {t('openGeneratedRules')}<ChevronRight aria-hidden="true" size={15} />
+                </Button>
+              )}
+              {thread?.kind === 'native-chat'
+                && thread.origin === 'rules'
+                && thread.rulesArtifact
+                && thread.rulesArtifact.candidateCount > 0 && (
+                <Button className="gap-1 bg-primary text-primary-foreground" onPress={() => onOpenGeneratedRules(thread.rulesArtifact!.runId)} size="sm">
+                  {t('openGeneratedRules')}<ChevronRight aria-hidden="true" size={15} />
+                </Button>
+              )}
+              {thread?.kind === 'rules-generation' && canRegenerate(thread.status) && (
+                <Button className="gap-1 bg-primary text-primary-foreground" isDisabled={isRegenerating} onPress={() => void regenerate()} size="sm">
+                  {isRegenerating ? <Spinner color="current" size="sm" /> : <RotateCcw aria-hidden="true" size={15} />}
+                  {isRegenerating ? t('regenerating') : t('regenerate')}
+                </Button>
+              )}
+              {thread?.kind === 'rules-generation'
+                && (thread.status === 'running' || thread.status === 'cancelling') && (
+                <Button className="gap-1" isDisabled={thread.status === 'cancelling'} onPress={() => void stopGeneration()} size="sm" variant="ghost">
+                  {thread.status === 'cancelling' ? <Spinner color="current" size="sm" /> : <Square aria-hidden="true" size={13} />}
+                  {thread.status === 'cancelling' ? t('cancelling') : t('stopGeneration')}
+                </Button>
+              )}
+              <Button
+                className="relative"
+                data-chat-context-toggle
+                isIconOnly
+                onPress={() => {
+                  setHistoryDrawerOpen(false)
+                  setContextOpen(!contextPanelOpen)
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <PanelRight aria-label={contextPanelOpen ? t('collapseContext') : t('expandContext')} size={16} />
+                {selectedContext.length > 0 && (
+                  <span className="absolute right-0 top-0 grid min-w-3.5 place-items-center rounded-full bg-success px-1 text-[8px] font-bold text-success-foreground">
+                    {selectedContext.length}
+                  </span>
+                )}
+              </Button>
+            </div>
+          </header>
 
-          <main
-            aria-label={t('conversation')}
-            className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-x-hidden bg-background"
-          >
+          {error && (
+            <Alert className="absolute left-1/2 top-14 z-30 w-[min(42rem,calc(100%-7rem))] -translate-x-1/2 shadow-xl" status="danger">
+              <Alert.Content><Alert.Title>{t(errorTitle)}</Alert.Title><Alert.Description>{error}</Alert.Description></Alert.Content>
+            </Alert>
+          )}
+
+          <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden">
             <section
-              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-[clamp(1rem,4vw,3rem)] pb-8 pt-8 max-[1600px]:pt-16"
+              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-[clamp(1rem,4vw,3rem)] pb-8 pt-8"
               data-chat-conversation
               onScroll={updateFollowState}
               ref={conversationRef}
             >
               {!thread && !legacy && !isSending ? (
-                <div className="grid h-full place-items-center text-sm text-muted">
-                  {loading ? t('loading') : t('emptySelection')}
-                </div>
+                <div className="grid h-full place-items-center text-sm text-muted">{loading ? t('loading') : t('emptySelection')}</div>
               ) : thread?.kind === 'native-chat' ? (
-                <NativeConversation
-                  liveAssistant={liveAssistant}
-                  liveTools={liveTools}
-                  thread={thread}
-                />
+                <NativeConversation liveAssistant={liveAssistant} liveTools={liveTools} thread={thread} />
               ) : !thread && isSending ? (
                 <LiveTurn assistant={liveAssistant} tools={liveTools} />
               ) : thread ? (
@@ -819,120 +770,103 @@ export function ChatView({
                 <LegacyConversation entry={legacy!} />
               )}
             </section>
+
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
-              <div className="bg-gradient-to-t from-background via-background to-transparent px-[clamp(1rem,4vw,3rem)] pb-5 pt-3" data-chat-composer>
-                <div
-                  className="mx-auto w-full max-w-[60rem] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_14px_36px_rgba(0,0,0,0.22)] motion-reduce:transition-none"
-                  data-chat-composer-surface
-                >
-                  <div className="flex min-w-0 items-end gap-3 px-4 pb-3 pt-4">
-                    <textarea
-                      aria-label={t('message', { defaultValue: 'Message' })}
-                      className="max-h-44 min-h-14 min-w-0 flex-1 resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted"
-                      onChange={(event) => setComposer(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                          event.preventDefault()
-                          sendChatMessage()
-                        }
-                      }}
-                      placeholder={t('messagePlaceholder', { defaultValue: 'Message Claude…' })}
-                      value={composer}
-                    />
-                    {isSending && (
-                      <Button isIconOnly onPress={() => void stopChatTurn()} variant="ghost">
-                        <Square aria-label={t('stopChat')} size={15} />
-                      </Button>
-                    )}
-                    <Button className="shrink-0 bg-primary text-primary-foreground" isDisabled={!composer.trim()} onPress={sendChatMessage}>
-                      {isSending ? t('queue', { count: queuedCount }) : t('send', { defaultValue: 'Send' })}
-                    </Button>
-                  </div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border/70 px-3 py-2 text-xs text-muted">
-                  <Select
-                    aria-label={t('agent')}
-                    className="w-28"
-                    isDisabled={thread?.kind === 'native-chat'}
-                    onSelectionChange={(key) => setProvider(String(key) as ProviderId)}
-                    selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}
-                  >
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover><ListBox>
-                      <ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item>
-                      <ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item>
-                    </ListBox></Select.Popover>
-                  </Select>
-                  <Select
-                    aria-label={t('model')}
-                    className="w-40"
-                    onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))}
-                    selectedKey={model || '__default'}
-                  >
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover><ListBox>
-                      <ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>
-                      {(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => (
-                        <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>
-                      ))}
-                    </ListBox></Select.Popover>
-                  </Select>
-                  <Select
-                    aria-label={t('effort')}
-                    className="w-28"
-                    onSelectionChange={(key) => setEffort(String(key) as typeof effort)}
-                    selectedKey={effort}
-                  >
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover><ListBox>
-                      {CHAT_EFFORTS.map((value) => (
-                        <ListBox.Item id={value} key={value}>{value}</ListBox.Item>
-                      ))}
-                    </ListBox></Select.Popover>
-                  </Select>
-                  <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={setFastMode}>
-                    <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control></Switch.Content>
-                  </Switch>
-                  <Select
-                    aria-label={t('skills')}
-                    className="w-36"
-                    onSelectionChange={(key) => {
-                      const name = String(key)
-                      setComposer((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}/${name} `)
-                      setSelectedSkill(null)
+              <div className="bg-gradient-to-t from-background via-background to-transparent px-[clamp(1rem,4vw,3rem)] pb-4 pt-3" data-chat-composer>
+                <div className="mx-auto w-full max-w-[51.25rem] rounded-2xl border border-border bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_14px_36px_rgba(0,0,0,0.22)] motion-reduce:transition-none" data-chat-composer-surface>
+                  <textarea
+                    aria-label={t('message')}
+                    className="block max-h-44 min-h-16 w-full resize-none bg-transparent px-4 pb-1 pt-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted"
+                    onChange={(event) => setComposer(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault()
+                        sendChatMessage()
+                      }
                     }}
-                    selectedKey={selectedSkill}
-                  >
-                    <Select.Trigger><Select.Value>{t('skills')}</Select.Value><Select.Indicator /></Select.Trigger>
-                    <Select.Popover><ListBox>
-                      {skills.map((skill) => (
-                        <ListBox.Item id={skill.name} key={skill.name}>{skill.name}</ListBox.Item>
-                      ))}
-                    </ListBox></Select.Popover>
-                  </Select>
-                  <span>{t('fullAccess')}</span>
-                  <span className="ml-auto">
-                    {liveUsage
-                      ? `${liveUsage.usedTokens} / ${liveUsage.maxTokens}`
-                      : thread?.kind === 'native-chat' && thread.contextUsage
-                        ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
-                        : '—'}
-                  </span>
+                    placeholder={t('messagePlaceholder')}
+                    value={composer}
+                  />
+                  <div className="flex min-w-0 items-center gap-1 px-2 pb-2 pt-1 text-xs text-muted">
+                    <div className="relative" data-composer-options>
+                      <Button isIconOnly onPress={() => setComposerOptionsOpen((open) => !open)} size="sm" variant="ghost">
+                        <Plus aria-label={t('moreOptions')} size={16} />
+                      </Button>
+                      {composerOptionsOpen && (
+                        <div className="absolute bottom-10 left-0 z-50 grid w-64 gap-3 rounded-xl border border-border bg-surface p-3 shadow-2xl">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="flex items-center gap-2 text-xs text-foreground"><SlidersHorizontal size={14} />{t('fastMode')}</span>
+                            <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={setFastMode}>
+                              <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control></Switch.Content>
+                            </Switch>
+                          </div>
+                          <Select
+                            aria-label={t('skills')}
+                            onSelectionChange={(key) => {
+                              const name = String(key)
+                              setComposer((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}/${name} `)
+                              setSelectedSkill(null)
+                              setComposerOptionsOpen(false)
+                            }}
+                            selectedKey={selectedSkill}
+                          >
+                            <Select.Trigger><Select.Value>{t('skills')}</Select.Value><Select.Indicator /></Select.Trigger>
+                            <Select.Popover><ListBox>{skills.map((skill) => <ListBox.Item id={skill.name} key={skill.name}>{skill.name}</ListBox.Item>)}</ListBox></Select.Popover>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                    <Button className="gap-1 px-2" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
+                      <PanelRight aria-hidden="true" size={14} />{t('contextShort')} <span className="font-semibold text-success">{selectedContext.length}</span>
+                    </Button>
+                    <div className="flex min-w-0 items-center gap-1" data-composer-runtime>
+                      <Select aria-label={t('agent')} className="w-24" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => setProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
+                        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Popover><ListBox><ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item><ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item></ListBox></Select.Popover>
+                      </Select>
+                      <Select aria-label={t('model')} className="w-36" onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))} selectedKey={model || '__default'}>
+                        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Popover><ListBox><ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>{(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
+                      </Select>
+                      <Select aria-label={t('effort')} className="w-24" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
+                        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Popover><ListBox>{CHAT_EFFORTS.map((value) => <ListBox.Item id={value} key={value}>{value}</ListBox.Item>)}</ListBox></Select.Popover>
+                      </Select>
+                    </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-2.5 pl-2" data-composer-actions>
+                      <span className="flex items-center gap-1 whitespace-nowrap text-[11px]"><ShieldCheck className="text-success" size={14} />{t('fullAccess')}</span>
+                      <span
+                        aria-label={contextUsage ? `${contextUsage.usedTokens} / ${contextUsage.maxTokens}` : t('contextUnavailable')}
+                        className="size-4 rounded-full border-2 border-border"
+                        style={contextUsage ? { background: `conic-gradient(var(--color-success) ${contextPercent}%, transparent 0)` } : undefined}
+                        title={contextUsage ? `${contextUsage.usedTokens} / ${contextUsage.maxTokens}` : t('contextUnavailable')}
+                      />
+                      {isSending && (
+                        <Button isIconOnly onPress={() => void stopChatTurn()} size="sm" variant="ghost"><Square aria-label={t('stopChat')} size={14} /></Button>
+                      )}
+                      <Button aria-label={isSending ? t('queue', { count: queuedCount }) : t('send')} className="min-w-8 rounded-full bg-primary text-primary-foreground" isDisabled={!composer.trim()} isIconOnly onPress={sendChatMessage} size="sm">
+                        <Send aria-hidden="true" size={15} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-          </main>
+          </div>
+        </main>
 
-          <aside
-            aria-hidden={compactLayout && !compactContextOpen ? true : undefined}
-            aria-label={t('context')}
-            className={`min-h-0 overflow-x-hidden overflow-y-auto border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1600px]:fixed max-[1600px]:bottom-4 max-[1600px]:right-4 max-[1600px]:top-16 max-[1600px]:z-40 max-[1600px]:w-[22rem] max-[1600px]:rounded-2xl max-[1600px]:border max-[1600px]:shadow-2xl ${
-              compactContextOpen
-                ? 'max-[1600px]:translate-x-0 max-[1600px]:opacity-100'
-                : 'max-[1600px]:pointer-events-none max-[1600px]:translate-x-[calc(100%+2rem)] max-[1600px]:opacity-0'
-            }`}
-            inert={compactLayout && !compactContextOpen ? true : undefined}
-          >
+        <aside
+          aria-hidden={!contextPanelOpen}
+          aria-label={t('context')}
+          className={`grid min-h-0 grid-rows-[3rem_minmax(0,1fr)_auto] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1600px]:fixed max-[1600px]:bottom-4 max-[1600px]:right-4 max-[1600px]:top-12 max-[1600px]:z-40 max-[1600px]:w-[22rem] max-[1600px]:rounded-2xl max-[1600px]:border max-[1600px]:shadow-2xl ${contextVisibilityClass}`}
+          data-chat-context-panel
+          inert={!contextPanelOpen}
+        >
+          <header className="flex items-center gap-2 border-b border-border px-4">
+            <strong className="text-sm font-semibold text-foreground">{t('sessionContext')}</strong>
+            <Chip size="sm" variant="soft">{selectedContext.length}</Chip>
+          </header>
+          <div className="min-h-0 overflow-y-auto">
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
               <SessionContextPicker
                 cursor={contextCursor}
@@ -941,10 +875,7 @@ export function ChatView({
                 loading={contextLoading}
                 onLoadMore={() => void loadContextSessions(true)}
                 onProjectChange={setContextProject}
-                onRangeChange={(nextFrom, nextTo) => {
-                  setContextFrom(nextFrom)
-                  setContextTo(nextTo)
-                }}
+                onRangeChange={(nextFrom, nextTo) => { setContextFrom(nextFrom); setContextTo(nextTo) }}
                 onRecentDays={selectRecentContextDays}
                 onSelectedChange={(next) => void updateSelectedContext(next)}
                 project={contextProject}
@@ -954,12 +885,52 @@ export function ChatView({
                 to={contextTo}
               />
             )}
-            <p className="border-t border-border p-5 text-xs leading-5 text-muted">
-              {t('privacy')}
-            </p>
-          </aside>
-        </Card.Content>
-      </Card>
+          </div>
+          <p className="border-t border-border p-4 text-[11px] leading-5 text-muted">{t('privacy')}</p>
+        </aside>
+      </div>
+
+      <button
+        aria-hidden={!overlayOpen}
+        aria-label={t('closePanels')}
+        className={`absolute inset-0 top-12 z-30 cursor-default bg-black/45 transition-opacity duration-200 motion-reduce:transition-none ${overlayOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        onClick={() => { setHistoryDrawerOpen(false); setCompactContextOpen(false) }}
+        tabIndex={overlayOpen ? 0 : -1}
+        type="button"
+      />
+      <aside
+        aria-hidden={!historyDrawerOpen}
+        aria-label={t('threadRail')}
+        className={`absolute bottom-0 left-0 top-12 z-40 grid w-72 grid-rows-[auto_minmax(0,1fr)] border-r border-border bg-surface shadow-2xl transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none ${historyDrawerOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}
+        data-chat-history-drawer
+        inert={!historyDrawerOpen}
+      >
+        <div className="grid gap-3 border-b border-border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <strong className="text-sm font-semibold">{t('threadRail')}</strong>
+            <Button isIconOnly onPress={() => setHistoryDrawerOpen(false)} size="sm" variant="ghost"><X aria-label={t('closeHistory')} size={15} /></Button>
+          </div>
+          <Button className="gap-2 border border-border bg-surface-hover" fullWidth onPress={startDraft} variant="ghost"><Plus size={15} />{t('newChat')}</Button>
+          <div className="grid grid-cols-2 gap-1">
+            <Button onPress={() => setHistoryMode('active')} size="sm" variant={historyMode === 'active' ? 'primary' : 'ghost'}>{t('activeChats')}</Button>
+            <Button onPress={() => setHistoryMode('archived')} size="sm" variant={historyMode === 'archived' ? 'primary' : 'ghost'}>{t('archivedChats')}</Button>
+          </div>
+        </div>
+        <div className="min-h-0 overflow-y-auto p-2">
+          {loading ? <div className="grid place-items-center py-12"><Spinner color="accent" /></div> : visibleItems.length === 0 ? (
+            <p className="px-3 py-8 text-xs leading-5 text-muted">{t('empty')}</p>
+          ) : visibleItems.map((item) => {
+            const status = item.thread?.status ?? item.legacy?.status ?? 'completed'
+            const active = item.id === selectedId
+            return (
+              <button aria-current={active ? 'page' : undefined} className={`grid w-full gap-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${active ? 'bg-primary-soft' : ''}`} key={item.id} onClick={() => selectThread(item.id)} type="button">
+                <strong className="truncate text-xs font-medium text-foreground">{item.thread ? item.thread.kind === 'native-chat' ? item.thread.title : threadTitle(item.thread.request, t) : legacyTitle(item.legacy!, t)}</strong>
+                <span className="flex items-center justify-between gap-2 text-[10px] text-muted"><span>{t(`status.${status}`, { defaultValue: status })}</span>{!item.thread && <span>{t('legacy')}</span>}</span>
+              </button>
+            )
+          })}
+        </div>
+      </aside>
       <Modal
         isOpen={managementOpen && thread?.kind === 'native-chat'}
         onOpenChange={setManagementOpen}
@@ -1091,10 +1062,10 @@ function NativeConversation({
   liveTools: NativeToolActivity[]
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-[60rem] gap-7">
+    <div className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-7 py-4">
       {thread.messages.map((message) => message.role === 'user' ? (
         <div className="grid justify-items-end gap-1" key={message.id}>
-          <div className="max-w-[42rem] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
+          <div className="max-w-[68%] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
             <p className="break-words whitespace-pre-wrap">{message.content}</p>
           </div>
           {message.turnConfig && <TurnConfigLine config={message.turnConfig} />}
@@ -1103,6 +1074,7 @@ function NativeConversation({
         <article className="grid min-w-0 max-w-full gap-3 overflow-hidden whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
           {message.content}
           <ToolActivityList activities={message.toolActivities ?? []} chatId={thread.id} />
+          <MessageFooter message={message} />
         </article>
       ))}
       {thread.status === 'running' && <LiveTurn assistant={liveAssistant} chatId={thread.id} tools={liveTools} />}
@@ -1121,7 +1093,7 @@ function LiveTurn({
   chatId?: string
 }) {
   return (
-    <article className="mx-auto grid w-full max-w-[60rem] gap-3 text-sm leading-7 text-foreground">
+    <article className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-3 py-4 text-sm leading-7 text-foreground">
       {assistant && <p className="whitespace-pre-wrap">{assistant}</p>}
       <ToolActivityList activities={tools} chatId={chatId} />
       <Spinner color="accent" size="sm" />
@@ -1135,7 +1107,7 @@ function ToolActivityList({ activities, chatId }: {
 }) {
   if (activities.length === 0) return null
   return (
-    <div className="grid min-w-0 max-w-full gap-2 overflow-hidden" role="list">
+    <div className="grid min-w-0 max-w-full gap-1 overflow-hidden" role="list">
       {activities.map((activity) => (
         <NativeToolCard activity={activity} chatId={chatId} key={activity.itemId} />
       ))}
@@ -1180,30 +1152,47 @@ function NativeToolCard({ activity, chatId }: {
 
   const Icon = activityIcon(activity.kind)
   return (
-    <Card className="min-w-0 max-w-full overflow-hidden border border-border bg-surface shadow-none" role="listitem">
-      <Card.Content className="min-w-0 max-w-full overflow-hidden p-3">
-        <button className="flex w-full items-center gap-2 text-left" onClick={toggle} type="button">
-          <Icon aria-hidden="true" className="text-muted" size={15} />
-          <strong className="text-xs font-medium text-foreground">{activity.name}</strong>
-          <span className="min-w-0 flex-1 truncate text-xs text-muted">{activity.summary}</span>
-          {activity.status === 'running' ? <Spinner color="accent" size="sm" /> : (
-            <ChevronRight className={expanded ? 'rotate-90' : ''} size={14} />
+    <div className="min-w-0 max-w-full overflow-hidden" role="listitem">
+      <button className="grid min-h-8 w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1 text-left text-muted transition-colors hover:bg-surface-hover" onClick={toggle} type="button">
+        <Icon aria-hidden="true" size={15} />
+        <strong className="text-xs font-medium text-foreground">{activity.name}</strong>
+        <span className="min-w-0 truncate text-xs">{activity.summary}</span>
+        {activity.status === 'running' ? <Spinner color="accent" size="sm" /> : <ChevronRight className={`transition-transform ${expanded ? 'rotate-90' : ''}`} size={14} />}
+      </button>
+      {expanded && (
+        <div className="mb-2 ml-[1.6rem] border-l border-border py-2 pl-3">
+          {loading && !content ? <Spinner color="accent" size="sm" /> : available ? (
+            <pre className="max-h-80 max-w-full overflow-auto break-words whitespace-pre-wrap text-xs leading-5 text-muted">{content}</pre>
+          ) : <p className="text-xs text-muted">{t('toolSourceUnavailable')}</p>}
+          {nextCursor !== null && nextCursor > 0 && (
+            <Button className="mt-2" isDisabled={loading} onPress={() => void loadPage(nextCursor)} size="sm" variant="ghost">{t('loadMore')}</Button>
           )}
-        </button>
-        {expanded && (
-          <div className="mt-3 border-t border-border pt-3">
-            {loading && !content ? <Spinner color="accent" size="sm" /> : available ? (
-              <pre className="max-h-80 max-w-full overflow-auto break-words whitespace-pre-wrap text-xs leading-5 text-muted">{content}</pre>
-            ) : <p className="text-xs text-muted">{t('toolSourceUnavailable')}</p>}
-            {nextCursor !== null && nextCursor > 0 && (
-              <Button className="mt-2" isDisabled={loading} onPress={() => void loadPage(nextCursor)} size="sm" variant="ghost">
-                {t('loadMore')}
-              </Button>
-            )}
-          </div>
-        )}
-      </Card.Content>
-    </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MessageFooter({ message }: { message: ChatMessage }) {
+  const { t } = useTranslation('chat')
+  const completedAt = message.completedAt ? Date.parse(message.completedAt) : Number.NaN
+  const elapsed = Number.isFinite(completedAt)
+    ? formatElapsed(message.createdAt, completedAt)
+    : null
+
+  return (
+    <footer className="flex items-center gap-2 text-[11px] text-muted">
+      <Button
+        aria-label={t('copyResponse')}
+        isIconOnly
+        onPress={() => void navigator.clipboard.writeText(message.content)}
+        size="sm"
+        variant="ghost"
+      >
+        <Copy aria-hidden="true" size={14} />
+      </Button>
+      {elapsed && <span>{t('workedFor', { elapsed })}</span>}
+    </footer>
   )
 }
 
@@ -1233,9 +1222,9 @@ function PersistedConversation({ thread }: { thread: GenerationChatThread }) {
     ? assistantMessage?.content ?? terminalMessage(thread.status, t)
     : terminalMessage(thread.status, t)
   return (
-    <div className="mx-auto grid w-full max-w-[60rem] gap-7">
+    <div className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-7 py-4">
       <div className="flex justify-end">
-        <div className="max-w-[42rem] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
+        <div className="max-w-[68%] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
           {userMessage?.kind === 'rules-generation-request'
             ? requestMessage(thread.request, t)
             : userMessage?.content ?? scopeLabel(thread.request, t)}
@@ -1287,6 +1276,7 @@ function PersistedConversation({ thread }: { thread: GenerationChatThread }) {
               </p>
             )}
           </div>
+          {assistantMessage && <div className="mt-4"><MessageFooter message={assistantMessage} /></div>}
         </div>
       </article>
     </div>
@@ -1423,7 +1413,7 @@ function activityLabel(kind: string): string {
 function LegacyConversation({ entry }: { entry: GenerationHistoryEntry }) {
   const { t } = useTranslation('chat')
   return (
-    <div className="mx-auto grid w-full max-w-[60rem] gap-7">
+    <div className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-7 py-4">
       <div className="flex justify-end">
         <div className="max-w-xl rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm text-foreground">
           {scopeLabel(entry.request, t)}
@@ -1497,72 +1487,52 @@ function SessionContextPicker({
     .filter((value, index, values) => values.indexOf(value) === index)
 
   return (
-    <section className="p-5" data-session-context>
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">{t('sessionContext')}</h3>
-        <Chip size="sm" variant="soft">{selected.length}</Chip>
-      </div>
-      <Select
-        aria-label={t('contextProject')}
-        className="mt-3"
-        onSelectionChange={(key) => onProjectChange(String(key))}
-        selectedKey={project}
-      >
-        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-        <Select.Popover><ListBox>
-          <ListBox.Item id="all">{t('allProjects')}</ListBox.Item>
-          {projectOptions.map((slug) => (
-            <ListBox.Item id={slug} key={slug}>{slug === 'default' ? t('defaultProject') : slug}</ListBox.Item>
-          ))}
-        </ListBox></Select.Popover>
-      </Select>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <input
-          aria-label={t('contextFrom')}
-          className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground"
-          onChange={(event) => onRangeChange(event.target.value, to)}
-          type="date"
-          value={from}
-        />
-        <input
-          aria-label={t('contextTo')}
-          className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground"
-          onChange={(event) => onRangeChange(from, event.target.value)}
-          type="date"
-          value={to}
-        />
-      </div>
-      <div className="mt-2 flex gap-2">
-        <Button onPress={() => onRecentDays(7)} size="sm" variant="ghost">{t('recent7Days')}</Button>
-        <Button onPress={() => onRecentDays(30)} size="sm" variant="ghost">{t('recent30Days')}</Button>
-        {(from || to) && (
-          <Button onPress={() => onRangeChange('', '')} size="sm" variant="ghost">{t('clearRange')}</Button>
-        )}
-      </div>
+    <section data-session-context>
       {selected.length > 0 && (
-        <div className="mt-3 grid max-h-28 gap-1 overflow-y-auto pr-1">
-          <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
-          {selected.map((reference) => {
-            const item = knownItems.get(sessionReferenceKey(reference))
-            return (
-              <button
-                className="flex w-full min-w-0 items-center gap-2 rounded-md bg-surface-hover px-2 py-1 text-left text-xs"
-                key={sessionReferenceKey(reference)}
-                onClick={() => onSelectedChange(selected.filter(
-                  (current) => sessionReferenceKey(current) !== sessionReferenceKey(reference),
-                ))}
-                type="button"
-              >
-                <span className="min-w-0 flex-1 truncate">{reference.agent} · {reference.id}</span>
-                {item && !item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
-                <span aria-label={t('removeSession')}>×</span>
-              </button>
-            )
-          })}
+        <div className="border-b border-border p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
+            <Button onPress={() => onSelectedChange([])} size="sm" variant="ghost">{t('clearSelected')}</Button>
+          </div>
+          <div className="grid max-h-28 gap-1 overflow-y-auto pr-1">
+            {selected.map((reference) => {
+              const item = knownItems.get(sessionReferenceKey(reference))
+              return (
+                <button
+                  className="flex w-full min-w-0 items-center gap-2 rounded-lg bg-surface-hover px-2 py-1.5 text-left text-xs"
+                  key={sessionReferenceKey(reference)}
+                  onClick={() => onSelectedChange(selected.filter((current) => sessionReferenceKey(current) !== sessionReferenceKey(reference)))}
+                  type="button"
+                >
+                  <span className="grid size-4 shrink-0 place-items-center rounded bg-success/15 text-[9px] font-bold text-success">{reference.agent.slice(0, 1).toUpperCase()}</span>
+                  <span className="min-w-0 flex-1 truncate">{reference.agent} · {reference.id}</span>
+                  {item && !item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
+                  <span aria-label={t('removeSession')}>×</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
-      <div
-        className="relative mt-3 overflow-y-auto rounded-lg border border-border"
+      <div className="border-b border-border p-4">
+        <Select aria-label={t('contextProject')} onSelectionChange={(key) => onProjectChange(String(key))} selectedKey={project}>
+          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+          <Select.Popover><ListBox><ListBox.Item id="all">{t('allProjects')}</ListBox.Item>{projectOptions.map((slug) => <ListBox.Item id={slug} key={slug}>{slug === 'default' ? t('defaultProject') : slug}</ListBox.Item>)}</ListBox></Select.Popover>
+        </Select>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <input aria-label={t('contextFrom')} className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground" onChange={(event) => onRangeChange(event.target.value, to)} type="date" value={from} />
+          <input aria-label={t('contextTo')} className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground" onChange={(event) => onRangeChange(from, event.target.value)} type="date" value={to} />
+        </div>
+        <div className="mt-2 flex gap-1">
+          <Button onPress={() => onRecentDays(7)} size="sm" variant="ghost">{t('recent7Days')}</Button>
+          <Button onPress={() => onRecentDays(30)} size="sm" variant="ghost">{t('recent30Days')}</Button>
+          {(from || to) && <Button onPress={() => onRangeChange('', '')} size="sm" variant="ghost">{t('clearRange')}</Button>}
+        </div>
+      </div>
+      <div className="p-4">
+        <div className="mb-2 flex items-center justify-between text-xs text-muted"><span>{t('availableSessions')}</span><span>{items.length}</span></div>
+        <div
+        className="relative overflow-y-auto rounded-lg border border-border"
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
         style={{ height: viewportHeight }}
       >
@@ -1601,6 +1571,7 @@ function SessionContextPicker({
           {t('loadMore')}
         </Button>
       )}
+      </div>
     </section>
   )
 }

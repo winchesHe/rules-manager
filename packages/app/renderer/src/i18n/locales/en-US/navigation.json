@@ -5,6 +5,7 @@
   "rules": "Rules",
   "settings": "Settings",
   "workspace": "Local workspace",
+  "localSessions": "Local agent sessions",
   "mainLabel": "Main navigation",
   "rulesLabel": "Rules navigation",
   "rulesOverview": "Overview",

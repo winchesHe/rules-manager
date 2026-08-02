@@ -61,12 +61,14 @@ export function App() {
       ) : (
         <div className="grid h-screen w-screen max-w-full grid-cols-[14rem_minmax(0,1fr)] overflow-hidden bg-background text-foreground max-[980px]:grid-cols-[11.75rem_minmax(0,1fr)]">
           <aside className="flex h-screen flex-col border-r border-border bg-sidebar px-4 pb-5 pt-11">
-            <div className="mb-2 grid size-9 place-items-center rounded-lg bg-primary font-extrabold text-primary-foreground">
-              M
-            </div>
-            <div className="mb-8 grid gap-1">
-              <strong className="text-sm text-foreground">Memory Manager</strong>
-              <span className="text-xs text-muted">{t('workspace')}</span>
+            <div className="mb-8 flex items-center gap-2.5">
+              <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-success font-extrabold text-success-foreground">
+                M
+              </div>
+              <div className="grid min-w-0 gap-0.5">
+                <strong className="truncate text-sm text-foreground">Memory Manager</strong>
+                <span className="truncate text-xs text-muted">{t('localSessions')}</span>
+              </div>
             </div>
 
             <nav aria-label={t('mainLabel')} className="grid gap-1">
@@ -91,7 +93,7 @@ export function App() {
                       }}
                       variant="ghost"
                     >
-                      <Icon aria-hidden="true" className={active ? 'text-primary' : undefined} size={17} />
+                      <Icon aria-hidden="true" className={active ? 'text-success' : undefined} size={17} />
                       <span>{t(labelKey)}</span>
                     </Button>
                     {id === 'rules' && active && (
@@ -159,7 +161,7 @@ export function App() {
           <main
             className={`min-w-0 max-w-full overflow-x-hidden bg-background ${
               activeView === 'chat'
-                ? 'overflow-y-hidden px-[clamp(1rem,2vw,2rem)] py-8'
+                ? 'overflow-y-hidden'
                 : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
             }`}
             key={activeView}

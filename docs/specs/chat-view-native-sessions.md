@@ -31,17 +31,22 @@ Chat 使用 `workspace + fluid`，占满 App Shell 内可用 viewport，页面�
 
 ```text
 ┌──────────────┬──────────────────────────────────┬──────────────────────┐
-│ Thread Rail  │ Conversation                     │ Session Context      │
-│ New Chat     │ Chat header                      │ Project / All        │
-│ Active       │ Messages + Tool activities       │ Date range / 7d /30d │
-│ Archived     │                                  │ Session checklist    │
-│              │ Composer + runtime controls      │ Selected refs        │
+│ 产品导航     │ Chat header / History trigger    │ Session Context      │
+│ Scan         │ Messages + Tool activities       │ Selected refs        │
+│ Projects     │                                  │ Project / All        │
+│ Chat         │                                  │ Date range / 7d /30d │
+│ Rules        │ Composer + runtime controls      │ Session checklist    │
 └──────────────┴──────────────────────────────────┴──────────────────────┘
+                 ↳ 18rem History Drawer（按需覆盖）
 ```
 
-### 3.1 Thread Rail
+常驻宽度为 `14rem + minmax(0, 1fr) + 22rem`，Conversation 与 Composer 共享 820px
+阅读线。Session Context 收起后中央列取得完整 22rem；页面不保留外层 Card。
 
-- 支持展开/收起；包含 New Chat、Active 和 Archived 入口。
+### 3.1 History Drawer
+
+- Chat Header 标题打开 18rem 覆盖式 Drawer；Drawer 不参与主 Grid 重排，包含 New Chat、
+  Active 和 Archived 入口。
 - Active 默认按 Paseo 的最近活动时间分组和排序；支持重命名与 Archive。
 - New Chat 先创建 Renderer 内 Draft。首次发送前不写 ChatStore、不创建 Native Session；
   离开空 Draft 时直接丢弃。
@@ -72,6 +77,9 @@ Chat 使用 `workspace + fluid`，占满 App Shell 内可用 viewport，页面�
 
 ### 3.4 Session Context Pane
 
+- 桌面端宽 22rem，可由 Chat Header 或 Composer 收起/展开；桌面偏好保存到 Renderer
+  `localStorage`，不进入 workspace config、DB 或 ChatStore。
+- 1600px 及以下改为带遮罩的覆盖式 Drawer；支持 Escape 关闭，关闭时使用 `inert` 隔离交互。
 - Project 支持单项目、`default` 和 `all`；`all` 包含 `default`。
 - 支持起止日期和最近 7 天、最近 30 天快捷选择；日期按本机时区包含首尾自然日。
 - Session 列表按 `updatedAt DESC, id DESC` 分页查询并虚拟化，支持逐条选择。
@@ -201,4 +209,3 @@ listSkills / archive / unarchive / delete / close
 - 不实现应用侧 Session 摘要器、搜索协议、Locator、Context token 预算或原文缓存。
 - 不删除/重写历史扫描 Session；不把 Chat 正文写入 `memory.db`。
 - 不新增用户可选 Permission Mode 或 working directory。
-
