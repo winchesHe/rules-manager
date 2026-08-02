@@ -2080,3 +2080,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 自动化基线：App 23 suites / 141 tests、Core 26 suites / 278 tests 全绿；App/Core production build
   通过。Core build 仅保留既有 `tsdown define` 配置警告。
 - 提交信息：`feat: 完善 Chat 历史与 Session 展示`
+
+## Chat History 顶部像素级对齐（2026-08-02）
+
+- 以 `docs/prototypes/chat-codex-paseo-layout.html` 的 History 顶部为唯一基准，修正真实 App 中
+  HeroUI 默认尺寸和额外 Tab 底板造成的偏差；History Pane 增加独立的 dark/light Pane、Surface、
+  Raised、Hover、文字、弱文字、边框和 soft border token。
+- 顶部控件改为原生 button 并显式固定计算样式：12px padding、10px 行间距、12px / 650 标题、
+  30×30px 关闭按钮、263×34px 新建按钮，以及两个 129.5×28px Tab。Tab 容器不再带额外背景、
+  padding 或圆角，激活态完整铺满半列。
+- 真实 production Electron 在 1728×979 下通过 DOM 计算样式逐项测量：Pane 288px、顶部 287×137px、
+  新建按钮 gap 7px / radius 9px、Tab gap 4px / radius 7px；背景 `#1b1c1b`、Surface `#242524`、
+  Raised `#2b2c2b`、边框 `#303230`、文字 `#e8e9e7` 与 HTML 基准一致。
+- 最终截图为 `docs/prototypes/chat-implementation-v4-history-header.png`。`simplify` 复核仅整理 JSX 排版，
+  未引入额外抽象；App 23 suites / 142 tests、Core 26 suites / 278 tests 全绿，两端 production build
+  与 `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
+- 提交信息：`fix: 对齐 Chat 历史栏顶部样式`

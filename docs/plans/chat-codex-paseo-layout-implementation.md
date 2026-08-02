@@ -88,3 +88,19 @@ Session Context 与主题能力；不能用静态假数据或仅视觉相似替�
 - 自动化覆盖 ChatStore 置顶持久化与排序、IPC/Controller 路径、OpenCode 名称解析、Renderer 结构契约；
   最终运行 App/Core 全量测试与 production build，并用 Computer Use 在真实 Electron 中验证右键菜单、
   可读 Session 名称、历史时间、Tooltip 和整体视觉间距。
+
+## 第四轮：History 顶部像素级对齐
+
+以 `docs/prototypes/chat-codex-paseo-layout.html` 的 `.drawer-head`、`.drawer-title-row`、
+`.new-chat-button`、`.drawer-tabs` 与 `.drawer-tab` 为唯一基准，修正真实 App 中 HeroUI 默认尺寸和
+额外容器样式造成的偏差。
+
+本轮验收标准与验证方式：
+
+- History Pane 使用 Pane 背景；顶部区域为 12px padding、10px 行间距和 soft border。
+- 标题为 12px / 650，关闭按钮固定 30×30px、8px 圆角；图标固定 14×14px。
+- 新建对话按钮固定 34px 高、9px 圆角、7px 图文间距、11px / 620，并使用 Surface 背景。
+- Tab 容器只保留两列和 4px 间距，不得附加背景、padding 或圆角；Tab 固定 28px 高、7px 圆角、
+  10px 字号，激活态使用 Surface Raised。
+- 先新增 Renderer 源码契约并确认旧实现失败，再实现主题 token 和精确类名；随后运行 App 全量测试、
+  production build 与 `git diff --check`，最后通过真实 Electron 截图逐项复核上述尺寸与层级。

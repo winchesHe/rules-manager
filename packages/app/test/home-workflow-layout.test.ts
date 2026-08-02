@@ -121,6 +121,22 @@ describe('home workflow layout', () => {
     expect(source).not.toContain('<Card className="h-full')
   })
 
+  it('History 顶部严格遵循 HTML 原型的尺寸与层级', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('data-chat-history-head')
+    expect(source).toContain('grid gap-2.5 border-b border-border-soft p-3')
+    expect(source).toContain('text-[12px] font-[650] leading-[normal] text-pane-foreground')
+    expect(source).toContain('inline-grid size-[30px] place-items-center rounded-lg')
+    expect(source).toContain('h-[34px] w-full items-center justify-center gap-[7px] rounded-[9px]')
+    expect(source).toContain('bg-pane-surface p-0 text-[11px] font-[620] leading-[normal]')
+    expect(source).toContain('data-chat-history-tabs')
+    expect(source).toContain('grid grid-cols-2 gap-1')
+    expect(source).toContain('h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal]')
+    expect(source).toContain('bg-surface-raised text-pane-foreground')
+    expect(source).not.toContain('grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1')
+  })
+
   it('Chat Header 分离历史入口与当前标题，Context 在右栏内关闭并从 Header 恢复', () => {
     const source = read('views/ChatView.tsx')
 

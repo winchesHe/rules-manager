@@ -743,19 +743,45 @@ export function ChatView({
     <aside
       aria-hidden={!historyPaneOpen}
       aria-label={t('threadRail')}
-      className={`relative z-10 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-r border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-0 max-[1279px]:left-0 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-72 max-[1279px]:shadow-2xl ${historyPaneOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}
+      className={`relative z-10 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-r border-pane-border bg-pane transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-0 max-[1279px]:left-0 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-72 max-[1279px]:shadow-2xl ${historyPaneOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}
       data-chat-history-pane
       inert={!historyPaneOpen}
     >
-      <div className="grid gap-3 border-b border-border p-3">
-        <div className="flex items-center justify-between gap-2">
-          <strong className="text-sm font-semibold">{t('threadRail')}</strong>
-          <Button isIconOnly onPress={() => setHistoryPaneOpen(false)} size="sm" variant="ghost"><X aria-label={t('closeHistory')} size={15} /></Button>
+      <div className="grid gap-2.5 border-b border-border-soft p-3" data-chat-history-head>
+        <div className="flex items-center gap-2">
+          <strong className="text-[12px] font-[650] leading-[normal] text-pane-foreground">{t('threadRail')}</strong>
+          <button
+            aria-label={t('closeHistory')}
+            className="ml-auto inline-grid size-[30px] place-items-center rounded-lg border-0 bg-transparent p-0 text-pane-muted hover:bg-pane-hover hover:text-pane-foreground"
+            onClick={() => setHistoryPaneOpen(false)}
+            type="button"
+          >
+            <X aria-hidden="true" size={14} />
+          </button>
         </div>
-        <Button className="h-8 gap-2 rounded-lg border border-border bg-surface-hover text-foreground" fullWidth onPress={startDraft} size="sm" variant="ghost"><Plus size={15} />{t('newChat')}</Button>
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1">
-          <Button className={`h-7 rounded-md text-xs ${historyMode === 'active' ? 'bg-surface-hover text-foreground' : 'text-muted'}`} onPress={() => setHistoryMode('active')} size="sm" variant="ghost">{t('activeChats')}</Button>
-          <Button className={`h-7 rounded-md text-xs ${historyMode === 'archived' ? 'bg-surface-hover text-foreground' : 'text-muted'}`} onPress={() => setHistoryMode('archived')} size="sm" variant="ghost">{t('archivedChats')}</Button>
+        <button
+          className="flex h-[34px] w-full items-center justify-center gap-[7px] rounded-[9px] border border-pane-border bg-pane-surface p-0 text-[11px] font-[620] leading-[normal] text-pane-foreground hover:bg-surface-raised"
+          onClick={startDraft}
+          type="button"
+        >
+          <Plus aria-hidden="true" size={14} />
+          {t('newChat')}
+        </button>
+        <div className="grid grid-cols-2 gap-1" data-chat-history-tabs>
+          <button
+            className={`h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal] ${historyMode === 'active' ? 'bg-surface-raised text-pane-foreground' : 'bg-transparent text-pane-muted'}`}
+            onClick={() => setHistoryMode('active')}
+            type="button"
+          >
+            {t('activeChats')}
+          </button>
+          <button
+            className={`h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal] ${historyMode === 'archived' ? 'bg-surface-raised text-pane-foreground' : 'bg-transparent text-pane-muted'}`}
+            onClick={() => setHistoryMode('archived')}
+            type="button"
+          >
+            {t('archivedChats')}
+          </button>
         </div>
       </div>
       <div className="min-h-0 overflow-y-auto p-2">
