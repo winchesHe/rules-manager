@@ -2233,3 +2233,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终基线：App 24 suites / 152 tests、Core 26 suites / 278 tests 全绿；App/Core production build 与
   `git diff --check` 通过。既有 Core build `tsdown define` 与 Markstream PURE 注释位置警告保持不变。
 - 提交信息：`fix: 移除 Chat Markdown 占位骨架`
+
+## Chat 顶部按钮热区修复（2026-08-02）
+
+- 根因是全局窗口拖拽层固定覆盖顶部 32px 且使用 `z-index: 1000`，Chat Header 只有 `z-20`；可见的
+  历史按钮和对话管理按钮大部分区域实际落在拖拽层下方，因此点击图标中心会被识别为窗口拖动，表现为
+  历史按钮热区错位、`…` 无响应。对话管理弹窗本身已有重命名、归档等完整能力。
+- `.window-no-drag` 统一提升到拖拽层之上的 `z-index: 1001`，恢复其原本的 no-drag 语义；两个 Header
+  图标按钮显式固定为 32×32px，并将可访问名称从 SVG 移到实际 Button，避免命中区和语义节点分离。
+- `simplify` 复核把层级规则收敛到语义 CSS 类，未在 JSX 中保留 Tailwind 魔法层级；没有改动窗口拖拽层
+  的全局尺寸、Chat 生命周期或管理操作。
+- 真实 Electron 点击验证：`…` 可打开含标题输入、重命名和归档操作的“对话管理”弹窗；历史按钮可连续
+  打开和关闭历史侧栏。App 24 suites / 153 tests、Core 26 suites / 278 tests 全绿；App/Core
+  production build 与 `git diff --check` 通过，既有 Core `tsdown define` 与 Markstream PURE 注释警告不变。
+- 提交信息：`fix: 修复 Chat 顶部按钮热区`

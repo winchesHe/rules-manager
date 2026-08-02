@@ -828,9 +828,10 @@ export function ChatView({
         data-chat-workspace
       >
         <main aria-label={t('conversation')} className="grid min-h-0 min-w-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden bg-background">
-          <header className="window-no-drag relative z-20 flex min-w-0 items-center gap-1 border-b border-border px-3" data-chat-header>
+          <header className="window-no-drag flex min-w-0 items-center gap-1 border-b border-border px-3" data-chat-header>
             <Button
-              className={historyPaneOpen ? 'bg-surface-hover' : undefined}
+              aria-label={historyPaneOpen ? t('closeHistory') : t('openHistory')}
+              className={`size-8 min-w-8 shrink-0 p-0 ${historyPaneOpen ? 'bg-surface-hover' : ''}`}
               data-chat-history-toggle
               isIconOnly
               onPress={() => {
@@ -840,7 +841,7 @@ export function ChatView({
               size="sm"
               variant="ghost"
             >
-              <History aria-label={historyPaneOpen ? t('closeHistory') : t('openHistory')} size={16} />
+              <History aria-hidden="true" size={16} />
             </Button>
             <div className="flex min-w-0 items-baseline gap-2 px-1" data-chat-current-title>
               <strong className="min-w-0 truncate text-sm font-semibold text-foreground">{currentTitle}</strong>
@@ -848,13 +849,15 @@ export function ChatView({
             </div>
             {thread?.kind === 'native-chat' && (
               <Button
+                aria-label={t('chatManagement')}
+                className="size-8 min-w-8 shrink-0 p-0"
                 data-chat-management-trigger
                 isIconOnly
                 onPress={() => setManagementOpen(true)}
                 size="sm"
                 variant="ghost"
               >
-                <MoreHorizontal aria-label={t('chatManagement')} size={16} />
+                <MoreHorizontal aria-hidden="true" size={16} />
               </Button>
             )}
             <div className="ml-auto flex min-w-0 items-center gap-1">

@@ -217,7 +217,12 @@ body {
   -webkit-app-region: drag;
 }
 
-.window-no-drag,
+.window-no-drag {
+  position: relative;
+  z-index: 1001;
+  -webkit-app-region: no-drag;
+}
+
 button,
 a,
 input,
