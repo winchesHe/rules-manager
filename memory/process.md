@@ -1922,3 +1922,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终自动化基线：Core 26 suites / 277 tests、App 20 suites / 127 tests 全绿；Core/App production
   build 与 `git diff --check` 通过。
 - 提交信息：`refactor: 优化 Chat 布局与交互体验`。
+
+## Chat View 去除常驻抬头与运行信息（2026-08-02）
+
+- 按 UI 标注移除 Chat 页面级标题/说明，Workspace Card 改为占满 Chat viewport；窄屏 Rail/Context
+  入口和 Rules Artifact/重试/停止操作改为 Card 内悬浮 Action，不再占用常驻顶栏。
+- 右侧移除“任务上下文”“对话管理”“运行上下文”，Session Context Picker 直接成为 Pane 首项；
+  Provider、Model、Effort、Full access 与 Context Window 已在 Composer 常驻，避免重复展示。
+- Native Chat 的重命名、Archive、恢复、永久删除与 resume-failed 续开没有删除，统一收进 Thread
+  Rail 顶部 `…` 管理 Modal。真实 Electron 1728×979 检查确认左右 Pane 与 Conversation 同顶对齐。
+- 最终自动化基线：Core 26 suites / 277 tests、App 20 suites / 127 tests 全绿；Core/App production
+  build 与 `git diff --check` 通过。
+- 提交信息：`refactor: 精简 Chat 常驻信息`。

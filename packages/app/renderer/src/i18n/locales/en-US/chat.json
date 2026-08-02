@@ -1,6 +1,5 @@
 {
   "title": "Chat",
-  "description": "View streaming Agent work and restored conversations.",
   "threadRail": "Threads",
   "newChat": "New Chat",
   "activeChats": "Active",
@@ -21,7 +20,6 @@
   "conversation": "Conversation",
   "context": "Run context",
   "chatManagement": "Chat management",
-  "runtimeContext": "Runtime context",
   "running": "Running",
   "recent": "Recent",
   "empty": "No Chat Threads yet. Start a generation from Rules.",

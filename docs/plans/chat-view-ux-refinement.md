@@ -52,3 +52,12 @@ Session Context 注入或生命周期语义。
 - 1024×768：正文、Tool 卡片和 Composer 无页面级横向滚动，配置项允许自然换行。
 - Core 26 suites / 277 tests、App 20 suites / 127 tests 全绿；双端 production build 与
   `git diff --check` 通过。
+
+## Follow-up：去除常驻抬头与运行信息
+
+- 顶部 Chat 标题与说明移除，Workspace Card 直接占满 Chat 可用高度。
+- 右侧移除任务抬头、对话管理与运行上下文，直接从 Session 上下文开始。
+- 重命名、Archive、恢复、永久删除与 resume-failed 续开收进 Thread Rail 顶部 `…` Modal；
+  Rules 运行中的停止操作进入悬浮 Action，不丢失原功能。
+- 观察点：桌面首屏不再出现用户标注的两个冗余区域，Conversation 与 Session Context 同顶对齐。
+- 验证方式：真实 Electron 1728×979 截图确认；定向布局测试与 App production build 通过。

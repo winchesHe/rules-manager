@@ -107,11 +107,14 @@ describe('home workflow layout', () => {
     expect(source).toContain('data-chat-composer-surface')
   })
 
-  it('Chat 右栏分离管理、运行信息和 Session 选择，长内容不撑破布局', () => {
+  it('Chat 移除页面抬头与常驻运行信息，右栏直接展示 Session 选择', () => {
     const source = read('views/ChatView.tsx')
 
-    expect(source).toContain('data-chat-management')
-    expect(source).toContain('data-runtime-context')
+    expect(source).not.toContain('<h1 className="text-xl')
+    expect(source).not.toContain('data-runtime-context')
+    expect(source).not.toContain("<h2 className=\"text-sm font-semibold text-foreground\">{t('context')}</h2>")
+    expect(source).toContain('data-chat-management-trigger')
+    expect(source).toContain('isOpen={managementOpen')
     expect(source).toContain('data-session-context')
     expect(source).toContain('max-h-28')
     expect(source).toContain('overflow-y-auto')

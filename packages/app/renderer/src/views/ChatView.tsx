@@ -11,6 +11,7 @@ import {
   Eye,
   FilePenLine,
   MessageSquareText,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
@@ -107,6 +108,7 @@ export function ChatView({
   const [compactContextOpen, setCompactContextOpen] = useState(false)
   const [compactLayout, setCompactLayout] = useState(false)
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
+  const [managementOpen, setManagementOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirmThread, setDeleteConfirmThread] = useState<Extract<ChatThread, { version: 2 }> | null>(null)
   const selectedIdRef = useRef<string | null>(selectedId)
@@ -620,21 +622,17 @@ export function ChatView({
   }
 
   return (
-    <section aria-label={t('title')} className="grid h-[calc(100vh-4rem)] min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
-      <div>
-        <header className="mb-3 flex min-h-12 items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">{t('title')}</h1>
-            <p className="mt-0.5 text-xs text-muted">{t('description')}</p>
-          </div>
-          <div className="ml-auto hidden gap-2 max-[1600px]:flex">
+    <section aria-label={t('title')} className="relative h-[calc(100vh-4rem)] min-h-0 overflow-hidden">
+      <div className="pointer-events-none absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-3">
+        <div className="pointer-events-auto hidden gap-2 max-[1600px]:flex">
             <Button isIconOnly onPress={() => setCompactRailOpen(true)} size="sm" variant="ghost">
               <MessageSquareText aria-label={t('threadRail')} size={16} />
             </Button>
             <Button isIconOnly onPress={() => setCompactContextOpen(true)} size="sm" variant="ghost">
               <Eye aria-label={t('context')} size={16} />
             </Button>
-          </div>
+        </div>
+        <div className="pointer-events-auto ml-auto flex gap-2">
           {thread?.kind === 'rules-generation'
             && thread.status === 'completed' && thread.candidateCount > 0 && (
             <Button
@@ -669,19 +667,33 @@ export function ChatView({
               {isRegenerating ? t('regenerating') : t('regenerate')}
             </Button>
           )}
-        </header>
-
-        {error && (
-          <Alert className="mb-4" status="danger">
-            <Alert.Content>
-              <Alert.Title>{t(errorTitle)}</Alert.Title>
-              <Alert.Description>{error}</Alert.Description>
-            </Alert.Content>
-          </Alert>
-        )}
+          {thread?.kind === 'rules-generation'
+            && (thread.status === 'running' || thread.status === 'cancelling') && (
+            <Button
+              className="gap-2"
+              isDisabled={thread.status === 'cancelling'}
+              onPress={() => void stopGeneration()}
+              variant="ghost"
+            >
+              {thread.status === 'cancelling'
+                ? <Spinner color="current" size="sm" />
+                : <Square aria-hidden="true" size={14} />}
+              {thread.status === 'cancelling' ? t('cancelling') : t('stopGeneration')}
+            </Button>
+          )}
+        </div>
       </div>
 
-      <Card className="min-h-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-none">
+      {error && (
+        <Alert className="absolute left-1/2 top-3 z-30 w-[min(42rem,calc(100%-7rem))] -translate-x-1/2 shadow-xl" status="danger">
+          <Alert.Content>
+            <Alert.Title>{t(errorTitle)}</Alert.Title>
+            <Alert.Description>{error}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      )}
+
+      <Card className="h-full min-h-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-none">
         <Card.Content
           className={`grid h-full min-h-0 transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${railCollapsed
             ? 'grid-cols-[4rem_minmax(0,1fr)_22rem]'
@@ -709,9 +721,22 @@ export function ChatView({
             inert={compactLayout && !compactRailOpen ? true : undefined}
           >
             <div className={`sticky top-0 z-10 border-b border-border bg-surface ${railCollapsed ? 'p-2' : 'px-4 py-3'}`}>
-              <Button isIconOnly={railCollapsed} onPress={() => setRailCollapsed((value) => !value)} size="sm" variant="ghost">
-                {railCollapsed ? <PanelLeftOpen aria-label={t('expandRail')} size={16} /> : <PanelLeftClose aria-label={t('collapseRail')} size={16} />}
-              </Button>
+              <div className="flex items-center justify-between gap-2">
+                <Button isIconOnly={railCollapsed} onPress={() => setRailCollapsed((value) => !value)} size="sm" variant="ghost">
+                  {railCollapsed ? <PanelLeftOpen aria-label={t('expandRail')} size={16} /> : <PanelLeftClose aria-label={t('collapseRail')} size={16} />}
+                </Button>
+                {!railCollapsed && thread?.kind === 'native-chat' && (
+                  <Button
+                    data-chat-management-trigger
+                    isIconOnly
+                    onPress={() => setManagementOpen(true)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <MoreHorizontal aria-label={t('chatManagement')} size={16} />
+                  </Button>
+                )}
+              </div>
               {!railCollapsed && (
                 <>
                   <Button className="my-3 bg-primary text-primary-foreground" fullWidth onPress={startDraft}>
@@ -771,7 +796,7 @@ export function ChatView({
             className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-x-hidden bg-background"
           >
             <section
-              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-[clamp(1rem,4vw,3rem)] py-8"
+              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-[clamp(1rem,4vw,3rem)] pb-8 pt-8 max-[1600px]:pt-16"
               data-chat-conversation
               onScroll={updateFollowState}
               ref={conversationRef}
@@ -908,113 +933,6 @@ export function ChatView({
             }`}
             inert={compactLayout && !compactContextOpen ? true : undefined}
           >
-            <div className="sticky top-0 z-10 border-b border-border bg-surface/95 px-5 py-4 backdrop-blur">
-              <h2 className="text-sm font-semibold text-foreground">{t('context')}</h2>
-            </div>
-            {thread?.kind === 'native-chat' ? (
-              <div>
-                <section className="grid gap-2 border-b border-border p-5" data-chat-management>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{t('chatManagement')}</h3>
-                  <div className="flex gap-2">
-                    <input
-                      aria-label={t('chatTitle')}
-                      className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground"
-                      onChange={(event) => setRenameValue(event.target.value)}
-                      value={renameValue}
-                    />
-                    <Button isDisabled={lifecycleBusy || !renameValue.trim()} isIconOnly onPress={() => void renameCurrentChat()} size="sm" variant="ghost">
-                      <Pencil aria-label={t('renameChat')} size={14} />
-                    </Button>
-                  </div>
-                  {thread.archivedAt ? (
-                    <div className="flex gap-2">
-                      <Button className="flex-1 gap-2" isDisabled={lifecycleBusy} onPress={() => void restoreCurrentChat()} size="sm" variant="ghost">
-                        <ArchiveRestore size={14} />{t('restoreChat')}
-                      </Button>
-                      <Button className="gap-2 text-danger" isDisabled={lifecycleBusy} onPress={() => setDeleteConfirmThread(thread)} size="sm" variant="ghost">
-                        <Trash2 size={14} />{t('deleteForever')}
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button className="gap-2" isDisabled={lifecycleBusy} onPress={() => void archiveCurrentChat()} size="sm" variant="ghost">
-                      <Archive size={14} />{t('archiveChat')}
-                    </Button>
-                  )}
-                  {thread.nativeState === 'resume-failed' && (
-                    <div className="grid gap-2 rounded-lg border border-danger/40 p-3">
-                      <span className="text-xs text-danger">{t('resumeFailed')}</span>
-                      <Button onPress={continueAsNewChat} size="sm" variant="ghost">{t('continueAsNew')}</Button>
-                    </div>
-                  )}
-                </section>
-                <section className="border-b border-border p-5" data-runtime-context>
-                  <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">{t('runtimeContext')}</h3>
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-                    <ContextDetail label={t('agent')} value={thread.provider === 'claude' ? 'Claude' : 'Codex'} />
-                    <ContextDetail label={t('model')} value={thread.defaultTurnConfig.model ?? t('providerDefaultModel')} />
-                    <ContextDetail label={t('effort')} value={thread.defaultTurnConfig.effort} />
-                    <ContextDetail label={t('workingDirectory')} value={t('workspace')} />
-                    <ContextDetail label={t('access')} value={t('fullAccess')} />
-                    <ContextDetail label={t('contextWindow')} value={thread.contextUsage
-                      ? `${thread.contextUsage.usedTokens} / ${thread.contextUsage.maxTokens}`
-                      : '—'} />
-                  </div>
-                </section>
-              </div>
-            ) : thread ? (
-              <div className="grid grid-cols-2 gap-x-5 gap-y-4 border-b border-border p-5" data-runtime-context>
-                <ContextDetail label={t('run')} value={thread.runId.slice(0, 8)} />
-                <ContextDetail label={t('scope')} value={scopeLabel(thread.request, t)} />
-                <ContextDetail
-                  label={t('agent')}
-                  value={
-                    thread.request.provider === 'codex'
-                      ? 'Codex'
-                      : thread.request.provider === 'claude' ? 'Claude' : '—'
-                  }
-                />
-                <ContextDetail
-                  label={t('model')}
-                  value={thread.request.model ?? t('providerDefaultModel')}
-                />
-                <ContextDetail label={t('effort')} value={thread.request.effort ?? '—'} />
-                <ContextDetail
-                  label={t('fastMode')}
-                  value={
-                    thread.request.fastMode === undefined
-                      ? '—'
-                      : thread.request.fastMode ? t('enabled') : t('disabled')
-                  }
-                />
-                <ContextDetail label={t('projects')} value={String(thread.projectCount)} />
-                <ContextDetail label={t('sessions')} value={String(thread.sessionCount)} />
-                <ContextDetail label={t('candidates')} value={String(thread.candidateCount)} />
-                <ContextDetail
-                  label={t('updated')}
-                  value={formatDateTime(thread.updatedAt, currentLocale())}
-                />
-                {(thread.status === 'running' || thread.status === 'cancelling') && (
-                  <Button
-                    className="mt-2 gap-2"
-                    isDisabled={thread.status === 'cancelling'}
-                    onPress={() => void stopGeneration()}
-                    variant="ghost"
-                  >
-                    {thread.status === 'cancelling'
-                      ? <Spinner color="current" size="sm" />
-                      : <Square aria-hidden="true" size={14} />}
-                    {thread.status === 'cancelling' ? t('cancelling') : t('stopGeneration')}
-                  </Button>
-                )}
-              </div>
-            ) : legacy ? (
-              <div className="grid gap-4 border-b border-border p-5" data-runtime-context>
-                <Chip color="warning" size="sm" variant="soft">{t('legacy')}</Chip>
-                <ContextDetail label={t('run')} value={legacy.id.slice(0, 8)} />
-                <ContextDetail label={t('scope')} value={scopeLabel(legacy.request, t)} />
-                <ContextDetail label={t('candidates')} value={String(legacy.candidateCount)} />
-              </div>
-            ) : null}
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
               <SessionContextPicker
                 cursor={contextCursor}
@@ -1042,6 +960,101 @@ export function ChatView({
           </aside>
         </Card.Content>
       </Card>
+      <Modal
+        isOpen={managementOpen && thread?.kind === 'native-chat'}
+        onOpenChange={setManagementOpen}
+      >
+        <Modal.Backdrop>
+          <Modal.Container placement="center" size="sm">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{t('chatManagement')}</Modal.Heading>
+                <Modal.CloseTrigger />
+              </Modal.Header>
+              {thread?.kind === 'native-chat' && (
+                <Modal.Body>
+                  <div className="grid gap-3">
+                    <div className="flex gap-2">
+                      <input
+                        aria-label={t('chatTitle')}
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        value={renameValue}
+                      />
+                      <Button
+                        className="gap-2"
+                        isDisabled={lifecycleBusy || !renameValue.trim()}
+                        onPress={() => void renameCurrentChat()}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <Pencil aria-hidden="true" size={14} />
+                        {t('renameChat')}
+                      </Button>
+                    </div>
+                    {thread.archivedAt ? (
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1 gap-2"
+                          isDisabled={lifecycleBusy}
+                          onPress={() => {
+                            setManagementOpen(false)
+                            void restoreCurrentChat()
+                          }}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <ArchiveRestore size={14} />{t('restoreChat')}
+                        </Button>
+                        <Button
+                          className="gap-2 text-danger"
+                          isDisabled={lifecycleBusy}
+                          onPress={() => {
+                            setManagementOpen(false)
+                            setDeleteConfirmThread(thread)
+                          }}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <Trash2 size={14} />{t('deleteForever')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        className="gap-2"
+                        isDisabled={lifecycleBusy}
+                        onPress={() => {
+                          setManagementOpen(false)
+                          void archiveCurrentChat()
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <Archive size={14} />{t('archiveChat')}
+                      </Button>
+                    )}
+                    {thread.nativeState === 'resume-failed' && (
+                      <div className="grid gap-2 rounded-lg border border-danger/40 p-3">
+                        <span className="text-xs text-danger">{t('resumeFailed')}</span>
+                        <Button
+                          onPress={() => {
+                            setManagementOpen(false)
+                            continueAsNewChat()
+                          }}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          {t('continueAsNew')}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Modal.Body>
+              )}
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
       <Modal isOpen={Boolean(deleteConfirmThread)} onOpenChange={(open) => !open && setDeleteConfirmThread(null)}>
         <Modal.Backdrop>
           <Modal.Container placement="center" size="md">
