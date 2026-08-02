@@ -64,6 +64,21 @@
       transition: grid-template-columns 220ms var(--ease);
     }
     .app.context-closed { grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 0; }
+    .app.light {
+      --bg: #f5f7fa;
+      --sidebar: #eef2f6;
+      --sidebar-hover: #e3e9ef;
+      --sidebar-active: #dbe5ed;
+      --pane: #f8fafc;
+      --surface: #edf1f5;
+      --surface-raised: #e4e9ee;
+      --surface-hover: #d9e0e7;
+      --border: #d5dce3;
+      --border-soft: #e1e6eb;
+      --text: #18212a;
+      --muted: #66717c;
+      --faint: #89939d;
+    }
 
     /* Unified Codex-style navigation */
     .sidebar {
@@ -152,12 +167,13 @@
     .sidebar-spacer { min-height: 24px; flex: 1; }
 
     .sidebar-footer {
-      display: grid;
-      gap: 2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
       border-top: 1px solid var(--border-soft);
       padding: 9px 8px 12px;
     }
-    .sidebar-footer .nav-row { height: 32px; }
+    .sidebar-footer .nav-row { width: auto; height: 32px; flex: 1; }
 
     /* Chat history belongs to the Chat page, not the global app navigation. */
     .thread-backdrop {
@@ -188,7 +204,7 @@
     }
     .thread-drawer-closed .thread-backdrop { pointer-events: none; opacity: 0; }
     .thread-drawer-closed .thread-drawer { pointer-events: none; opacity: 0; transform: translateX(-24px); }
-    .app:not(.thread-drawer-closed) #threadToggle { background: var(--surface-raised); color: var(--text); }
+    .app:not(.thread-drawer-closed) .history-title { color: var(--text); }
     .drawer-head { display: grid; gap: 10px; border-bottom: 1px solid var(--border-soft); padding: 12px; }
     .drawer-title-row { display: flex; align-items: center; gap: 8px; }
     .drawer-title-row strong { font-size: 12px; font-weight: 650; }
@@ -244,8 +260,8 @@
       background: rgb(21 22 21 / 94%);
       backdrop-filter: blur(12px);
     }
-    .header-project { display: flex; min-width: 0; align-items: center; gap: 8px; font-size: 13px; font-weight: 620; }
-    .header-project .icon { color: var(--muted); }
+    .header-project { display: flex; min-width: 0; align-items: center; gap: 8px; border: 0; border-radius: 7px; background: transparent; padding: 5px 6px; color: inherit; font-size: 13px; font-weight: 620; text-align: left; cursor: pointer; }
+    .header-project:hover { background: rgb(255 255 255 / 4%); }
     .header-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .header-subtitle { color: var(--muted); font-weight: 440; }
     .header-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -393,7 +409,8 @@
     .composer-tool.context-control { color: #b8cfc5; }
     .composer-tool .tiny-count { color: var(--primary); font-weight: 700; }
     .composer-spacer { flex: 1; }
-    .access-label { display: flex; align-items: center; gap: 5px; padding: 0 5px; color: var(--muted); font-size: 10px; }
+    .composer-actions { display: flex; align-items: center; gap: 10px; padding: 0 2px 0 8px; }
+    .access-label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; }
     .access-label .icon { color: var(--primary); }
     .meter { width: 17px; height: 17px; border: 2px solid #525450; border-top-color: var(--primary); border-radius: 50%; }
     .send-button {
@@ -428,7 +445,6 @@
     .context-header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-soft); padding: 0 12px 0 16px; }
     .context-header strong { font-size: 13px; font-weight: 640; }
     .context-count { display: grid; min-width: 20px; height: 20px; place-items: center; border-radius: 999px; background: var(--surface-raised); padding: 0 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
-    .context-header .icon-button { margin-left: auto; }
     .context-section { padding: 14px 16px; border-bottom: 1px solid var(--border-soft); }
     .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; color: var(--muted); font-size: 10px; font-weight: 680; letter-spacing: .02em; }
     .section-action { border: 0; background: transparent; color: var(--faint); font-size: 10px; cursor: pointer; }
@@ -526,8 +542,6 @@
   <svg width="0" height="0" aria-hidden="true" style="position:absolute">
     <defs>
       <symbol id="i-panel-left" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
-      <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
-      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
       <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></symbol>
@@ -538,12 +552,12 @@
       <symbol id="i-rules" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></symbol>
       <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></symbol>
       <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
       <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
       <symbol id="i-panel-right" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
       <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9.5 4A3.5 3.5 0 0 0 6 7.5c0 .3 0 .6.1.8A3.5 3.5 0 0 0 7 15a3 3 0 0 0 5 2.2V6.5A2.5 2.5 0 0 0 9.5 4Z"/><path d="M14.5 4A3.5 3.5 0 0 1 18 7.5c0 .3 0 .6-.1.8A3.5 3.5 0 0 1 17 15a3 3 0 0 1-5 2.2V6.5A2.5 2.5 0 0 1 14.5 4Z"/></symbol>
       <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
       <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
-      <symbol id="i-fork" viewBox="0 0 24 24"><circle cx="6" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="6" cy="20" r="2"/><path d="M6 6v12M8 8h8"/></symbol>
       <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
       <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
       <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
@@ -556,7 +570,7 @@
     <aside class="sidebar" aria-label="Memory Manager 主导航">
       <div class="window-strip" aria-hidden="true">
         <span class="traffic red"></span><span class="traffic yellow"></span><span class="traffic green"></span>
-        <div class="window-actions"><svg class="icon sm"><use href="#i-panel-left"/></svg><svg class="icon sm"><use href="#i-arrow-left"/></svg><svg class="icon sm"><use href="#i-arrow-right"/></svg></div>
+        <div class="window-actions"><svg class="icon sm"><use href="#i-panel-left"/></svg></div>
       </div>
       <div class="product-brand">
         <span class="product-mark">M</span>
@@ -574,13 +588,13 @@
       <div class="sidebar-spacer"></div>
       <footer class="sidebar-footer">
         <button class="nav-row"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></button>
+        <button class="icon-button" id="themeToggle" aria-label="切换到明亮主题" aria-pressed="false"><svg class="icon"><use href="#i-sun"/></svg></button>
       </footer>
     </aside>
 
     <main class="workspace">
       <header class="workspace-header">
-        <button class="icon-button" id="threadToggle" aria-label="打开对话历史" aria-expanded="false"><svg class="icon"><use href="#i-message"/></svg></button>
-        <div class="header-project"><svg class="icon sm"><use href="#i-folder"/></svg><span class="header-title">参考 Codex / Paseo 重整布局</span><span class="header-subtitle">rules-manager</span></div>
+        <button class="header-project history-title" id="threadToggle" aria-label="打开对话历史" aria-expanded="false"><span class="header-title">参考 Codex / Paseo 重整布局</span><span class="header-subtitle">rules-manager</span></button>
         <button class="icon-button" aria-label="对话管理"><svg class="icon"><use href="#i-more"/></svg></button>
         <div class="header-actions">
           <button class="icon-button context-toggle" id="contextToggle" aria-label="收起 Session 上下文" aria-expanded="true">
@@ -615,7 +629,7 @@
                 <li>Tool Activity 折叠态改为单行，不再使用占据整行的大 Card。</li>
               </ul>
               <p>这样右栏展开时仍有明确的上下文工作区，收起后中央对话自动获得完整宽度。</p>
-              <footer class="turn-footer"><button aria-label="复制回复"><svg class="icon sm"><use href="#i-copy"/></svg></button><button aria-label="分支"><svg class="icon sm"><use href="#i-fork"/></svg></button><span>Worked for 2m 14s</span></footer>
+              <footer class="turn-footer"><button aria-label="复制回复"><svg class="icon sm"><use href="#i-copy"/></svg></button><span>Worked for 2m 14s</span></footer>
             </article>
 
             <div class="turn user-turn">
@@ -624,7 +638,7 @@
             </div>
             <article class="turn assistant-turn">
               <p>可以。右栏状态会作为纯 UI 偏好持久化，不改变已经选择的 Session；收起后 Header 和 Composer 都会继续显示“上下文 2”。</p>
-              <footer class="turn-footer"><button aria-label="复制回复"><svg class="icon sm"><use href="#i-copy"/></svg></button><button aria-label="分支"><svg class="icon sm"><use href="#i-fork"/></svg></button><span>Worked for 18s</span></footer>
+              <footer class="turn-footer"><button aria-label="复制回复"><svg class="icon sm"><use href="#i-copy"/></svg></button><span>Worked for 18s</span></footer>
             </article>
           </div>
         </section>
@@ -638,9 +652,11 @@
               <button class="composer-tool"><span>Provider 默认</span><svg class="icon sm"><use href="#i-chevron-down"/></svg></button>
               <button class="composer-tool"><span>high</span><svg class="icon sm"><use href="#i-chevron-down"/></svg></button>
               <div class="composer-spacer"></div>
-              <span class="access-label"><svg class="icon sm"><use href="#i-shield"/></svg>Full access</span>
-              <span class="meter" title="Context Window 47%"></span>
-              <button class="send-button" aria-label="发送"><svg class="icon"><use href="#i-send"/></svg></button>
+              <div class="composer-actions">
+                <span class="access-label"><svg class="icon sm"><use href="#i-shield"/></svg>Full access</span>
+                <span class="meter" title="Context Window 47%"></span>
+                <button class="send-button" aria-label="发送"><svg class="icon"><use href="#i-send"/></svg></button>
+              </div>
             </div>
           </div>
         </div>
@@ -672,7 +688,7 @@
 
     <button class="mobile-backdrop" id="backdrop" aria-label="关闭 Session 上下文"></button>
     <aside class="context-pane" id="contextPane" aria-label="Session 上下文">
-      <header class="context-header"><strong>Session 上下文</strong><span class="context-count" data-context-count>2</span><button class="icon-button" id="contextClose" aria-label="收起 Session 上下文"><svg class="icon"><use href="#i-panel-right"/></svg></button></header>
+      <header class="context-header"><strong>Session 上下文</strong><span class="context-count" data-context-count>2</span></header>
       <section class="context-section">
         <div class="section-heading"><span>已选择</span><button class="section-action" id="clearSelected">清空</button></div>
         <div class="selected-list" id="selectedList"></div>
@@ -698,12 +714,12 @@
   <script>
     const app = document.getElementById('app');
     const contextToggle = document.getElementById('contextToggle');
-    const contextClose = document.getElementById('contextClose');
     const composerContext = document.getElementById('composerContext');
     const backdrop = document.getElementById('backdrop');
     const threadToggle = document.getElementById('threadToggle');
     const threadClose = document.getElementById('threadClose');
     const threadBackdrop = document.getElementById('threadBackdrop');
+    const themeToggle = document.getElementById('themeToggle');
     const selectedList = document.getElementById('selectedList');
     const clearSelected = document.getElementById('clearSelected');
     const sessionRows = [...document.querySelectorAll('.session-row')];
@@ -740,12 +756,16 @@
     }
 
     contextToggle.addEventListener('click', () => setContextOpen(app.classList.contains('context-closed')));
-    contextClose.addEventListener('click', () => setContextOpen(false));
     composerContext.addEventListener('click', () => setContextOpen(true));
     backdrop.addEventListener('click', () => setContextOpen(false));
     threadToggle.addEventListener('click', () => setThreadDrawerOpen(app.classList.contains('thread-drawer-closed')));
     threadClose.addEventListener('click', () => setThreadDrawerOpen(false));
     threadBackdrop.addEventListener('click', () => setThreadDrawerOpen(false));
+    themeToggle.addEventListener('click', () => {
+      const light = app.classList.toggle('light');
+      themeToggle.setAttribute('aria-pressed', String(light));
+      themeToggle.setAttribute('aria-label', light ? '切换到暗色主题' : '切换到明亮主题');
+    });
     clearSelected.addEventListener('click', () => { sessionRows.forEach((row) => row.classList.remove('selected')); renderSelected(); });
     sessionRows.forEach((row) => row.addEventListener('click', () => { row.classList.toggle('selected'); renderSelected(); }));
     document.querySelectorAll('.activity').forEach((row) => row.addEventListener('click', () => row.classList.toggle('expanded')));

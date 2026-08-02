@@ -2001,3 +2001,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Electron 已分别渲染默认、右栏收起和历史 Drawer 展开三种 3456×1958 预览并完成视觉检查；HTML
   无远程资源，`git diff --check` 通过。Core 26 suites / 277 tests、App 22 suites / 135 tests 全绿。
 - 提交信息：`docs: 修正 Chat 原型产品导航层级`
+
+## Chat 布局原型截图标注精简（2026-08-02）
+
+- 按第二轮截图标注移除窗口前进/后退、Chat Header 的消息/文件夹前置图标、Session Context 内部
+  重复收起按钮，以及 Assistant Footer 的分支按钮；Conversation Header 的右栏按钮继续作为
+  Session Context 唯一收起入口。
+- 对话历史能力没有随图标删除：Chat Header 标题改为可点击入口，继续打开原有 18rem 临时 Drawer。
+- 左栏底部补回主题切换按钮，原型提供 dark/light token 切换；Electron smoke 确认点击后
+  `aria-pressed=true` 且 Workspace 背景切换为 `rgb(245, 247, 250)`。
+- Composer 将 Full access、Context Window meter 与发送按钮包为独立操作组，组内间距调整为 10px；
+  默认、右栏收起和历史 Drawer 展开三种 3456×1958 预览均重新渲染并完成视觉检查。
+- 验证结果：Core 26 suites / 277 tests、App 22 suites / 135 tests 全绿；HTML 无远程资源，
+  `git diff --check` 通过。
+- 提交信息：`docs: 按标注精简 Chat 布局原型`
