@@ -1988,3 +1988,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `84378 → 84703`，回退 marker 后再次变为 `84809`；第二次 dev 启动明确报 5173 已占用并返回 1。
 - 新增 2 项配置契约；App 22 suites / 135 tests、production build 与 `git diff --check` 通过。
 - 提交信息：`fix: 恢复 APP 开发热更新`
+
+## Chat 布局原型产品导航修正（2026-08-02）
+
+- 根据 Memory Manager 不是 Chat-first 产品、没有用户登录和 Workspace 管理的产品前提，原型左栏
+  从 Codex 式项目/对话目录改为 14rem 产品级导航，仅保留扫描、项目、Chat、规则与设置。
+- 移除用户头像、Pinned、Workspace 与项目分组对话；Chat 历史改为页面 Header 触发的 18rem 临时
+  Drawer，默认不占永久列，包含新建对话、当前/归档与扁平历史列表。
+- 右侧 Session Context 继续保持 22rem 并可独立收起；Conversation/Composer 继续共享 820px
+  阅读线。1728×979 下实测默认布局为 `224 + 1152 + 352`，右栏收起后中央区为 1504px，历史
+  Drawer 从 x=224 覆盖 288px，不改变中央 Grid 宽度。
+- Electron 已分别渲染默认、右栏收起和历史 Drawer 展开三种 3456×1958 预览并完成视觉检查；HTML
+  无远程资源，`git diff --check` 通过。Core 26 suites / 277 tests、App 22 suites / 135 tests 全绿。
+- 提交信息：`docs: 修正 Chat 原型产品导航层级`
