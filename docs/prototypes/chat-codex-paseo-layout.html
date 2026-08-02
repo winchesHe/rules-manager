@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory Manager · Codex / Paseo Chat Layout</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --sidebar-width: 320px;
+      --context-width: 352px;
+      --content-width: 820px;
+      --bg: #151615;
+      --sidebar: #202120;
+      --sidebar-hover: #292a29;
+      --sidebar-active: #343534;
+      --pane: #1b1c1b;
+      --surface: #242524;
+      --surface-raised: #2b2c2b;
+      --surface-hover: #303130;
+      --border: #303230;
+      --border-soft: #282a28;
+      --text: #e8e9e7;
+      --muted: #9a9c98;
+      --faint: #71736f;
+      --primary: #49b68b;
+      --primary-soft: #203c31;
+      --danger: #e46868;
+      --warning: #d9a94e;
+      --blue: #75a9ee;
+      --shadow: 0 22px 60px rgb(0 0 0 / 35%);
+      --ease: cubic-bezier(.2, .8, .2, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--primary) 80%, white);
+      outline-offset: 2px;
+    }
+    svg { display: block; }
+    .icon { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .icon.sm { width: 14px; height: 14px; }
+    .icon.lg { width: 18px; height: 18px; }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--context-width);
+      width: 100vw;
+      height: 100vh;
+      min-width: 980px;
+      background: var(--bg);
+      transition: grid-template-columns 220ms var(--ease);
+    }
+    .app.context-closed { grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 0; }
+
+    /* Unified Codex-style navigation */
+    .sidebar {
+      position: relative;
+      z-index: 5;
+      display: flex;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      overflow: hidden;
+      border-right: 1px solid var(--border);
+      background: var(--sidebar);
+    }
+    .window-strip {
+      display: flex;
+      height: 38px;
+      flex: 0 0 38px;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      -webkit-app-region: drag;
+    }
+    .traffic { width: 10px; height: 10px; border-radius: 999px; }
+    .traffic.red { background: #ff5f57; }
+    .traffic.yellow { background: #febc2e; }
+    .traffic.green { background: #28c840; }
+    .window-actions { display: flex; gap: 14px; margin-left: 12px; color: var(--faint); }
+    .brand-row {
+      display: flex;
+      height: 44px;
+      flex: 0 0 44px;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+    }
+    .brand-button {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      background: transparent;
+      padding: 5px 0;
+      font-size: 14px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .brand-actions { display: flex; gap: 4px; margin-left: auto; }
+    .icon-button {
+      position: relative;
+      display: inline-grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .icon-button:hover { background: var(--sidebar-hover); color: var(--text); }
+    .notification-dot { position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+    .sidebar-primary { display: grid; gap: 1px; padding: 2px 8px 12px; border-bottom: 1px solid var(--border-soft); }
+    .nav-row, .thread-row {
+      display: flex;
+      width: 100%;
+      min-width: 0;
+      align-items: center;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+    .nav-row {
+      height: 34px;
+      gap: 10px;
+      border-radius: 8px;
+      padding: 0 10px;
+      color: #c3c5c1;
+      font-size: 13px;
+    }
+    .nav-row:hover { background: var(--sidebar-hover); color: var(--text); }
+    .nav-row .icon { color: var(--muted); }
+    .nav-row.active { background: var(--sidebar-active); color: var(--text); }
+    .nav-row.active .icon { color: var(--primary); }
+
+    .thread-directory { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+    .directory-heading {
+      display: flex;
+      height: 38px;
+      flex: 0 0 38px;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 12px 4px 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .directory-heading-actions { display: flex; gap: 2px; margin-left: auto; }
+    .directory-heading .icon-button { width: 26px; height: 26px; }
+    .thread-scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 14px; scrollbar-color: #4b4d49 transparent; scrollbar-width: thin; }
+    .thread-group { margin-top: 8px; }
+    .group-title {
+      display: flex;
+      height: 30px;
+      align-items: center;
+      gap: 8px;
+      padding: 0 7px;
+      color: #d4d5d2;
+      font-size: 12px;
+      font-weight: 620;
+    }
+    .group-title .icon { color: var(--muted); }
+    .thread-row {
+      position: relative;
+      min-height: 31px;
+      gap: 8px;
+      border-radius: 8px;
+      padding: 6px 10px 6px 28px;
+      color: #b9bbb7;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .thread-row:hover { background: var(--sidebar-hover); color: var(--text); }
+    .thread-row.active { background: var(--sidebar-active); color: var(--text); }
+    .thread-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .thread-status { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--blue); }
+    .thread-status.running { background: var(--primary); box-shadow: 0 0 0 3px rgb(73 182 139 / 13%); }
+    .show-more { height: 29px; padding-left: 28px; color: var(--faint); font-size: 11px; }
+    .sidebar-footer {
+      display: flex;
+      height: 44px;
+      flex: 0 0 44px;
+      align-items: center;
+      gap: 8px;
+      border-top: 1px solid var(--border-soft);
+      padding: 0 10px 0 13px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .avatar { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: #606f40; color: #eef2de; font-size: 9px; font-weight: 700; }
+    .sidebar-footer .icon-button { margin-left: auto; width: 28px; height: 28px; }
+
+    /* Conversation workspace */
+    .workspace { display: grid; min-width: 0; min-height: 0; grid-template-rows: 48px minmax(0, 1fr); background: var(--bg); }
+    .workspace-header {
+      position: relative;
+      z-index: 4;
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-soft);
+      padding: 0 12px 0 14px;
+      background: rgb(21 22 21 / 94%);
+      backdrop-filter: blur(12px);
+    }
+    .header-project { display: flex; min-width: 0; align-items: center; gap: 8px; font-size: 13px; font-weight: 620; }
+    .header-project .icon { color: var(--muted); }
+    .header-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-subtitle { color: var(--muted); font-weight: 440; }
+    .header-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+    .header-actions .icon-button { width: 32px; height: 32px; }
+    .context-toggle .count {
+      position: absolute;
+      top: 2px;
+      right: 1px;
+      display: grid;
+      min-width: 14px;
+      height: 14px;
+      place-items: center;
+      border: 2px solid var(--bg);
+      border-radius: 999px;
+      background: var(--primary);
+      padding: 0 3px;
+      color: #10241c;
+      font-size: 8px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .conversation-shell { position: relative; display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
+    .conversation {
+      min-width: 0;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-color: #474946 transparent;
+      scrollbar-width: thin;
+    }
+    .conversation-content {
+      display: grid;
+      width: min(var(--content-width), calc(100% - 48px));
+      min-height: 100%;
+      margin: 0 auto;
+      align-content: end;
+      gap: 28px;
+      padding: 44px 0 36px;
+    }
+    .turn { display: grid; min-width: 0; gap: 14px; }
+    .user-turn { justify-items: end; }
+    .user-bubble {
+      max-width: 68%;
+      border-radius: 18px 18px 5px 18px;
+      background: var(--surface-raised);
+      padding: 12px 15px;
+      color: #e2e3e1;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .turn-config { color: var(--faint); font-size: 10px; }
+    .assistant-turn { color: #dfe0dd; font-size: 13px; line-height: 1.72; }
+    .assistant-turn p { margin: 0; }
+    .assistant-turn strong { color: var(--text); font-weight: 650; }
+    .assistant-turn ul { margin: 2px 0 0; padding-left: 22px; }
+    .assistant-turn li { margin: 6px 0; padding-left: 3px; }
+    .inline-code { border-radius: 5px; background: var(--surface); padding: 2px 5px; color: #c8cac6; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
+    .activity-list { display: grid; gap: 2px; margin: 1px 0 2px; }
+    .activity {
+      display: grid;
+      min-height: 30px;
+      grid-template-columns: 18px auto minmax(0, 1fr) 18px;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      padding: 3px 4px;
+      color: var(--muted);
+      text-align: left;
+      cursor: pointer;
+    }
+    .activity:hover { background: rgb(255 255 255 / 3%); }
+    .activity .icon { color: var(--faint); }
+    .activity-name { color: #c8cac6; font-size: 12px; font-weight: 570; }
+    .activity-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .activity-chevron { color: var(--faint); transition: transform 160ms var(--ease); }
+    .activity.expanded .activity-chevron { transform: rotate(90deg); }
+    .activity-detail {
+      display: none;
+      margin: 2px 0 7px 29px;
+      border-left: 1px solid var(--border);
+      padding: 6px 0 6px 12px;
+      color: var(--muted);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .activity.expanded + .activity-detail { display: block; }
+    .turn-footer { display: flex; align-items: center; gap: 9px; color: var(--faint); font-size: 11px; }
+    .turn-footer button { border: 0; background: transparent; padding: 2px; color: inherit; cursor: pointer; }
+    .turn-footer button:hover { color: var(--text); }
+
+    .composer-wrap {
+      position: relative;
+      z-index: 3;
+      width: 100%;
+      background: linear-gradient(to top, var(--bg) 70%, rgb(21 22 21 / 92%) 84%, transparent);
+      padding: 12px 24px 16px;
+    }
+    .composer {
+      width: min(var(--content-width), 100%);
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid #3a3c39;
+      border-radius: 18px;
+      background: var(--surface-raised);
+      box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
+      transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+    }
+    .composer:focus-within { border-color: #555853; box-shadow: 0 14px 36px rgb(0 0 0 / 30%); }
+    .composer textarea {
+      display: block;
+      width: 100%;
+      min-height: 62px;
+      max-height: 150px;
+      resize: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      padding: 15px 16px 6px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .composer textarea::placeholder { color: #777975; }
+    .composer-toolbar { display: flex; height: 42px; align-items: center; gap: 4px; padding: 4px 8px 7px; }
+    .composer-tool {
+      display: inline-flex;
+      height: 29px;
+      align-items: center;
+      gap: 5px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      padding: 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .composer-tool.icon-only { width: 29px; justify-content: center; padding: 0; }
+    .composer-tool:hover { background: var(--surface-hover); color: var(--text); }
+    .composer-tool.context-control { color: #b8cfc5; }
+    .composer-tool .tiny-count { color: var(--primary); font-weight: 700; }
+    .composer-spacer { flex: 1; }
+    .access-label { display: flex; align-items: center; gap: 5px; padding: 0 5px; color: var(--muted); font-size: 10px; }
+    .access-label .icon { color: var(--primary); }
+    .meter { width: 17px; height: 17px; border: 2px solid #525450; border-top-color: var(--primary); border-radius: 50%; }
+    .send-button {
+      display: grid;
+      width: 29px;
+      height: 29px;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      background: #e8e9e7;
+      color: #202220;
+      cursor: pointer;
+    }
+    .send-button:hover { background: white; }
+
+    /* Collapsible Session Context pane */
+    .context-pane {
+      position: relative;
+      z-index: 8;
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      grid-template-rows: 48px auto auto minmax(0, 1fr) auto;
+      overflow: hidden;
+      border-left: 1px solid var(--border);
+      background: var(--pane);
+      opacity: 1;
+      transform: translateX(0);
+      transition: opacity 160ms var(--ease), transform 220ms var(--ease);
+    }
+    .context-closed .context-pane { pointer-events: none; opacity: 0; transform: translateX(28px); }
+    .context-header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-soft); padding: 0 12px 0 16px; }
+    .context-header strong { font-size: 13px; font-weight: 640; }
+    .context-count { display: grid; min-width: 20px; height: 20px; place-items: center; border-radius: 999px; background: var(--surface-raised); padding: 0 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
+    .context-header .icon-button { margin-left: auto; }
+    .context-section { padding: 14px 16px; border-bottom: 1px solid var(--border-soft); }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; color: var(--muted); font-size: 10px; font-weight: 680; letter-spacing: .02em; }
+    .section-action { border: 0; background: transparent; color: var(--faint); font-size: 10px; cursor: pointer; }
+    .section-action:hover { color: var(--text); }
+    .selected-list { display: grid; gap: 5px; }
+    .selected-item {
+      display: grid;
+      min-height: 34px;
+      grid-template-columns: 18px minmax(0, 1fr) 20px;
+      align-items: center;
+      gap: 7px;
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 5px 5px 5px 8px;
+      color: #d2d4d0;
+      font-size: 11px;
+    }
+    .selected-item .provider-mark { display: grid; width: 17px; height: 17px; place-items: center; border-radius: 4px; background: #35433d; color: var(--primary); font-size: 8px; font-weight: 800; }
+    .selected-copy { min-width: 0; }
+    .selected-copy strong, .selected-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .selected-copy strong { font-size: 10px; font-weight: 600; }
+    .selected-copy span { margin-top: 2px; color: var(--faint); font-size: 9px; }
+    .remove-button { display: grid; width: 20px; height: 20px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer; }
+    .remove-button:hover { background: var(--surface-hover); color: var(--text); }
+    .filters { display: grid; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-soft); }
+    .filter-control {
+      display: flex;
+      height: 34px;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 0 10px;
+      color: #c7c9c5;
+      font-size: 11px;
+    }
+    .filter-control .icon { color: var(--faint); }
+    .filter-control span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .date-control { height: 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 0 8px; color: var(--muted); font-size: 10px; }
+    .quick-row { display: flex; gap: 5px; }
+    .quick-button { height: 26px; border: 0; border-radius: 7px; background: transparent; padding: 0 8px; color: var(--muted); font-size: 10px; cursor: pointer; }
+    .quick-button:hover, .quick-button.active { background: var(--surface-raised); color: var(--text); }
+    .session-browser { min-height: 0; overflow-y: auto; padding: 10px 8px; scrollbar-color: #464845 transparent; scrollbar-width: thin; }
+    .browser-heading { display: flex; align-items: center; justify-content: space-between; padding: 1px 8px 8px; color: var(--muted); font-size: 10px; }
+    .session-row {
+      display: grid;
+      min-height: 51px;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      padding: 6px 8px;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .session-row:hover { background: var(--surface); }
+    .session-check { display: grid; width: 15px; height: 15px; place-items: center; border: 1px solid #555752; border-radius: 50%; color: transparent; }
+    .session-row.selected .session-check { border-color: var(--primary); background: var(--primary); color: #10241c; }
+    .session-main { min-width: 0; }
+    .session-main strong, .session-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .session-main strong { color: #d4d6d2; font-size: 10px; font-weight: 580; }
+    .session-main span { margin-top: 4px; color: var(--faint); font-size: 9px; }
+    .agent-tag { border-radius: 5px; background: var(--surface); padding: 3px 5px; color: var(--muted); font-size: 8px; text-transform: capitalize; }
+    .privacy-note { border-top: 1px solid var(--border-soft); padding: 11px 16px 13px; color: var(--faint); font-size: 9px; line-height: 1.45; }
+    .privacy-note .icon { display: inline-block; margin-right: 4px; vertical-align: -3px; color: var(--primary); }
+
+    .mobile-backdrop { display: none; }
+    @media (max-width: 1279px) {
+      :root { --sidebar-width: 280px; }
+      .app, .app.context-closed { grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 0; }
+      .context-pane {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(var(--context-width), calc(100vw - 32px));
+        box-shadow: var(--shadow);
+      }
+      .context-closed .context-pane { transform: translateX(100%); }
+      .mobile-backdrop { position: fixed; inset: 0; z-index: 7; display: block; border: 0; background: rgb(0 0 0 / 45%); opacity: 1; transition: opacity 160ms var(--ease); }
+      .context-closed .mobile-backdrop { pointer-events: none; opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0ms !important; animation-duration: 0ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <defs>
+      <symbol id="i-panel-left" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><path d="M8 12h8"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+      <symbol id="i-rules" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+      <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+      <symbol id="i-panel-right" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9.5 4A3.5 3.5 0 0 0 6 7.5c0 .3 0 .6.1.8A3.5 3.5 0 0 0 7 15a3 3 0 0 0 5 2.2V6.5A2.5 2.5 0 0 0 9.5 4Z"/><path d="M14.5 4A3.5 3.5 0 0 1 18 7.5c0 .3 0 .6-.1.8A3.5 3.5 0 0 1 17 15a3 3 0 0 1-5 2.2V6.5A2.5 2.5 0 0 1 14.5 4Z"/></symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+      <symbol id="i-fork" viewBox="0 0 24 24"><circle cx="6" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="6" cy="20" r="2"/><path d="M6 6v12M8 8h8"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app" id="app">
+    <aside class="sidebar" aria-label="主导航与对话列表">
+      <div class="window-strip" aria-hidden="true">
+        <span class="traffic red"></span><span class="traffic yellow"></span><span class="traffic green"></span>
+        <div class="window-actions"><svg class="icon sm"><use href="#i-panel-left"/></svg><svg class="icon sm"><use href="#i-arrow-left"/></svg><svg class="icon sm"><use href="#i-arrow-right"/></svg></div>
+      </div>
+      <div class="brand-row">
+        <button class="brand-button">Memory Manager <svg class="icon sm"><use href="#i-chevron-down"/></svg></button>
+        <div class="brand-actions">
+          <button class="icon-button" aria-label="搜索"><svg class="icon"><use href="#i-search"/></svg></button>
+          <button class="icon-button" aria-label="通知"><svg class="icon"><use href="#i-bell"/></svg><span class="notification-dot"></span></button>
+        </div>
+      </div>
+      <nav class="sidebar-primary" aria-label="产品导航">
+        <button class="nav-row"><svg class="icon"><use href="#i-plus"/></svg><span>新建对话</span></button>
+        <button class="nav-row"><svg class="icon"><use href="#i-scan"/></svg><span>扫描</span></button>
+        <button class="nav-row"><svg class="icon"><use href="#i-folder"/></svg><span>项目</span></button>
+        <button class="nav-row"><svg class="icon"><use href="#i-rules"/></svg><span>规则</span></button>
+      </nav>
+      <div class="thread-directory">
+        <div class="directory-heading">
+          <span>对话</span>
+          <div class="directory-heading-actions">
+            <button class="icon-button" aria-label="搜索对话"><svg class="icon sm"><use href="#i-search"/></svg></button>
+            <button class="icon-button" id="historyMode" aria-label="查看归档"><svg class="icon sm"><use href="#i-rules"/></svg></button>
+          </div>
+        </div>
+        <div class="thread-scroll" id="threadScroll">
+          <section class="thread-group">
+            <div class="group-title"><svg class="icon sm"><use href="#i-folder"/></svg><span>rules-manager</span></div>
+            <button class="thread-row active"><span class="thread-label">参考 Codex / Paseo 重整布局</span></button>
+            <button class="thread-row"><span class="thread-label">更新主题色并持久化模式</span><span class="thread-status"></span></button>
+            <button class="thread-row"><span class="thread-label">确认 Chat View Agent 接入方式</span></button>
+            <button class="thread-row"><span class="thread-label">重构 Rules Generation Run 生成流程</span></button>
+            <button class="thread-row"><span class="thread-label">修复 scan 阻塞并改为异步</span></button>
+          </section>
+          <section class="thread-group">
+            <div class="group-title"><svg class="icon sm"><use href="#i-folder"/></svg><span>agent-workspace</span></div>
+            <button class="thread-row"><span class="thread-label">查找本地 qq-chat-exporter</span></button>
+            <button class="thread-row"><span class="thread-label">配置 Obsidian Git 同步</span></button>
+            <button class="thread-row"><span class="thread-label">定位问题并明确前端修复</span></button>
+            <button class="thread-row"><span class="thread-label">service charge list</span></button>
+            <button class="thread-row"><span class="thread-label">设计 Deactivation 目标 GRM-2148</span></button>
+            <button class="thread-row show-more"><span class="thread-label">Show more</span></button>
+          </section>
+          <section class="thread-group">
+            <div class="group-title"><svg class="icon sm"><use href="#i-folder"/></svg><span>AI-guanglinglu</span></div>
+            <button class="thread-row"><span class="thread-label">查询 7 月 31 日资金流入前 20</span></button>
+            <button class="thread-row"><span class="thread-label">生成今日短线晋级预案</span><span class="thread-status running"></span></button>
+            <button class="thread-row"><span class="thread-label">分析大盘抄底时机</span><span class="thread-status running"></span></button>
+            <button class="thread-row"><span class="thread-label">创建广陵路优化 Prompt</span></button>
+          </section>
+        </div>
+      </div>
+      <footer class="sidebar-footer"><span class="avatar">WH</span><span>winches he</span><button class="icon-button" aria-label="设置"><svg class="icon sm"><use href="#i-settings"/></svg></button></footer>
+    </aside>
+
+    <main class="workspace">
+      <header class="workspace-header">
+        <div class="header-project"><svg class="icon sm"><use href="#i-folder"/></svg><span class="header-title">参考 Codex / Paseo 重整布局</span><span class="header-subtitle">rules-manager</span></div>
+        <button class="icon-button" aria-label="对话管理"><svg class="icon"><use href="#i-more"/></svg></button>
+        <div class="header-actions">
+          <button class="icon-button context-toggle" id="contextToggle" aria-label="收起 Session 上下文" aria-expanded="true">
+            <svg class="icon"><use href="#i-panel-right"/></svg><span class="count" data-context-count>2</span>
+          </button>
+        </div>
+      </header>
+      <div class="conversation-shell">
+        <section class="conversation" aria-label="对话内容">
+          <div class="conversation-content">
+            <div class="turn user-turn">
+              <div class="user-bubble">右边是我的 Chat 页面，我希望布局参考 Codex 和 Paseo。Session Context 右栏需要保留，但应该可以收起展开。</div>
+              <span class="turn-config">Claude · Provider 默认 · high</span>
+            </div>
+
+            <article class="turn assistant-turn">
+              <div class="activity-list" aria-label="执行活动">
+                <div>
+                  <button class="activity" type="button"><svg class="icon sm"><use href="#i-brain"/></svg><span class="activity-name">Thinking</span><span class="activity-summary">对照 Codex P1、Paseo 布局与当前 Chat 结构</span><svg class="icon sm activity-chevron"><use href="#i-chevron-right"/></svg></button>
+                  <div class="activity-detail">固定区域对比：当前 224 + 256 + 352px；目标 320 + flexible + 352px。</div>
+                </div>
+                <div>
+                  <button class="activity" type="button"><svg class="icon sm"><use href="#i-terminal"/></svg><span class="activity-name">Shell</span><span class="activity-summary">读取 ChatView、Paseo MAX_CONTENT_WIDTH 与侧栏基准</span><svg class="icon sm activity-chevron"><use href="#i-chevron-right"/></svg></button>
+                  <div class="activity-detail">MAX_CONTENT_WIDTH=820px\nDEFAULT_SIDEBAR_WIDTH=320px\nCONTEXT_PANE_WIDTH=352px</div>
+                </div>
+              </div>
+              <p><strong>最终布局已经收敛：</strong>保留 Codex 的可收起右侧辅助 Pane，同时采用 Paseo 的居中阅读线和紧凑 Activity timeline。</p>
+              <ul>
+                <li>左侧只保留一层导航，将产品入口和 Chat 列表合并。</li>
+                <li>右侧 Session Context 保持 <span class="inline-code">22rem / 352px</span>，通过 Header 按钮收起。</li>
+                <li>Conversation 与 Composer 共用 <span class="inline-code">820px</span> 对齐线。</li>
+                <li>Tool Activity 折叠态改为单行，不再使用占据整行的大 Card。</li>
+              </ul>
+              <p>这样右栏展开时仍有明确的上下文工作区，收起后中央对话自动获得完整宽度。</p>
+              <footer class="turn-footer"><button aria-label="复制回复"><svg class="icon sm"><use href="#i-copy"/></svg></button><button aria-label="分支"><svg class="icon sm"><use href="#i-fork"/></svg></button><span>Worked for 2m 14s</span></footer>
+            </article>
+
+            <div class="turn user-turn">
+              <div class="user-bubble">把右栏收起后的状态也保留，重新打开 App 时沿用上次选择。</div>
+              <span class="turn-config">Claude · Provider 默认 · high</span>
+            </div>
+            <article class="turn assistant-turn">
+              <p>可以。右栏状态会作为纯 UI 偏好持久化，不改变已经选择的 Session；收起后 Header 和 Composer 都会继续显示“上下文 2”。</p>
+              <footer class="turn-footer"><button aria-label="复制回复"><svg class="icon sm"><use href="#i-copy"/></svg></button><button aria-label="分支"><svg class="icon sm"><use href="#i-fork"/></svg></button><span>Worked for 18s</span></footer>
+            </article>
+          </div>
+        </section>
+        <div class="composer-wrap">
+          <div class="composer">
+            <textarea aria-label="向 Agent 发送消息" placeholder="向 Agent 发送消息，输入 / 使用命令或 Skills"></textarea>
+            <div class="composer-toolbar">
+              <button class="composer-tool icon-only" aria-label="添加附件"><svg class="icon"><use href="#i-plus"/></svg></button>
+              <button class="composer-tool context-control" id="composerContext"><svg class="icon sm"><use href="#i-panel-right"/></svg><span>上下文</span><span class="tiny-count" data-context-count>2</span></button>
+              <button class="composer-tool"><span>Claude</span><svg class="icon sm"><use href="#i-chevron-down"/></svg></button>
+              <button class="composer-tool"><span>Provider 默认</span><svg class="icon sm"><use href="#i-chevron-down"/></svg></button>
+              <button class="composer-tool"><span>high</span><svg class="icon sm"><use href="#i-chevron-down"/></svg></button>
+              <div class="composer-spacer"></div>
+              <span class="access-label"><svg class="icon sm"><use href="#i-shield"/></svg>Full access</span>
+              <span class="meter" title="Context Window 47%"></span>
+              <button class="send-button" aria-label="发送"><svg class="icon"><use href="#i-send"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <button class="mobile-backdrop" id="backdrop" aria-label="关闭 Session 上下文"></button>
+    <aside class="context-pane" id="contextPane" aria-label="Session 上下文">
+      <header class="context-header"><strong>Session 上下文</strong><span class="context-count" data-context-count>2</span><button class="icon-button" id="contextClose" aria-label="收起 Session 上下文"><svg class="icon"><use href="#i-panel-right"/></svg></button></header>
+      <section class="context-section">
+        <div class="section-heading"><span>已选择</span><button class="section-action" id="clearSelected">清空</button></div>
+        <div class="selected-list" id="selectedList"></div>
+      </section>
+      <section class="filters">
+        <div class="filter-control"><svg class="icon sm"><use href="#i-folder"/></svg><span>全部项目</span><svg class="icon sm"><use href="#i-chevron-down"/></svg></div>
+        <div class="date-row"><input class="date-control" aria-label="开始日期" type="text" value="2026/07/26"><input class="date-control" aria-label="结束日期" type="text" value="2026/08/02"></div>
+        <div class="quick-row"><button class="quick-button active">最近 7 天</button><button class="quick-button">最近 30 天</button><button class="quick-button">清除日期</button></div>
+      </section>
+      <section class="session-browser">
+        <div class="browser-heading"><span>可选 Session</span><span>31 条记录</span></div>
+        <button class="session-row selected" data-id="ses_0580fbcd2ffeRZ7PzL1wsdeR4e" data-agent="opencode" data-project="agent-workspace" data-date="7 月 29 日 17:18"><span class="session-check"><svg class="icon sm"><use href="#i-check"/></svg></span><span class="session-main"><strong>ses_0580fbcd2ffeRZ7PzL1wsdeR4e</strong><span>agent-workspace · 7 月 29 日 17:18</span></span><span class="agent-tag">opencode</span></button>
+        <button class="session-row selected" data-id="019facce-be08-75d3-8d46-8607" data-agent="codex" data-project="rules-manager" data-date="7 月 29 日 15:37"><span class="session-check"><svg class="icon sm"><use href="#i-check"/></svg></span><span class="session-main"><strong>019facce-be08-75d3-8d46-8607</strong><span>rules-manager · 7 月 29 日 15:37</span></span><span class="agent-tag">codex</span></button>
+        <button class="session-row" data-id="8ba0f4fa-8813-4123-90b7-32d0" data-agent="claude" data-project="manager-packages-app" data-date="7 月 29 日 16:12"><span class="session-check"><svg class="icon sm"><use href="#i-check"/></svg></span><span class="session-main"><strong>8ba0f4fa-8813-4123-90b7-32d0</strong><span>manager-packages-app · 7 月 29 日 16:12</span></span><span class="agent-tag">claude</span></button>
+        <button class="session-row" data-id="ses_05328a210ffeJQ6gaB4d0" data-agent="opencode" data-project="agent-workspace" data-date="7 月 29 日 16:58"><span class="session-check"><svg class="icon sm"><use href="#i-check"/></svg></span><span class="session-main"><strong>ses_05328a210ffeJQ6gaB4d0</strong><span>agent-workspace · 7 月 29 日 16:58</span></span><span class="agent-tag">opencode</span></button>
+        <button class="session-row" data-id="019facbf-48f4-73b0-a826-2a4c3" data-agent="codex" data-project="boarding-desktop" data-date="7 月 29 日 15:20"><span class="session-check"><svg class="icon sm"><use href="#i-check"/></svg></span><span class="session-main"><strong>019facbf-48f4-73b0-a826-2a4c3</strong><span>boarding-desktop · 7 月 29 日 15:20</span></span><span class="agent-tag">codex</span></button>
+        <button class="session-row" data-id="34513cac-88cb-4a0d-b94f" data-agent="cursor" data-project="moego-chrome-extension" data-date="7 月 28 日 14:42"><span class="session-check"><svg class="icon sm"><use href="#i-check"/></svg></span><span class="session-main"><strong>34513cac-88cb-4a0d-b94f</strong><span>moego-chrome-extension · 7 月 28 日 14:42</span></span><span class="agent-tag">cursor</span></button>
+      </section>
+      <footer class="privacy-note"><svg class="icon sm"><use href="#i-shield"/></svg>只保存 Session 引用和可见投影；不保存隐藏 Prompt、Session 原文或 Tool Output。</footer>
+    </aside>
+  </div>
+
+  <script>
+    const app = document.getElementById('app');
+    const contextToggle = document.getElementById('contextToggle');
+    const contextClose = document.getElementById('contextClose');
+    const composerContext = document.getElementById('composerContext');
+    const backdrop = document.getElementById('backdrop');
+    const selectedList = document.getElementById('selectedList');
+    const clearSelected = document.getElementById('clearSelected');
+    const sessionRows = [...document.querySelectorAll('.session-row')];
+
+    function setContextOpen(open) {
+      app.classList.toggle('context-closed', !open);
+      contextToggle.setAttribute('aria-expanded', String(open));
+      contextToggle.setAttribute('aria-label', open ? '收起 Session 上下文' : '展开 Session 上下文');
+    }
+
+    function selectedRows() { return sessionRows.filter((row) => row.classList.contains('selected')); }
+
+    function renderSelected() {
+      const rows = selectedRows();
+      document.querySelectorAll('[data-context-count]').forEach((node) => { node.textContent = String(rows.length); });
+      selectedList.innerHTML = '';
+      if (rows.length === 0) {
+        selectedList.innerHTML = '<div style="color:var(--faint);font-size:10px;padding:5px 1px">还没有选择 Session</div>';
+        return;
+      }
+      rows.forEach((row) => {
+        const item = document.createElement('div');
+        item.className = 'selected-item';
+        item.innerHTML = `<span class="provider-mark">${row.dataset.agent.slice(0, 1).toUpperCase()}</span><span class="selected-copy"><strong>${row.dataset.agent} · ${row.dataset.id}</strong><span>${row.dataset.project} · ${row.dataset.date}</span></span><button class="remove-button" aria-label="移除 ${row.dataset.id}"><svg class="icon sm"><use href="#i-x"/></svg></button>`;
+        item.querySelector('button').addEventListener('click', () => { row.classList.remove('selected'); renderSelected(); });
+        selectedList.appendChild(item);
+      });
+    }
+
+    contextToggle.addEventListener('click', () => setContextOpen(app.classList.contains('context-closed')));
+    contextClose.addEventListener('click', () => setContextOpen(false));
+    composerContext.addEventListener('click', () => setContextOpen(true));
+    backdrop.addEventListener('click', () => setContextOpen(false));
+    clearSelected.addEventListener('click', () => { sessionRows.forEach((row) => row.classList.remove('selected')); renderSelected(); });
+    sessionRows.forEach((row) => row.addEventListener('click', () => { row.classList.toggle('selected'); renderSelected(); }));
+    document.querySelectorAll('.activity').forEach((row) => row.addEventListener('click', () => row.classList.toggle('expanded')));
+    document.querySelectorAll('.thread-row:not(.show-more)').forEach((row) => row.addEventListener('click', () => {
+      document.querySelectorAll('.thread-row').forEach((item) => item.classList.remove('active'));
+      row.classList.add('active');
+      document.querySelector('.header-title').textContent = row.querySelector('.thread-label').textContent;
+    }));
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setContextOpen(false); });
+    renderSelected();
+  </script>
+</body>
+</html>

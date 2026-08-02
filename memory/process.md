@@ -1935,6 +1935,23 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   build 与 `git diff --check` 通过。
 - 提交信息：`refactor: 精简 Chat 常驻信息`。
 
+## Chat · Codex / Paseo 布局 HTML 原型（2026-08-02）
+
+- 新增独立原型 `docs/prototypes/chat-codex-paseo-layout.html`，只用于确认后续 Chat View 的
+  桌面布局方向，不修改现有 Renderer、Native Chat、Session Context 或持久化行为。
+- 桌面骨架收敛为唯一 20rem 左栏、弹性 Conversation、可收起 22rem Session Context；移除
+  页面外层 Card 的概念。左栏合并产品导航和 Chat 列表，右栏保留完整已选项、项目/日期筛选与
+  虚拟列表语义。
+- Conversation 与 Composer 使用 Paseo 的 820px 阅读线；用户消息为右侧轻量气泡，Assistant
+  无外壳，Tool Activity 使用紧凑单行并支持按需展开。
+- 原型支持右栏 Header/Composer 双入口、Escape/遮罩关闭、Session 选择与数量同步、Chat 行切换；
+  右栏收起后 Grid 从 `320 + 1056 + 352` 变为 `320 + 1408 + 0`，中央宽度确实释放。
+- Electron 以 1728×979、DPR 2 渲染出 3456×1958 预览，展开态视觉检查确认与 Codex P1 的贴边
+  工作台、顶部基线和底部 Composer 接近，同时保留本项目常驻 Session Context 的业务差异。
+- 验证结果：Core 26 suites / 277 tests、App 21 suites / 133 tests 全绿；两张预览均为
+  3456×1958，HTML 无远程资源依赖，`git diff --check` 通过。
+- 提交信息：`docs: 新增 Chat Codex Paseo 布局原型`
+
 ## APP 主题配色与持久化（2026-08-02）
 
 - 主题偏好由 Renderer `localStorage` 保存为 `memory-manager.theme = dark | light`；缺失、非法或
