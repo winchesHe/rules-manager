@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 import {
+  assistantTurnStartedAt,
   canRegenerate,
   formatElapsed,
   mergeTimelineActivities,
@@ -71,6 +72,14 @@ describe('chat view model', () => {
       '2026-07-30T00:00:00.000Z',
       Date.parse('2026-07-30T01:02:03.000Z'),
     )).toBe('1h 2m 3s')
+  })
+
+  it('旧 Assistant 时间戳无耗时时回退到前一条用户消息', () => {
+    const messages = [
+      { id: 'u1', role: 'user' as const, kind: 'text' as const, content: '开始', status: 'completed' as const, createdAt: '2026-08-02T12:00:00.000Z' },
+      { id: 'a1', role: 'assistant' as const, kind: 'text' as const, content: '完成', status: 'completed' as const, createdAt: '2026-08-02T12:00:05.000Z', completedAt: '2026-08-02T12:00:05.000Z' },
+    ]
+    expect(assistantTurnStartedAt(messages, 1)).toBe('2026-08-02T12:00:00.000Z')
   })
 
   it('只在接近底部时跟随新 Activity', () => {

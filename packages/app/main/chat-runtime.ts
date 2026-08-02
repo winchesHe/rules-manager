@@ -23,7 +23,7 @@ export interface NativeToolActivity {
 }
 
 export type NativeChatEvent =
-  | { type: 'assistant_delta'; text: string }
+  | { type: 'assistant_delta'; text: string; content?: string }
   | { type: 'tool_activity'; activity: NativeToolActivity }
   | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
 

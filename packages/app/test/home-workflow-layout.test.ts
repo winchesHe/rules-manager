@@ -228,6 +228,8 @@ describe('home workflow layout', () => {
     expect(source).not.toContain('<details')
     expect(source).toContain('ActivityTimeline')
     expect(source).toContain('formatElapsed')
+    expect(source).toContain('startedAt={liveStartedAt ?? undefined}')
+    expect(source).toContain("event.content ?? `${current}${event.text}`")
     expect(source).toContain('shouldFollowStream')
     expect(source).toContain("thread.status === 'completed'")
     expect(source).toContain('visibleProjectResponses')

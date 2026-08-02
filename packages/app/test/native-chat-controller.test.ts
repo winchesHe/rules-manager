@@ -75,7 +75,7 @@ describe('NativeChatController', () => {
     })
     expect(streamed).toContainEqual({
       chatId: 'chat-fixed',
-      event: { type: 'assistant_delta', text: 'first ' },
+      event: { type: 'assistant_delta', text: 'first ', content: 'first ' },
     })
 
     await createController().send({
@@ -116,6 +116,70 @@ describe('NativeChatController', () => {
     })).rejects.toThrow('provider is locked')
   })
 
+  it('发送后立即暴露用户消息，并用本轮起止时间保存 Assistant 与累计流式正文', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-live-turn-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const changed: string[] = []
+    const streamed: unknown[] = []
+    let release!: () => void
+    const providerGate = new Promise<void>((resolve) => { release = resolve })
+    const adapter: ChatProviderAdapter = {
+      start: async (request) => {
+        request.onEvent?.({ type: 'assistant_delta', text: '你' })
+        request.onEvent?.({ type: 'assistant_delta', text: '好' })
+        await providerGate
+        return { nativeSessionId: 'native-live', content: '你好' }
+      },
+      resume: async () => { throw new Error('unexpected resume') },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }
+    const times = [
+      '2026-08-02T12:00:00.000Z',
+      '2026-08-02T12:00:01.000Z',
+      '2026-08-02T12:00:06.000Z',
+      '2026-08-02T12:00:06.000Z',
+    ]
+    const controller = new NativeChatController({
+      store,
+      runtime: new ChatRuntimeManager(() => adapter),
+      workingDirectory: '/fixed-workspace',
+      createId: () => 'chat-live',
+      now: () => times.shift() ?? '2026-08-02T12:00:06.000Z',
+      onEvent: (event) => streamed.push(event),
+      onThreadChanged: (chatId) => changed.push(chatId),
+    })
+
+    const pending = controller.send({
+      provider: 'codex', message: '开始',
+      config: { effort: 'medium', fastMode: false },
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(changed).toEqual(['chat-live'])
+    expect(store.readThread('chat-live')).toMatchObject({
+      status: 'running',
+      messages: [{ role: 'user', content: '开始', createdAt: '2026-08-02T12:00:01.000Z' }],
+    })
+    expect(streamed).toEqual([
+      { chatId: 'chat-live', event: { type: 'assistant_delta', text: '你', content: '你' } },
+      { chatId: 'chat-live', event: { type: 'assistant_delta', text: '好', content: '你好' } },
+    ])
+
+    release()
+    await pending
+    expect(changed).toEqual(['chat-live', 'chat-live'])
+    expect(store.readThread('chat-live')?.messages.at(-1)).toMatchObject({
+      role: 'assistant', content: '你好',
+      createdAt: '2026-08-02T12:00:01.000Z',
+      completedAt: '2026-08-02T12:00:06.000Z',
+    })
+  })
+
   it('只允许按已持久化的安全工具引用懒加载原生详情', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-chat-'))
     roots.push(root)
@@ -131,6 +195,8 @@ describe('NativeChatController', () => {
       createdAt: '2026-08-01T02:00:02.000Z', completedAt: '2026-08-01T02:00:02.000Z',
       toolActivities: [{
         itemId: 'allowed-item', kind: 'read', name: 'Read', status: 'completed', summary: 'README.md',
+      }, {
+        itemId: 'message-item', kind: 'tool', name: 'agentMessage', status: 'completed',
       }],
     })
     const adapter: ChatProviderAdapter = {
@@ -151,11 +217,18 @@ describe('NativeChatController', () => {
       store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
     })
 
+    expect(store.readThread('chat-tool')?.messages.at(-1)?.toolActivities).toEqual([{
+      itemId: 'allowed-item', kind: 'read', name: 'Read', status: 'completed', summary: 'README.md',
+    }])
+
     await expect(controller.readToolItem({
       chatId: 'chat-tool', itemId: 'allowed-item', cursor: 4, limit: 128,
     })).resolves.toMatchObject({ content: 'native-tool-session:allowed-item:4' })
     await expect(controller.readToolItem({
       chatId: 'chat-tool', itemId: 'unknown-item', cursor: 0, limit: 128,
+    })).rejects.toThrow('tool item was not found')
+    await expect(controller.readToolItem({
+      chatId: 'chat-tool', itemId: 'message-item', cursor: 0, limit: 128,
     })).rejects.toThrow('tool item was not found')
   })
 

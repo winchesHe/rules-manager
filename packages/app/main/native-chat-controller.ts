@@ -118,7 +118,9 @@ export class NativeChatController {
       at: startedAt,
       turnConfig: request.config,
     }))
+    this.options.onThreadChanged?.(chatId)
     const toolActivities = new Map<string, NativeToolActivity>()
+    let assistantContent = ''
     try {
       const result = await this.options.runtime.sendTurn({
         chatId,
@@ -131,7 +133,15 @@ export class NativeChatController {
           if (event.type === 'tool_activity') {
             toolActivities.set(event.activity.itemId, event.activity)
           }
-          this.options.onEvent?.({ chatId, event })
+          if (event.type === 'assistant_delta') {
+            assistantContent += event.text
+            this.options.onEvent?.({
+              chatId,
+              event: { ...event, content: assistantContent },
+            })
+          } else {
+            this.options.onEvent?.({ chatId, event })
+          }
         },
       })
       const completedAt = this.now()
@@ -149,12 +159,15 @@ export class NativeChatController {
         role: 'assistant',
         content: result.content,
         at: completedAt,
+        startedAt,
         toolActivities: [...toolActivities.values()],
       }))
       return { chatId, nativeSessionId: result.nativeSessionId }
     } catch (error) {
       this.options.store.markNativeTurnFailed(chatId, errorMessage(error), this.now())
       throw error
+    } finally {
+      this.options.onThreadChanged?.(chatId)
     }
   }
 
@@ -395,6 +408,7 @@ function visibleMessage(input: {
   role: ChatMessage['role']
   content: string
   at: string
+  startedAt?: string
   turnConfig?: NativeTurnConfig
   toolActivities?: NativeToolActivity[]
 }): ChatMessage {
@@ -404,7 +418,7 @@ function visibleMessage(input: {
     kind: 'text',
     content: input.content,
     status: 'completed',
-    createdAt: input.at,
+    createdAt: input.startedAt ?? input.at,
     completedAt: input.at,
     ...(input.turnConfig ? { turnConfig: { ...input.turnConfig } } : {}),
     ...(input.toolActivities && input.toolActivities.length > 0

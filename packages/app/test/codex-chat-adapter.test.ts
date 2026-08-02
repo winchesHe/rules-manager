@@ -40,6 +40,12 @@ function fakeServer(autoComplete = true) {
             threadId: 'codex-thread-1',
             item: { id: 'cmd-1', type: 'commandExecution', command: 'rtk git status', rawOutput: 'must-not-leak' },
           })
+          notify('item/completed', {
+            threadId: 'codex-thread-1', item: { id: 'user-1', type: 'userMessage' },
+          })
+          notify('item/completed', {
+            threadId: 'codex-thread-1', item: { id: 'msg-1', type: 'agentMessage' },
+          })
           notify('item/agentMessage/delta', { threadId: 'codex-thread-1', itemId: 'msg-1', delta: 'hello ' })
           notify('item/agentMessage/delta', { threadId: 'codex-thread-1', itemId: 'msg-1', delta: 'codex' })
           notify('thread/tokenUsage/updated', {
@@ -106,6 +112,8 @@ describe('CodexChatAdapter', () => {
       },
     })
     expect(events).toContainEqual({ type: 'assistant_delta', text: 'hello ' })
+    expect(JSON.stringify(events)).not.toContain('userMessage')
+    expect(JSON.stringify(events)).not.toContain('agentMessage')
     expect(events).toContainEqual({
       type: 'usage', contextUsage: { usedTokens: 50000, maxTokens: 200000 },
     })

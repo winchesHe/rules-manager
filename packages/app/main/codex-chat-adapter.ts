@@ -278,10 +278,12 @@ export class CodexChatAdapter implements ChatProviderAdapter {
     }
     if (method === 'item/started' || method === 'item/completed') {
       const item = asRecord(params.item)
+      const itemType = asString(item.type)
+      if (itemType === 'userMessage' || itemType === 'agentMessage') return
       const activity = safeToolActivity({
         itemId: item.id,
-        name: item.type,
-        providerType: item.type,
+        name: itemType,
+        providerType: itemType,
         status: method === 'item/started' ? 'running' : 'completed',
         item,
       })

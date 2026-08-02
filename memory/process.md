@@ -2166,3 +2166,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   26 suites / 278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留
   既有 `tsdown define` 配置警告。
 - 提交信息：`fix: 修复 Context Window hover 提示`
+
+## Chat Native Turn 消息与耗时修复（2026-08-02）
+
+- P1 根因一是 Native Chat 只在 `chat.send` 完成后刷新 Thread，首轮运行时只有流式 Assistant，刚落盘的
+  用户消息尚未进入 Renderer；二是 Codex app-server 的 `userMessage / agentMessage` item 生命周期被
+  误投影成 Tool Activity；流式增量在 Renderer 重复收到时又会继续追加，造成正文逐块重复。
+- 用户消息落盘后立即广播 `chat.changed`，草稿发送态收到首个 Chat ID 后即时选中并读取 Thread；Controller
+  对 Assistant delta 增加本轮累计正文快照，Renderer 优先替换快照，重复 IPC 不再重复拼接。
+- Codex Adapter 从源头过滤消息 item，ChatStore 读取时也过滤旧记录中的同名 Tool Activity，因此现有
+  历史会话无需迁移即可去掉空的 `userMessage / agentMessage` 行，真实 Command 等工具活动保持可读。
+- P2 根因是 Assistant 完成时 `createdAt / completedAt` 同时写成完成时间。现在保存本轮用户消息时间为
+  Assistant `createdAt`、完成时间为 `completedAt`；运行态从发送瞬间展示并每秒递增“用时”，旧历史记录
+  展示时回退到前一条用户消息时间，原有 `0s` 也能显示真实轮次耗时。
+- `simplify` 复核确认累计正文、即时刷新和时间戳职责边界清晰，保留本地 `liveStartedAt` 以覆盖主进程
+  首次刷新前的短暂窗口，没有引入额外抽象。
+- 验证结果：App 23 suites / 149 tests、Core 26 suites / 278 tests 全绿；App/Core production build
+  与 `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
+- 提交信息：`fix: 修复 Chat 消息与轮次耗时`

@@ -1,8 +1,19 @@
 import type {
+  ChatMessage,
   GenerationChatThread,
   NativeSessionReference,
   ProjectGenerationResponse,
 } from '../types'
+
+export function assistantTurnStartedAt(
+  messages: ChatMessage[],
+  assistantIndex: number,
+): string | undefined {
+  for (let index = assistantIndex - 1; index >= 0; index--) {
+    if (messages[index]?.role === 'user') return messages[index].createdAt
+  }
+  return messages[assistantIndex]?.createdAt
+}
 
 export function canRegenerate(status: GenerationChatThread['status']): boolean {
   return status === 'failed' || status === 'cancelled' || status === 'interrupted'

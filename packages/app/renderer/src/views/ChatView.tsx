@@ -52,6 +52,7 @@ import type {
   SessionContextPage,
 } from '../types'
 import {
+  assistantTurnStartedAt,
   canRegenerate,
   formatElapsed,
   mergeTimelineActivities,
@@ -111,6 +112,7 @@ export function ChatView({
   const [skills, setSkills] = useState<Array<{ name: string }>>([])
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null)
   const [liveAssistant, setLiveAssistant] = useState('')
+  const [liveStartedAt, setLiveStartedAt] = useState<string | null>(null)
   const [liveTools, setLiveTools] = useState<NativeToolActivity[]>([])
   const [liveUsage, setLiveUsage] = useState<{ usedTokens: number; maxTokens: number } | null>(null)
   const [queuedCount, setQueuedCount] = useState(0)
@@ -270,7 +272,7 @@ export function ChatView({
       if (!selectedIdRef.current && !sendingRef.current) return
       liveChatIdRef.current = envelope.chatId
       if (event.type === 'assistant_delta') {
-        setLiveAssistant((current) => `${current}${event.text}`)
+        setLiveAssistant((current) => event.content ?? `${current}${event.text}`)
       } else if (event.type === 'tool_activity') {
         setLiveTools((current) => mergeNativeToolActivity(current, event.activity))
       } else {
@@ -392,7 +394,11 @@ export function ChatView({
     const onChanged = (value: unknown) => {
       if (!value || typeof value !== 'object' || !('chatId' in value)) return
       const chatId = (value as { chatId?: unknown }).chatId
-      if (typeof chatId === 'string' && chatId === selectedIdRef.current) {
+      if (typeof chatId !== 'string') return
+      if (chatId === selectedIdRef.current) void refresh(chatId)
+      else if (!selectedIdRef.current && sendingRef.current) {
+        selectedIdRef.current = chatId
+        setSelectedId(chatId)
         void refresh(chatId)
       }
     }
@@ -523,6 +529,7 @@ export function ChatView({
     setLegacy(null)
     setComposer('')
     setLiveAssistant('')
+    setLiveStartedAt(null)
     setLiveTools([])
     setLiveUsage(null)
     liveChatIdRef.current = null
@@ -571,6 +578,7 @@ export function ChatView({
     setError(null)
     setLiveAssistant('')
     setLiveTools([])
+    setLiveStartedAt(new Date().toISOString())
     let next: QueuedChatTurn | undefined = first
     let currentChatId = thread?.kind === 'native-chat' ? thread.id : undefined
     try {
@@ -592,6 +600,7 @@ export function ChatView({
         setLiveAssistant('')
         setLiveTools([])
         next = queueRef.current.shift()
+        setLiveStartedAt(next ? new Date().toISOString() : null)
         setQueuedCount(queueRef.current.length)
       }
     } catch (reason: unknown) {
@@ -912,9 +921,9 @@ export function ChatView({
               {!thread && !legacy && !isSending ? (
                 <div className="grid h-full place-items-center text-sm text-muted">{loading ? t('loading') : t('emptySelection')}</div>
               ) : thread?.kind === 'native-chat' ? (
-                <NativeConversation liveAssistant={liveAssistant} liveTools={liveTools} thread={thread} />
+                <NativeConversation liveAssistant={liveAssistant} liveStartedAt={liveStartedAt} liveTools={liveTools} thread={thread} />
               ) : !thread && isSending ? (
-                <LiveTurn assistant={liveAssistant} tools={liveTools} />
+                <LiveTurn assistant={liveAssistant} startedAt={liveStartedAt ?? undefined} tools={liveTools} />
               ) : thread ? (
                 <PersistedConversation thread={thread} />
               ) : (
@@ -1212,15 +1221,17 @@ export function ChatView({
 function NativeConversation({
   thread,
   liveAssistant,
+  liveStartedAt,
   liveTools,
 }: {
   thread: Extract<ChatThread, { version: 2 }>
   liveAssistant: string
+  liveStartedAt: string | null
   liveTools: NativeToolActivity[]
 }) {
   return (
     <div className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-7 py-4">
-      {thread.messages.map((message) => message.role === 'user' ? (
+      {thread.messages.map((message, index) => message.role === 'user' ? (
         <div className="grid justify-items-end gap-1" key={message.id}>
           <div className="max-w-[68%] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
             <p className="break-words whitespace-pre-wrap">{message.content}</p>
@@ -1231,10 +1242,17 @@ function NativeConversation({
         <article className="grid min-w-0 max-w-full gap-3 overflow-hidden whitespace-pre-wrap text-sm leading-7 text-foreground" key={message.id}>
           {message.content}
           <ToolActivityList activities={message.toolActivities ?? []} chatId={thread.id} />
-          <MessageFooter message={message} />
+          <MessageFooter message={message} startedAt={assistantTurnStartedAt(thread.messages, index)} />
         </article>
       ))}
-      {thread.status === 'running' && <LiveTurn assistant={liveAssistant} chatId={thread.id} tools={liveTools} />}
+      {thread.status === 'running' && (
+        <LiveTurn
+          assistant={liveAssistant}
+          chatId={thread.id}
+          startedAt={assistantTurnStartedAt(thread.messages, thread.messages.length) ?? liveStartedAt ?? undefined}
+          tools={liveTools}
+        />
+      )}
       {thread.lastError && <Alert status="danger"><Alert.Description>{thread.lastError}</Alert.Description></Alert>}
     </div>
   )
@@ -1244,16 +1262,20 @@ function LiveTurn({
   assistant,
   tools,
   chatId,
+  startedAt,
 }: {
   assistant: string
   tools: NativeToolActivity[]
   chatId?: string
+  startedAt?: string
 }) {
   return (
     <article className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-3 py-4 text-sm leading-7 text-foreground">
       {assistant && <p className="whitespace-pre-wrap">{assistant}</p>}
       <ToolActivityList activities={tools} chatId={chatId} />
-      <Spinner color="accent" size="sm" />
+      {startedAt
+        ? <RunningElapsed showLabel startedAt={startedAt} />
+        : <Spinner color="accent" size="sm" />}
     </article>
   )
 }
@@ -1330,11 +1352,14 @@ function NativeToolCard({ activity, chatId }: {
   )
 }
 
-function MessageFooter({ message }: { message: ChatMessage }) {
+function MessageFooter({ message, startedAt = message.createdAt }: {
+  message: ChatMessage
+  startedAt?: string
+}) {
   const { t } = useTranslation('chat')
   const completedAt = message.completedAt ? Date.parse(message.completedAt) : Number.NaN
   const elapsed = Number.isFinite(completedAt)
-    ? formatElapsed(message.createdAt, completedAt)
+    ? formatElapsed(startedAt, completedAt)
     : null
 
   return (
@@ -1525,7 +1550,8 @@ function ActivityRow({
   )
 }
 
-function RunningElapsed({ startedAt }: { startedAt: string }) {
+function RunningElapsed({ startedAt, showLabel = false }: { startedAt: string; showLabel?: boolean }) {
+  const { t } = useTranslation('chat')
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -1536,7 +1562,7 @@ function RunningElapsed({ startedAt }: { startedAt: string }) {
   return (
     <div className="mt-5 flex items-center gap-2 text-sm text-muted">
       <Spinner color="accent" size="sm" />
-      <span>{formatElapsed(startedAt, now)}</span>
+      <span>{showLabel ? t('workedFor', { elapsed: formatElapsed(startedAt, now) }) : formatElapsed(startedAt, now)}</span>
     </div>
   )
 }

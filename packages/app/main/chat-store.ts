@@ -553,7 +553,7 @@ export class ChatStore {
       .flatMap((line) => {
         try {
           const value = JSON.parse(line) as unknown
-          return isChatMessage(value) ? [value] : []
+          return isChatMessage(value) ? [visibleChatMessage(value)] : []
         } catch {
           return []
         }
@@ -631,6 +631,17 @@ function isChatMessage(value: unknown): value is ChatMessage {
     && typeof record.content === 'string'
     && typeof record.createdAt === 'string'
     && typeof record.status === 'string'
+}
+
+function visibleChatMessage(message: ChatMessage): ChatMessage {
+  if (!message.toolActivities) return message
+  const toolActivities = message.toolActivities.filter((activity) => {
+    const name = activity.name.toLowerCase()
+    return name !== 'usermessage' && name !== 'agentmessage'
+  })
+  return toolActivities.length === message.toolActivities.length
+    ? message
+    : { ...message, toolActivities }
 }
 
 function sameReferences(
