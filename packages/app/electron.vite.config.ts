@@ -41,6 +41,10 @@ export default defineConfig({
   renderer: {
     root: resolve(process.cwd(), 'renderer'),
     plugins: [react(), tailwindcss()],
+    server: {
+      port: 5173,
+      strictPort: true,
+    },
     build: {
       rollupOptions: {
         input: fileURLToPath(new URL('./renderer/index.html', import.meta.url)),

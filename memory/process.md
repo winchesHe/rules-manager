@@ -1977,3 +1977,14 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Computer Use 不允许读取 Codex 自身窗口；色阶以本机安装包可见静态资源和 Codex 当前视觉观感为参照，
   并在目标 APP 实际窗口完成最终视觉检查。
 - 提交信息：`style: 调整暗色背景为 Codex 炭灰`
+
+## APP 开发热更新修复（2026-08-02）
+
+- 根因是 electron-vite 5 的 `dev` 默认只启动 Renderer HMR，只有显式 `--watch` 才监听 Main 与
+  Preload；项目原 script 缺少该参数，因此 Main 修改不会重建或重启 Electron。
+- dev script 改为 `electron-vite dev --watch`，保留原有 5 个 Main/Worker 构建入口；Renderer server
+  固定 5173 并启用 `strictPort`，第二次 dev 启动不再静默漂移到 5174 后被单实例锁退出。
+- 真实 smoke 确认 Renderer CSS 修改收到 HMR `js-update`；Main marker 修改使 Electron PID
+  `84378 → 84703`，回退 marker 后再次变为 `84809`；第二次 dev 启动明确报 5173 已占用并返回 1。
+- 新增 2 项配置契约；App 22 suites / 135 tests、production build 与 `git diff --check` 通过。
+- 提交信息：`fix: 恢复 APP 开发热更新`
