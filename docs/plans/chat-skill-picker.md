@@ -8,6 +8,7 @@
 ## 观察点
 
 - Picker 固定在 Composer 附近，不超过可用视口，不遮挡整段对话。
+- Fast Mode 作为运行参数常驻 Composer 底栏，与 Agent、Model、Effort 同组；不进入 Skill Picker。
 - 搜索框打开后自动聚焦，可按名称和描述筛选；方向键、Enter 与 Escape 可完成选择和关闭；输入独立
   `/` 可快捷唤起，URL 和文件路径中的斜杠不触发。
 - 已选 Skill 以 chip 展示并可直接移除；Picker 保持打开以连续多选。

@@ -197,6 +197,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
   使用项目与 Agent 回退，原始 Session ID 仅作为辅助信息。
 - Full access 是固定运行模式，必须在 Composer 附近常驻显示；页面不提供 Permission Mode 或
   working directory 控件。
+- Fast Mode 与 Agent、Model、Effort 同属本轮运行配置，常驻 Composer 底栏并可直接切换，不放入
+  Skill Picker 或二级菜单。
 - Skill 作为“下一条消息附件”展示：Composer 使用固定尺寸、可搜索的多选 Picker，支持名称与描述搜索、
   最近使用、键盘选择和 chip 移除，输入独立 `/` 可快捷唤起；发送时再转换为原生 `/skill-name` 前缀，
   发送后清空本轮选择。

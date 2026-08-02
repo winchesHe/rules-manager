@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Switch } from '@heroui/react'
-import { Check, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Button } from '@heroui/react'
+import { Check, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChatSkillOption } from './chat-skill-picker-model'
 import { filterChatSkills, orderChatSkills } from './chat-skill-picker-model'
 
 interface ChatSkillPickerProps {
-  fastMode: boolean
-  onFastModeChange: (selected: boolean) => void
   onClose: () => void
   onToggle: (name: string) => void
   recentNames: string[]
@@ -16,8 +14,6 @@ interface ChatSkillPickerProps {
 }
 
 export function ChatSkillPicker({
-  fastMode,
-  onFastModeChange,
   onClose,
   onToggle,
   recentNames,
@@ -61,13 +57,6 @@ export function ChatSkillPicker({
         <Button aria-label={t('closeSkillPicker')} className="size-8 min-h-8 min-w-8" isIconOnly onPress={onClose} size="sm" variant="ghost">
           <X aria-hidden="true" size={15} />
         </Button>
-      </div>
-
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-        <span className="flex items-center gap-2 text-xs text-foreground"><SlidersHorizontal size={14} />{t('fastMode')}</span>
-        <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={onFastModeChange}>
-          <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control></Switch.Content>
-        </Switch>
       </div>
 
       {selectedNames.length > 0 && (

@@ -80,6 +80,7 @@
   "providerDefaultModel": "Provider 默认",
   "effort": "Reasoning Effort",
   "fastMode": "Fast Mode",
+  "fast": "Fast",
   "workingDirectory": "工作目录",
   "workspace": "工作区",
   "access": "权限",

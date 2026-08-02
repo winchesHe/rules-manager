@@ -80,6 +80,7 @@
   "providerDefaultModel": "Provider default",
   "effort": "Reasoning Effort",
   "fastMode": "Fast Mode",
+  "fast": "Fast",
   "workingDirectory": "Working directory",
   "workspace": "Workspace",
   "access": "Access",

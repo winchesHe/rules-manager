@@ -207,6 +207,7 @@ describe('home workflow layout', () => {
     expect(source).toContain('<ChatSkillPicker')
     expect(source).toContain('data-composer-context')
     expect(source).toContain('data-composer-runtime')
+    expect(source).toContain('data-composer-fast-mode')
     expect(source).toContain('data-composer-actions')
     expect(source).toContain('flex min-h-11 min-w-0 items-center')
     expect(source.match(/h-8 min-h-8/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
@@ -589,7 +590,8 @@ describe('home workflow layout', () => {
     expect(chatSource).toContain("label={t('agent')}")
     expect(chatSource).toContain("label={t('model')}")
     expect(chatSource).toContain("label={t('effort')}")
-    expect(read('views/ChatSkillPicker.tsx')).toContain("aria-label={t('fastMode')}")
+    expect(chatSource).toContain("aria-label={t('fastMode')}")
+    expect(read('views/ChatSkillPicker.tsx')).not.toContain("t('fastMode')")
   })
 
   it('Rules Dashboard 使用任务摘要和统一状态辅助栏', () => {

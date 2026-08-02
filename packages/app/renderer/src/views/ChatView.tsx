@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Tooltip } from '@heroui/react'
+import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Switch, Tooltip } from '@heroui/react'
 import MarkdownRender from 'markstream-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -29,6 +29,7 @@ import {
   Trash2,
   Wrench,
   X,
+  Zap,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { currentLocale } from '../i18n'
@@ -1013,9 +1014,7 @@ export function ChatView({
                       </Button>
                       {composerOptionsOpen && (
                         <ChatSkillPicker
-                          fastMode={fastMode}
                           onClose={() => setComposerOptionsOpen(false)}
-                          onFastModeChange={setFastMode}
                           onToggle={(name) => setSelectedSkills((current) => current.includes(name)
                             ? current.filter((item) => item !== name)
                             : [...current, name])}
@@ -1041,6 +1040,13 @@ export function ChatView({
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{CHAT_EFFORTS.map((value) => <ListBox.Item id={value} key={value}>{value}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
+                      <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-background/40 px-2.5 text-[11px] text-foreground" data-composer-fast-mode>
+                        <Zap aria-hidden="true" className={fastMode ? 'text-success' : 'text-muted'} size={13} />
+                        <span>{t('fast')}</span>
+                        <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={setFastMode} size="sm">
+                          <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control></Switch.Content>
+                        </Switch>
+                      </label>
                     </div>
                     <div className="ml-auto flex h-8 shrink-0 items-center gap-2.5 border-l border-border pl-3 pr-0.5" data-composer-actions>
                       <span className="flex items-center gap-1 whitespace-nowrap text-[11px]"><ShieldCheck className="text-success" size={14} />{t('fullAccess')}</span>
