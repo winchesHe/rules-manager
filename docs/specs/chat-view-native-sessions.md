@@ -49,6 +49,8 @@ Chat 使用 `workspace + fluid`，占满 App Shell 内可用 viewport，页面�
   默认展开并参与 Chat 内部 Grid 重排，1279px 及以下改为带遮罩的覆盖式 Drawer。
 - 桌面端 Escape 只关闭临时 Composer 选项，不关闭常驻 History Pane；窄屏 Escape 可关闭覆盖式历史栏。
 - Active 默认按 Paseo 的最近活动时间分组和排序；支持重命名与 Archive。
+- 条目展示更新时间；Native Chat 右键菜单提供重命名、置顶/取消置顶与归档/恢复。置顶状态写入
+  ChatStore，置顶项优先，其余仍按 `updatedAt DESC, id DESC` 排序。
 - New Chat 先创建 Renderer 内 Draft。首次发送前不写 ChatStore、不创建 Native Session；
   离开空 Draft 时直接丢弃。
 - Archived 中支持 Restore 和永久删除。运行中 Archive 先二次确认并中断当前 turn，进入
@@ -84,6 +86,8 @@ Chat 使用 `workspace + fluid`，占满 App Shell 内可用 viewport，页面�
 - Project 支持单项目、`default` 和 `all`；`all` 包含 `default`。
 - 支持起止日期和最近 7 天、最近 30 天快捷选择；日期按本机时区包含首尾自然日。
 - Session 列表按 `updatedAt DESC, id DESC` 分页查询并虚拟化，支持逐条选择。
+- Session 主行显示可读名称：OpenCode 读取权威 SQLite title，其余来源使用 `slug · agent` 回退；
+  原始 ID 只放在辅助提示中，不占主视觉层级。
 - 切换筛选条件不丢失已选择项；独立 Selected 区展示当前完整选择及缺失源状态。
 - 用户在 active turn 中改变选择，只影响下一轮。
 

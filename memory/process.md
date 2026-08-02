@@ -2061,3 +2061,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终自动化基线：App 23 suites / 140 tests、Core 26 suites / 277 tests 全绿；两端 production
   build 通过。Core build 仅保留既有 `tsdown define` 配置警告。
 - 提交信息：`refactor: 默认展开 Chat 历史栏`
+
+## Chat 历史操作与 Session 可读性修正（2026-08-02）
+
+- History 顶部 New Chat 与当前/归档切换统一为暗色 Surface 层级，去掉突兀的白色 Primary pill；
+  每条历史记录补充本地化更新时间。
+- Native Chat 新增右键菜单，支持重命名、置顶/取消置顶与归档/恢复；`pinnedAt` 持久化在现有
+  FS-first ChatStore，旧 v2 文件缺字段时归一为 `null`。列表先按置顶时间、再按更新时间倒序。
+- Session Context 增加 `displayName`：OpenCode 从权威 SQLite `session.title` 按需读取，其他 Agent
+  使用 `slug · agent` 回退；同一 SQLite 来源合并为一次批量查询，避免 100 条列表逐条开库。已选和
+  可选列表不再把长 Session ID 放在主行，ID 只保留为辅助提示。
+- Context Window meter 改为真实 Tooltip，展示本地化 `used / max (percent)`；Composer Runtime 控件
+  间距统一为 8px。`simplify` 复核后抽出排序比较器并移除不必要的非空断言与参数。
+- Computer Use 在真实 production Electron 中确认：历史时间可见；右键菜单暴露重命名/置顶/归档；
+  置顶后图标与排序即时更新并在验收后恢复；已选 OpenCode 显示 `Review PR #6550 Boarding_Desktop`，
+  可选列表显示 Quick Win、GRM 等可读标题；Context Window 可访问文本为 `94,397 / 200,000 (47%)`。
+  最终截图为 `chat-implementation-v3-session-readability.png`。
+- 自动化基线：App 23 suites / 141 tests、Core 26 suites / 278 tests 全绿；App/Core production build
+  通过。Core build 仅保留既有 `tsdown define` 配置警告。
+- 提交信息：`feat: 完善 Chat 历史与 Session 展示`

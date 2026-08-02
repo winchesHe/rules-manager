@@ -390,6 +390,7 @@ export interface NativeChatThreadSummary {
   status: 'running' | 'ready' | 'failed' | 'interrupted'
   createdAt: string
   updatedAt: string
+  pinnedAt?: string | null
   archivedAt: string | null
   defaultTurnConfig: ChatTurnConfig
   sessionContext: {
@@ -417,6 +418,7 @@ export interface NativeSessionReference {
 }
 
 export interface SessionContextItem extends NativeSessionReference {
+  displayName: string
   slug: string
   updatedAt: string
   status: SessionStatus

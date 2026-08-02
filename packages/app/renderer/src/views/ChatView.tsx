@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Switch } from '@heroui/react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
+import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Switch, Tooltip } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
   Brain,
@@ -15,6 +16,8 @@ import {
   MoreHorizontal,
   PanelRight,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   RotateCcw,
   Search,
@@ -29,7 +32,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { currentLocale } from '../i18n'
-import { formatDateTime } from '../i18n/format'
+import { formatDateTime, formatNumber } from '../i18n/format'
 import type {
   ChatThread,
   ChatMessage,
@@ -69,6 +72,12 @@ interface QueuedChatTurn {
     fastMode: boolean
   }
   sessionContext?: NativeSessionReference[]
+}
+
+interface ChatHistoryItem {
+  id: string
+  thread?: ChatThreadSummary
+  legacy?: GenerationHistoryEntry
 }
 
 const CHAT_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
@@ -122,6 +131,11 @@ export function ChatView({
   const [composerOptionsOpen, setComposerOptionsOpen] = useState(false)
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
   const [managementOpen, setManagementOpen] = useState(false)
+  const [historyContextMenu, setHistoryContextMenu] = useState<{
+    item: ChatHistoryItem
+    x: number
+    y: number
+  } | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirmThread, setDeleteConfirmThread] = useState<Extract<ChatThread, { version: 2 }> | null>(null)
   const selectedIdRef = useRef<string | null>(selectedId)
@@ -209,7 +223,8 @@ export function ChatView({
     void window.api.invoke<SessionContextItem[]>('chat.context.resolve', selectedContext)
       .then(setSelectedContextItems)
       .catch(() => setSelectedContextItems(selectedContext.map((reference) => ({
-        ...reference, slug: 'unknown', updatedAt: '', status: 'missing', sourceAvailable: false,
+        ...reference, displayName: `${reference.agent} session`, slug: 'unknown', updatedAt: '',
+        status: 'missing', sourceAvailable: false,
       }))))
   }, [selectedContext])
 
@@ -443,6 +458,60 @@ export function ChatView({
     void refresh(id)
   }
 
+  function openHistoryContextMenu(
+    event: ReactMouseEvent,
+    item: ChatHistoryItem,
+  ): void {
+    if (item.thread?.version !== 2) return
+    event.preventDefault()
+    setHistoryContextMenu({
+      item,
+      x: Math.min(event.clientX, window.innerWidth - 190),
+      y: Math.min(event.clientY, window.innerHeight - 170),
+    })
+  }
+
+  async function openHistoryManagement(item: ChatHistoryItem): Promise<void> {
+    if (item.thread?.version !== 2) return
+    setHistoryContextMenu(null)
+    setSelectedId(item.id)
+    selectedIdRef.current = item.id
+    await refresh(item.id)
+    setRenameValue(item.thread.title)
+    setManagementOpen(true)
+  }
+
+  async function setHistoryPinned(item: ChatHistoryItem, pinned: boolean): Promise<void> {
+    if (item.thread?.version !== 2) return
+    setHistoryContextMenu(null)
+    try {
+      await window.api.invoke(pinned ? 'chat.pin' : 'chat.unpin', { chatId: item.id })
+      await refresh(selectedIdRef.current)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  async function setHistoryArchived(item: ChatHistoryItem, archived: boolean): Promise<void> {
+    if (item.thread?.version !== 2) return
+    if (archived && item.thread.status === 'running' && !window.confirm(t('archiveRunningConfirm'))) {
+      return
+    }
+    setHistoryContextMenu(null)
+    setLifecycleBusy(true)
+    try {
+      await window.api.invoke(archived ? 'chat.archive' : 'chat.unarchive', { chatId: item.id })
+      setHistoryMode(archived ? 'archived' : 'active')
+      await refresh(selectedIdRef.current)
+    } catch (reason: unknown) {
+      setErrorTitle('actionError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
   function startDraft(): void {
     if (compactLayout) setHistoryPaneOpen(false)
     preserveDraftContextRef.current = false
@@ -667,6 +736,9 @@ export function ChatView({
     contextVisibilityClass = 'pointer-events-none translate-x-7 opacity-0'
   }
   const overlayOpen = compactLayout && (historyPaneOpen || compactContextOpen)
+  const historyContextThread = historyContextMenu?.item.thread?.version === 2
+    ? historyContextMenu.item.thread
+    : null
   const historyPane = (
     <aside
       aria-hidden={!historyPaneOpen}
@@ -680,10 +752,10 @@ export function ChatView({
           <strong className="text-sm font-semibold">{t('threadRail')}</strong>
           <Button isIconOnly onPress={() => setHistoryPaneOpen(false)} size="sm" variant="ghost"><X aria-label={t('closeHistory')} size={15} /></Button>
         </div>
-        <Button className="h-9 gap-2 border border-border bg-surface-hover" fullWidth onPress={startDraft} variant="ghost"><Plus size={15} />{t('newChat')}</Button>
-        <div className="grid grid-cols-2 gap-1">
-          <Button className="h-8" onPress={() => setHistoryMode('active')} size="sm" variant={historyMode === 'active' ? 'primary' : 'ghost'}>{t('activeChats')}</Button>
-          <Button className="h-8" onPress={() => setHistoryMode('archived')} size="sm" variant={historyMode === 'archived' ? 'primary' : 'ghost'}>{t('archivedChats')}</Button>
+        <Button className="h-8 gap-2 rounded-lg border border-border bg-surface-hover text-foreground" fullWidth onPress={startDraft} size="sm" variant="ghost"><Plus size={15} />{t('newChat')}</Button>
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1">
+          <Button className={`h-7 rounded-md text-xs ${historyMode === 'active' ? 'bg-surface-hover text-foreground' : 'text-muted'}`} onPress={() => setHistoryMode('active')} size="sm" variant="ghost">{t('activeChats')}</Button>
+          <Button className={`h-7 rounded-md text-xs ${historyMode === 'archived' ? 'bg-surface-hover text-foreground' : 'text-muted'}`} onPress={() => setHistoryMode('archived')} size="sm" variant="ghost">{t('archivedChats')}</Button>
         </div>
       </div>
       <div className="min-h-0 overflow-y-auto p-2">
@@ -693,9 +765,12 @@ export function ChatView({
           const status = item.thread?.status ?? item.legacy?.status ?? 'completed'
           const active = item.id === selectedId
           return (
-            <button aria-current={active ? 'page' : undefined} className={`grid w-full gap-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${active ? 'bg-primary-soft' : ''}`} key={item.id} onClick={() => selectThread(item.id)} type="button">
-              <strong className="truncate text-xs font-medium text-foreground">{item.thread ? item.thread.kind === 'native-chat' ? item.thread.title : threadTitle(item.thread.request, t) : legacyTitle(item.legacy!, t)}</strong>
-              <span className="flex items-center justify-between gap-2 text-[10px] text-muted"><span>{t(`status.${status}`, { defaultValue: status })}</span>{!item.thread && <span>{t('legacy')}</span>}</span>
+            <button aria-current={active ? 'page' : undefined} className={`group grid w-full gap-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${active ? 'bg-primary-soft' : ''}`} key={item.id} onClick={() => selectThread(item.id)} onContextMenu={(event) => openHistoryContextMenu(event, item)} title={item.thread?.version === 2 ? t('historyContextHint') : undefined} type="button">
+              <span className="flex min-w-0 items-center gap-1.5">
+                {item.thread?.version === 2 && item.thread.pinnedAt && <Pin aria-label={t('pinned')} className="shrink-0 text-success" size={11} />}
+                <strong className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{item.thread ? item.thread.kind === 'native-chat' ? item.thread.title : threadTitle(item.thread.request, t) : legacyTitle(item.legacy!, t)}</strong>
+              </span>
+              <span className="flex items-center justify-between gap-2 text-[10px] text-muted"><span>{formatDateTime(historyItemUpdatedAt(item), currentLocale())} · {t(`status.${status}`, { defaultValue: status })}</span>{!item.thread && <span>{t('legacy')}</span>}</span>
             </button>
           )
         })}
@@ -864,7 +939,7 @@ export function ChatView({
                     <Button className="h-8 min-h-8 gap-1 border border-border bg-background/20 px-2" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
                       <PanelRight aria-hidden="true" size={14} />{t('contextShort')} <span className="font-semibold text-success">{selectedContext.length}</span>
                     </Button>
-                    <div className="flex h-8 min-w-0 items-center gap-1" data-composer-runtime>
+                    <div className="flex h-8 min-w-0 items-center gap-2" data-composer-runtime>
                       <Select aria-label={t('agent')} className="w-24" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => setProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item><ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item></ListBox></Select.Popover>
@@ -880,12 +955,17 @@ export function ChatView({
                     </div>
                     <div className="ml-auto flex h-8 shrink-0 items-center gap-2.5 border-l border-border pl-3 pr-0.5" data-composer-actions>
                       <span className="flex items-center gap-1 whitespace-nowrap text-[11px]"><ShieldCheck className="text-success" size={14} />{t('fullAccess')}</span>
-                      <span
-                        aria-label={contextUsage ? `${contextUsage.usedTokens} / ${contextUsage.maxTokens}` : t('contextUnavailable')}
-                        className="size-4 rounded-full border-2 border-border"
-                        style={contextUsage ? { background: `conic-gradient(var(--color-success) ${contextPercent}%, transparent 0)` } : undefined}
-                        title={contextUsage ? `${contextUsage.usedTokens} / ${contextUsage.maxTokens}` : t('contextUnavailable')}
-                      />
+                      <Tooltip>
+                        <span
+                          aria-label={contextUsage ? formatContextUsage(contextUsage, contextPercent) : t('contextUnavailable')}
+                          className="size-4 rounded-full border-2 border-border"
+                          style={contextUsage ? { background: `conic-gradient(var(--color-success) ${contextPercent}%, transparent 0)` } : undefined}
+                          tabIndex={0}
+                        />
+                        <Tooltip.Content>
+                          {contextUsage ? formatContextUsage(contextUsage, contextPercent) : t('contextUnavailable')}
+                        </Tooltip.Content>
+                      </Tooltip>
                       {isSending && (
                         <Button className="h-8 min-h-8 w-8 min-w-8" isIconOnly onPress={() => void stopChatTurn()} size="sm" variant="ghost"><Square aria-label={t('stopChat')} size={14} /></Button>
                       )}
@@ -953,6 +1033,26 @@ export function ChatView({
         tabIndex={overlayOpen ? 0 : -1}
         type="button"
       />
+      {historyContextMenu && historyContextThread && (
+        <div
+          aria-label={t('historyActions')}
+          className="fixed z-[70] grid w-44 gap-1 rounded-xl border border-border bg-surface p-1.5 text-xs shadow-2xl"
+          data-chat-history-context-menu
+          onMouseLeave={() => setHistoryContextMenu(null)}
+          role="menu"
+          style={{ left: historyContextMenu.x, top: historyContextMenu.y }}
+        >
+          <Button className="h-8 justify-start gap-2 px-2" onPress={() => void openHistoryManagement(historyContextMenu.item)} size="sm" variant="ghost"><Pencil size={14} />{t('renameChat')}</Button>
+          <Button className="h-8 justify-start gap-2 px-2" onPress={() => void setHistoryPinned(historyContextMenu.item, !historyContextThread.pinnedAt)} size="sm" variant="ghost">
+            {historyContextThread.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
+            {historyContextThread.pinnedAt ? t('unpinChat') : t('pinChat')}
+          </Button>
+          <Button className="h-8 justify-start gap-2 px-2" isDisabled={lifecycleBusy} onPress={() => void setHistoryArchived(historyContextMenu.item, !historyContextThread.archivedAt)} size="sm" variant="ghost">
+            {historyContextThread.archivedAt ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+            {historyContextThread.archivedAt ? t('restoreChat') : t('archiveChat')}
+          </Button>
+        </div>
+      )}
       <Modal
         isOpen={managementOpen && thread?.kind === 'native-chat'}
         onOpenChange={setManagementOpen}
@@ -1525,9 +1625,10 @@ function SessionContextPicker({
                   key={sessionReferenceKey(reference)}
                   onClick={() => onSelectedChange(selected.filter((current) => sessionReferenceKey(current) !== sessionReferenceKey(reference)))}
                   type="button"
+                  title={`${reference.agent} · ${reference.id}`}
                 >
                   <span className="grid size-4 shrink-0 place-items-center rounded bg-success/15 text-[9px] font-bold text-success">{reference.agent.slice(0, 1).toUpperCase()}</span>
-                  <span className="min-w-0 flex-1 truncate">{reference.agent} · {reference.id}</span>
+                  <span className="min-w-0 flex-1 truncate">{sessionDisplayName(item ?? reference)}</span>
                   {item && !item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
                   <span aria-label={t('removeSession')}>×</span>
                 </button>
@@ -1572,12 +1673,13 @@ function SessionContextPicker({
                   onClick={() => onSelectedChange(active
                     ? selected.filter((reference) => sessionReferenceKey(reference) !== sessionReferenceKey(item))
                     : [...selected, { agent: item.agent, id: item.id }])}
+                  title={`${item.agent} · ${item.id}`}
                   type="button"
                 >
                   {active ? <CheckCircle2 className="shrink-0 text-primary" size={14} /> : <span className="size-3.5 shrink-0 rounded-full border border-border" />}
                   <span className="min-w-0 flex-1">
-                    <strong className="block truncate font-medium text-foreground">{item.agent} · {item.id}</strong>
-                    <span className="block truncate text-muted">{item.slug} · {formatDateTime(item.updatedAt, currentLocale())}</span>
+                    <strong className="block truncate font-medium text-foreground">{sessionDisplayName(item)}</strong>
+                    <span className="block truncate text-muted">{item.agent} · {item.slug} · {formatDateTime(item.updatedAt, currentLocale())}</span>
                   </span>
                   {!item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
                 </button>
@@ -1614,6 +1716,27 @@ function canonicalSessionReferences(references: NativeSessionReference[]): Nativ
 
 function sessionReferenceKey(reference: NativeSessionReference): string {
   return `${reference.agent}\0${reference.id}`
+}
+
+function sessionDisplayName(
+  session: NativeSessionReference & { displayName?: string; slug?: string },
+): string {
+  if (session.displayName?.trim()) return session.displayName.trim()
+  if (session.slug?.trim() && session.slug !== 'unknown') return `${session.slug} · ${session.agent}`
+  return `${session.agent} session`
+}
+
+function historyItemUpdatedAt(item: ChatHistoryItem): string {
+  if (item.thread) return item.thread.updatedAt
+  return item.legacy?.endedAt ?? item.legacy?.startedAt ?? ''
+}
+
+function formatContextUsage(
+  usage: { usedTokens: number; maxTokens: number },
+  percent: number,
+): string {
+  const locale = currentLocale()
+  return `${formatNumber(usage.usedTokens, locale)} / ${formatNumber(usage.maxTokens, locale)} (${percent}%)`
 }
 
 function mergeSessionContextItems(

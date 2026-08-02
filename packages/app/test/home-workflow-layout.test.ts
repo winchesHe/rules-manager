@@ -64,10 +64,14 @@ describe('home workflow layout', () => {
     expect(ipcSource).toContain("ipcMain.handle('chat.context.query'")
     expect(ipcSource).toContain("ipcMain.handle('chat.context.update'")
     expect(ipcSource).toContain("ipcMain.handle('chat.rename'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.pin'")
+    expect(ipcSource).toContain("ipcMain.handle('chat.unpin'")
     expect(ipcSource).toContain("ipcMain.handle('chat.archive'")
     expect(ipcSource).toContain("ipcMain.handle('chat.unarchive'")
     expect(ipcSource).toContain("ipcMain.handle('chat.delete'")
     expect(source).toContain("'chat.rename'")
+    expect(source).toContain("'chat.pin'")
+    expect(source).toContain("'chat.unpin'")
     expect(source).toContain("'chat.archive'")
     expect(source).toContain("'chat.unarchive'")
     expect(source).toContain("'chat.delete'")
@@ -136,6 +140,18 @@ describe('home workflow layout', () => {
     expect(source).toContain('break-words whitespace-pre-wrap')
   })
 
+  it('历史条目显示时间和右键生命周期操作，Session Context 使用可读名称', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('onContextMenu={(event) => openHistoryContextMenu(event, item)}')
+    expect(source).toContain("t('pinChat')")
+    expect(source).toContain("t('unpinChat')")
+    expect(source).toContain("t('archiveChat')")
+    expect(source).toContain('formatDateTime(historyItemUpdatedAt(item), currentLocale())')
+    expect(source).toContain('sessionDisplayName(item)')
+    expect(source).not.toContain('{item.agent} · {item.id}</strong>')
+  })
+
   it('Composer 保留完整运行能力并按原型划分左右操作组', () => {
     const source = read('views/ChatView.tsx')
 
@@ -148,6 +164,8 @@ describe('home workflow layout', () => {
     expect(source).toContain('flex min-h-11 min-w-0 items-center')
     expect(source.match(/h-8 min-h-8/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
     expect(source).toContain('border-l border-border pl-3')
+    expect(source).toContain('<Tooltip>')
+    expect(source).toContain('formatContextUsage(contextUsage, contextPercent)')
     expect(source).toContain("t('fullAccess')")
     expect(source).toContain('liveUsage')
     expect(source).toContain('stopChatTurn')

@@ -184,6 +184,7 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
   与可收起的 22rem Session Context 组成，不再常驻 Thread Rail，也不使用页面外层 Card。
 - Chat Header 使用独立历史按钮控制 18rem 历史栏，当前标题不承担导航；桌面端历史栏默认展开并
   重排 Conversation，1279px 及以下才转为覆盖式 Drawer。Session Context 保持独立开关与收起入口。
+- History 条目显示更新时间；Native Chat 支持右键重命名、置顶和归档，置顶项在当前/归档分组内优先。
 - Conversation 与 Composer 共享 820px 阅读线；各滚动区独立，页面级容器不滚动。
 - Conversation 底部固定 Composer。首次发送前是临时 Draft；发送后一个 Chat 永久绑定一个
   Claude 或 Codex Native Session，Provider 不可切换。
@@ -192,6 +193,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 - Tool 原始 input/output 可以在用户展开时从 Native Session 按需查看，但不进入 ChatStore；
   默认只保存和展示 Native Item 引用、安全摘要与有限预览。隐藏 Prompt 永不进入 Renderer。
 - Context Window 只显示 Provider 权威值，缺失时显示不可用，不在应用侧估算。
+- Session Context 主行优先显示来源提供的可读标题；OpenCode 使用 SQLite `session.title`，其他来源
+  使用项目与 Agent 回退，原始 Session ID 仅作为辅助信息。
 - Full access 是固定运行模式，必须在 Composer 附近常驻显示；页面不提供 Permission Mode 或
   working directory 控件。
 

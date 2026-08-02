@@ -72,3 +72,19 @@ Session Context 与主题能力；不能用静态假数据或仅视觉相似替�
 - 1279px 及以下历史栏与 Context 使用遮罩式 Drawer；桌面与窄屏都不得产生页面级横向溢出。
 - 先更新布局契约使旧覆盖式默认结构失败，再实现并执行 App/Core 全量测试、两端构建；最终必须
   使用 Computer Use 操作真实 Electron App 并保存默认、历史收起、Context 收起三张截图。
+
+## 第三轮：历史操作与 Session 可读性修正
+
+按真实 App 标注图继续修正信息密度和可操作性，完整范围与验收标准如下：
+
+- History Pane 顶部 New Chat 与当前/归档切换改为一致的暗色 Surface 层级，不再出现突兀的白色
+  Primary pill；历史条目显示更新时间。
+- Native Chat 历史条目支持右键菜单，提供重命名、置顶/取消置顶、归档/恢复；置顶状态写入本地
+  ChatStore 并在当前/归档列表内优先排序。旧 Rules Generation 记录保持只读兼容。
+- Session Context Item 增加可读名称。OpenCode 从其权威 SQLite `session.title` 按需读取；其余来源
+  使用项目名与 Agent 组成稳定回退名称。主行不再展示长 Session ID，ID 仅保留在 title/辅助说明中。
+- Composer 左侧控件统一 8px 间距；Context Window meter 使用真实 Tooltip 展示 `used / max` 与百分比，
+  同时保留可访问名称和 Provider 权威值约束。
+- 自动化覆盖 ChatStore 置顶持久化与排序、IPC/Controller 路径、OpenCode 名称解析、Renderer 结构契约；
+  最终运行 App/Core 全量测试与 production build，并用 Computer Use 在真实 Electron 中验证右键菜单、
+  可读 Session 名称、历史时间、Tooltip 和整体视觉间距。

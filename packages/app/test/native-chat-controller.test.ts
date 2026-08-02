@@ -287,6 +287,10 @@ describe('NativeChatController', () => {
       now: () => '2026-08-01T05:00:02.000Z',
     })
     controller.rename('chat-life', 'after')
+    controller.pin('chat-life')
+    expect(store.readThread('chat-life')).toMatchObject({ pinnedAt: expect.any(String) })
+    controller.unpin('chat-life')
+    expect(store.readThread('chat-life')).toMatchObject({ pinnedAt: null })
     await controller.archive('chat-life')
     expect(store.readThread('chat-life')).toMatchObject({ title: 'after', archivedAt: expect.any(String) })
     await controller.unarchive('chat-life')

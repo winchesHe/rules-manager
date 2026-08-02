@@ -14,6 +14,7 @@ export interface SessionContextQuery {
 export interface SessionContextItem {
   id: string
   agent: AgentName
+  displayName: string
   slug: string
   updatedAt: string
   status: SessionStatus
@@ -33,6 +34,7 @@ export interface SessionContextReference {
 interface SessionContextRow {
   id: string
   agent: AgentName
+  source_path: string
   slug: string
   updated_at: string
   status: SessionStatus
@@ -79,7 +81,7 @@ export function querySessionContext(input: SessionContextQuery = {}): SessionCon
   const db = new Database(getDbPath(input.homeDir), { readonly: true })
   try {
     const rows = db.prepare(`
-      SELECT id, agent, slug, updated_at, status
+      SELECT id, agent, source_path, slug, updated_at, status
       FROM sessions
       ${where}
       ORDER BY updated_at DESC, id DESC
@@ -89,7 +91,7 @@ export function querySessionContext(input: SessionContextQuery = {}): SessionCon
     const visible = rows.slice(0, limit)
     const last = visible.at(-1)
     return {
-      items: visible.map(mapRow),
+      items: mapRows(visible),
       nextCursor: hasMore && last
         ? encodeCursor({ updatedAt: last.updated_at, id: last.id })
         : null,
@@ -111,40 +113,72 @@ export function resolveSessionContextItems(
   const db = new Database(getDbPath(homeDir), { readonly: true })
   try {
     const rows = db.prepare(`
-      SELECT id, agent, slug, updated_at, status
+      SELECT id, agent, source_path, slug, updated_at, status
       FROM sessions
       WHERE id IN (${placeholders})
     `).all(...ids) as SessionContextRow[]
-    const byKey = new Map(rows.map((row) => [`${row.agent}\0${row.id}`, row]))
+    const byKey = new Map(mapRows(rows).map((item) => [`${item.agent}\0${item.id}`, item]))
     return references.map((reference) => {
-      const row = byKey.get(`${reference.agent}\0${reference.id}`)
-      return row ? mapRow(row) : missingReference(reference)
+      return byKey.get(`${reference.agent}\0${reference.id}`) ?? missingReference(reference)
     })
   } finally {
     db.close()
   }
 }
 
-function mapRow(row: SessionContextRow): SessionContextItem {
-  return {
+function mapRows(rows: SessionContextRow[]): SessionContextItem[] {
+  const openCodeTitles = readOpenCodeTitles(rows)
+  return rows.map((row) => ({
     id: row.id,
     agent: row.agent,
+    displayName: openCodeTitles.get(`${row.source_path}\0${row.id}`)
+      ?? `${row.slug} · ${row.agent}`,
     slug: row.slug,
     updatedAt: row.updated_at,
     status: row.status,
     sourceAvailable: row.status !== 'missing' && row.status !== 'error',
-  }
+  }))
 }
 
 function missingReference(reference: SessionContextReference): SessionContextItem {
   return {
     id: reference.id,
     agent: reference.agent as AgentName,
+    displayName: `${reference.agent} session`,
     slug: 'unknown',
     updatedAt: '',
     status: 'missing',
     sourceAvailable: false,
   }
+}
+
+function readOpenCodeTitles(rows: SessionContextRow[]): Map<string, string> {
+  const bySource = new Map<string, string[]>()
+  for (const row of rows) {
+    if (row.agent !== 'opencode') continue
+    bySource.set(row.source_path, [...(bySource.get(row.source_path) ?? []), row.id])
+  }
+  const titles = new Map<string, string>()
+  for (const [sourcePath, ids] of bySource) {
+    try {
+      const source = new Database(sourcePath, { readonly: true, fileMustExist: true })
+      try {
+        const placeholders = ids.map(() => '?').join(', ')
+        const records = source.prepare(`SELECT id, title FROM session WHERE id IN (${placeholders})`)
+          .all(...ids) as Array<{ id: string; title?: unknown }>
+        for (const record of records) {
+          if (typeof record.title === 'string' && record.title.trim()) {
+            titles.set(`${sourcePath}\0${record.id}`, record.title.trim())
+          }
+        }
+      } finally {
+        source.close()
+      }
+    } catch {
+      // A missing or incompatible source falls back to the project and agent label.
+    }
+  }
+  return titles
 }
 
 function optionalIso(value: string | undefined, label: string): string | undefined {

@@ -317,6 +317,14 @@ export class NativeChatController {
     this.options.store.renameNativeThread(chatId, title, this.now())
   }
 
+  pin(chatId: string): void {
+    this.options.store.pinNativeThread(chatId, this.now())
+  }
+
+  unpin(chatId: string): void {
+    this.options.store.unpinNativeThread(chatId)
+  }
+
   async archive(chatId: string): Promise<void> {
     const thread = this.requireNativeThread(chatId)
     if (thread.archivedAt) return

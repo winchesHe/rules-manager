@@ -85,6 +85,7 @@ export interface NativeChatThreadSummary {
   status: 'running' | 'ready' | 'failed' | 'interrupted'
   createdAt: string
   updatedAt: string
+  pinnedAt?: string | null
   archivedAt: string | null
   defaultTurnConfig: NativeTurnConfig
   sessionContext: {
@@ -202,6 +203,7 @@ export class ChatStore {
       status: 'running',
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
+      pinnedAt: null,
       archivedAt: null,
       defaultTurnConfig: { ...input.defaultTurnConfig },
       sessionContext: {
@@ -350,6 +352,24 @@ export class ChatStore {
     } satisfies NativeChatThreadFile)
   }
 
+  pinNativeThread(threadId: string, at: string): void {
+    const thread = this.requireNativeThread(threadId)
+    if (thread.pinnedAt) return
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      pinnedAt: at,
+    } satisfies NativeChatThreadFile)
+  }
+
+  unpinNativeThread(threadId: string): void {
+    const thread = this.requireNativeThread(threadId)
+    if (!thread.pinnedAt) return
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      pinnedAt: null,
+    } satisfies NativeChatThreadFile)
+  }
+
   archiveNativeThread(threadId: string, at: string): void {
     const thread = this.requireNativeThread(threadId)
     if (thread.archivedAt) return
@@ -448,10 +468,7 @@ export class ChatStore {
           return []
         }
       })
-      .sort((left, right) =>
-        right.updatedAt.localeCompare(left.updatedAt)
-        || right.id.localeCompare(left.id),
-      )
+      .sort(compareThreadSummaries)
       .slice(0, limit)
   }
 
@@ -512,6 +529,9 @@ export class ChatStore {
     if (value === null) return null
     if (!isThreadFile(value, threadId)) {
       throw new Error(`chat thread ${threadId} metadata is invalid`)
+    }
+    if (value.version === 2 && value.pinnedAt === undefined) {
+      return { ...value, pinnedAt: null }
     }
     return value
   }
@@ -585,6 +605,7 @@ function isThreadFile(value: unknown, expectedId: string): value is StoredChatTh
       && typeof native.title === 'string'
       && typeof native.createdAt === 'string'
       && typeof native.updatedAt === 'string'
+      && (native.pinnedAt === undefined || native.pinnedAt === null || typeof native.pinnedAt === 'string')
       && Boolean(native.defaultTurnConfig)
       && Boolean(native.sessionContext)
   }
@@ -633,6 +654,18 @@ function toSummary(thread: StoredChatThreadFile): ChatThreadSummary {
     ...summary
   } = thread
   return summary
+}
+
+function compareThreadSummaries(
+  left: ChatThreadSummary,
+  right: ChatThreadSummary,
+): number {
+  const leftPinnedAt = left.version === 2 ? left.pinnedAt ?? '' : ''
+  const rightPinnedAt = right.version === 2 ? right.pinnedAt ?? '' : ''
+  return Number(Boolean(rightPinnedAt)) - Number(Boolean(leftPinnedAt))
+    || rightPinnedAt.localeCompare(leftPinnedAt)
+    || right.updatedAt.localeCompare(left.updatedAt)
+    || right.id.localeCompare(left.id)
 }
 
 function generationTitle(request: GenerationRequest): string {

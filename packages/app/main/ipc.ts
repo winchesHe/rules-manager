@@ -176,6 +176,12 @@ export function registerIpcHandlers(): void {
     const request = validateChatLifecycleRequest(value, true)
     nativeChatController.rename(request.chatId, request.title)
   })
+  ipcMain.handle('chat.pin', (_event, value: unknown) => {
+    nativeChatController.pin(validateChatLifecycleRequest(value).chatId)
+  })
+  ipcMain.handle('chat.unpin', (_event, value: unknown) => {
+    nativeChatController.unpin(validateChatLifecycleRequest(value).chatId)
+  })
   ipcMain.handle('chat.archive', (_event, value: unknown) => {
     return nativeChatController.archive(validateChatLifecycleRequest(value).chatId)
   })

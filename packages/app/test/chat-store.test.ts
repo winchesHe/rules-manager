@@ -168,7 +168,7 @@ describe('ChatStore', () => {
     })
   })
 
-  it('Native Chat 支持重命名、Archive/Restore，并只允许删除 Archived', () => {
+  it('Native Chat 支持重命名、置顶、Archive/Restore，并只允许删除 Archived', () => {
     const { chatsDir, store } = createStore()
     store.createNativeThread({
       id: 'chat-lifecycle', provider: 'claude', origin: 'chat', title: 'before',
@@ -178,8 +178,12 @@ describe('ChatStore', () => {
     store.bindNativeSession('chat-lifecycle', 'native-lifecycle', '2026-08-01T01:00:01.000Z')
     store.renameNativeThread('chat-lifecycle', 'after', '2026-08-01T01:00:02.000Z')
     expect(store.readThread('chat-lifecycle')).toMatchObject({
-      title: 'after', titleSource: 'manual', archivedAt: null,
+      title: 'after', titleSource: 'manual', pinnedAt: null, archivedAt: null,
     })
+    store.pinNativeThread('chat-lifecycle', '2026-08-01T01:00:02.500Z')
+    expect(store.readThread('chat-lifecycle')).toMatchObject({ pinnedAt: '2026-08-01T01:00:02.500Z' })
+    store.unpinNativeThread('chat-lifecycle')
+    expect(store.readThread('chat-lifecycle')).toMatchObject({ pinnedAt: null })
     expect(() => store.deleteArchivedNativeThread('chat-lifecycle')).toThrow('must be archived')
     store.archiveNativeThread('chat-lifecycle', '2026-08-01T01:00:03.000Z')
     expect(store.readThread('chat-lifecycle')).toMatchObject({
@@ -398,7 +402,7 @@ describe('ChatStore', () => {
     })
   })
 
-  it('按更新时间倒序列举，并隔离损坏或非法目录', () => {
+  it('置顶优先、其余按更新时间倒序列举，并隔离损坏或非法目录', () => {
     const { chatsDir, store } = createStore()
     store.createGenerationThread({
       runId: 'older',
@@ -410,10 +414,16 @@ describe('ChatStore', () => {
       request: { mode: 'full', projects: [] },
       startedAt: '2026-07-30T00:00:00.000Z',
     })
+    store.createNativeThread({
+      id: 'pinned-old', provider: 'claude', origin: 'chat', title: 'pinned',
+      createdAt: '2026-07-28T00:00:00.000Z',
+      defaultTurnConfig: { effort: 'high', fastMode: false },
+    })
+    store.pinNativeThread('pinned-old', '2026-07-31T00:00:00.000Z')
     fs.mkdirSync(path.join(chatsDir, 'broken'), { recursive: true })
     fs.writeFileSync(path.join(chatsDir, 'broken', 'thread.json'), '{bad json')
 
-    expect(store.listThreads().map((thread) => thread.id)).toEqual(['newer', 'older'])
+    expect(store.listThreads().map((thread) => thread.id)).toEqual(['pinned-old', 'newer', 'older'])
     expect(() => store.readThread('../outside')).toThrow('invalid chat thread id')
   })
 })

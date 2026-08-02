@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import Database from 'better-sqlite3'
 import { afterEach, describe, expect, it } from '@jest/globals'
 import { initDatabase } from '../../src/db'
 import { resolveWorkspace } from '../../src/workspace'
@@ -52,6 +53,29 @@ describe('querySessionContext', () => {
       { id: 's-default', sourceAvailable: true },
       { id: 'not-in-db', status: 'missing', sourceAvailable: false },
     ])
+  })
+
+  it('OpenCode 使用权威 SQLite title，其余来源返回稳定可读名称', () => {
+    const home = seed([
+      session('ses-readable', 'opencode', 'agent-workspace', '2026-07-02T00:00:00.000Z'),
+      session('codex-readable', 'codex', 'rules-manager', '2026-07-01T00:00:00.000Z'),
+    ])
+    const sourcePath = path.join(home, 'opencode.db')
+    const source = new Database(sourcePath)
+    source.exec('CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT)')
+    source.prepare('INSERT INTO session (id, title) VALUES (?, ?)')
+      .run('ses-readable', '修复 Chat Context 布局')
+    source.close()
+    const workspace = initDatabase(home)
+    workspace.prepare('UPDATE sessions SET source_path = ? WHERE id = ?')
+      .run(sourcePath, 'ses-readable')
+    workspace.close()
+
+    expect(querySessionContext({ homeDir: home, project: 'all', limit: 20 }).items)
+      .toMatchObject([
+        { id: 'ses-readable', displayName: '修复 Chat Context 布局' },
+        { id: 'codex-readable', displayName: 'rules-manager · codex' },
+      ])
   })
 })
 
