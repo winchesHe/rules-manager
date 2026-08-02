@@ -140,6 +140,7 @@ describe('page layout primitives', () => {
     )
 
     expect(html).toContain('data-page-header="true"')
+    expect(html).toContain('min-w-0 flex-1')
     expect(html).toContain('<h1')
     expect(html).toContain('data-page-section="true"')
     expect(html).toContain('<h2')

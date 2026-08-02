@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, shell } from 'electron'
 import Database from 'better-sqlite3'
 import { listProjects, listProjectSessions } from '@memory-manager/core'
 import {
@@ -60,6 +60,7 @@ import { ClaudeChatAdapter } from './claude-chat-adapter.js'
 import { CodexChatAdapter } from './codex-chat-adapter.js'
 import { NativeChatController } from './native-chat-controller.js'
 import { listChatSkills } from './chat-skills.js'
+import { resolveProjectLocation, resolveSessionLocation } from './source-location.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
@@ -106,6 +107,15 @@ export function registerIpcHandlers(): void {
     }
     if (!isDatabaseReady()) return []
     return listProjectSessions({ slug })
+  })
+  ipcMain.handle('projects.reveal', async (_event, slug: unknown) => {
+    if (typeof slug !== 'string') throw new Error('project slug is required')
+    const result = await shell.openPath(resolveProjectLocation(slug))
+    if (result) throw new Error(result)
+  })
+  ipcMain.handle('sessions.reveal', (_event, sessionId: unknown) => {
+    if (typeof sessionId !== 'string') throw new Error('session id is required')
+    shell.showItemInFolder(resolveSessionLocation(sessionId))
   })
   ipcMain.handle('sessions.preview', (_event, sessionId: unknown) => {
     if (typeof sessionId !== 'string' || !sessionId.trim()) {

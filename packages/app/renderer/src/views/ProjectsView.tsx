@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
 import { Button, Card, Chip, Input, Spinner, Table, TextField } from '@heroui/react'
-import { ChevronRight, Search } from 'lucide-react'
+import { ChevronRight, FileSearch, FolderOpen, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
@@ -266,6 +266,16 @@ function ProjectDetails({
   const [sessionStatus, setSessionStatus] = useState('all')
   const [sessionScrollTop, setSessionScrollTop] = useState(0)
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null)
+  const [revealError, setRevealError] = useState<string | null>(null)
+
+  async function revealProject(): Promise<void> {
+    setRevealError(null)
+    try {
+      await window.api.invoke('projects.reveal', project.slug)
+    } catch {
+      setRevealError(t('errors.revealProject'))
+    }
+  }
 
   useEffect(() => {
     let current = true
@@ -328,12 +338,21 @@ function ProjectDetails({
     <>
       <ProjectBreadcrumbs onBackToProjects={onBack} projectSlug={project.slug} />
       <PageHeader
+        actions={(
+          <Button onPress={() => void revealProject()} variant="ghost">
+            <FolderOpen aria-hidden="true" size={16} />
+            {t('details.openProjectLocation')}
+          </Button>
+        )}
         description={t('details.description', {
           count: project.sessionCount,
           agents: project.agents.join(' · ') || t('details.noAgents'),
         })}
         title={project.slug}
       />
+      {revealError && (
+        <p className="mb-4 text-sm text-danger" role="alert">{revealError}</p>
+      )}
       <div aria-label={t('details.label')} className="mb-4 flex gap-2">
         {(['sessions', 'rules'] as DetailTab[]).map((item) => (
           <Button
@@ -540,6 +559,16 @@ function SessionDetails({
   const [preview, setPreview] = useState<SessionPreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [revealError, setRevealError] = useState<string | null>(null)
+
+  async function revealSession(): Promise<void> {
+    setRevealError(null)
+    try {
+      await window.api.invoke('sessions.reveal', session.id)
+    } catch {
+      setRevealError(t('errors.revealSession'))
+    }
+  }
 
   useEffect(() => {
     let current = true
@@ -579,9 +608,18 @@ function SessionDetails({
         sessionId={session.displayName}
       />
       <PageHeader
+        actions={(
+          <Button onPress={() => void revealSession()} variant="ghost">
+            <FileSearch aria-hidden="true" size={16} />
+            {t('sessions.openLocation')}
+          </Button>
+        )}
         description={`${session.agent} · ${session.status}`}
         title={session.displayName}
       />
+      {revealError && (
+        <p className="mb-4 text-sm text-danger" role="alert">{revealError}</p>
+      )}
       <Card className="mb-4 border border-border bg-surface shadow-none">
         <Card.Content className="grid gap-2 p-4">
           <p className="break-all text-sm text-muted">{session.sourcePath}</p>

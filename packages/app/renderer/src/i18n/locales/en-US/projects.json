@@ -10,6 +10,8 @@
     "loadProjects": "Unable to load projects",
     "loadDetails": "Unable to load project details",
     "openSession": "Unable to open session",
+    "revealProject": "Unable to open the project location.",
+    "revealSession": "Unable to reveal the Session source.",
     "previewVersion": "Session preview is available in the new app version. Restart the app to finish updating."
   },
   "filters": {
@@ -42,6 +44,7 @@
     "sessionsTab": "Sessions",
     "rulesTab": "Rules",
     "generate": "Generate for this project",
+    "openProjectLocation": "Open project location",
     "searchSessions": "Search session name, ID, or source path",
     "agent": "Agent",
     "status": "Status",
@@ -57,7 +60,8 @@
     "latestMessages": "Latest {{visible}} of {{total}} messages",
     "emptyPreview": "No displayable user or assistant messages.",
     "messagesLabel": "Session messages",
-    "session": "Session"
+    "session": "Session",
+    "openLocation": "Open Session location"
   },
   "breadcrumbs": {
     "label": "Breadcrumb",

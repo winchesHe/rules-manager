@@ -314,6 +314,10 @@ describe('home workflow layout', () => {
     expect(source).toContain('SessionDetails')
     expect(source).toContain('onOpen')
     expect(source).toContain('className="grid w-full cursor-pointer grid-cols-')
+    expect(source).toContain("window.api.invoke('projects.reveal'")
+    expect(source).toContain("window.api.invoke('sessions.reveal'")
+    expect(source).toContain("t('details.openProjectLocation')")
+    expect(source).toContain("t('sessions.openLocation')")
   })
 
   it('Session 详情使用 Projects / project / session 面包屑并处理旧主进程', () => {

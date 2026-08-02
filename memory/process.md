@@ -2264,3 +2264,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   App 24 suites / 153 tests 全绿；App/Core production build 与 `git diff --check` 通过，既有 Core
   `tsdown define` 与 Markstream PURE 注释警告保持不变。
 - 提交信息：`feat: 统一展示可读 Session 名称`
+
+## 项目与 Session 系统定位（2026-08-02）
+
+- 项目详情 Page Header 增加“打开项目位置”，通过 Electron `shell.openPath` 打开
+  `~/.memory-manager/projects/<slug>` 的 FS-first 项目目录；Session 详情增加“打开 Session 位置”，
+  主进程按 Session ID 从 DB 解析 `source_path` 后交给 Finder 定位，Renderer 不能提交任意文件路径。
+- 新增独立路径解析边界：项目 slug 拒绝目录穿越并要求目录存在；Session 必须存在于索引且原始来源仍
+  可访问。两类失败在页面显示本地化错误，不离开当前详情页。
+- 真实 Electron 验证 `agent-workspace` 项目目录成功在 Finder 打开，Codex Session 定位动作成功触发；
+  同时根据视觉结果将 PageHeader 标题区改为可收缩弹性列，长 Session 名称下操作按钮仍固定在右上角。
+- `simplify` 复核确认路径解析留在主进程、项目与 Session 保持独立错误语义。Core 26 suites / 279 tests、
+  App 25 suites / 155 tests 全绿；App production build 与 `git diff --check` 通过，既有 Markstream PURE
+  注释警告保持不变。
+- 提交信息：`feat: 支持定位项目与 Session 来源`

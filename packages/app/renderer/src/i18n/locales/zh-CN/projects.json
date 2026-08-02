@@ -10,6 +10,8 @@
     "loadProjects": "无法加载项目",
     "loadDetails": "无法加载项目详情",
     "openSession": "无法打开会话",
+    "revealProject": "无法打开项目位置。",
+    "revealSession": "无法定位 Session 来源。",
     "previewVersion": "新版本已支持会话预览。请重启应用以完成更新。"
   },
   "filters": {
@@ -42,6 +44,7 @@
     "sessionsTab": "会话",
     "rulesTab": "规则",
     "generate": "为此项目生成规则",
+    "openProjectLocation": "打开项目位置",
     "searchSessions": "搜索会话名称、ID 或来源路径",
     "agent": "Agent",
     "status": "状态",
@@ -57,7 +60,8 @@
     "latestMessages": "最近 {{visible}} / {{total}} 条消息",
     "emptyPreview": "没有可展示的用户或 Assistant 消息。",
     "messagesLabel": "会话消息",
-    "session": "会话"
+    "session": "会话",
+    "openLocation": "打开 Session 位置"
   },
   "breadcrumbs": {
     "label": "面包屑",

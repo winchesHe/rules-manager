@@ -18,7 +18,7 @@ export function PageHeader({
       className={`flex flex-wrap items-start justify-between gap-6 ${className}`.trim()}
       data-page-header="true"
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {eyebrow && <p className="mb-2 text-xs font-bold text-muted">{eyebrow}</p>}
         <h1 className="text-3xl font-semibold text-foreground">{title}</h1>
         {description && <p className="mt-2 text-sm text-muted">{description}</p>}
