@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from '@jest/globals'
 import {
   CodexChatAdapter,
@@ -109,6 +112,7 @@ describe('CodexChatAdapter', () => {
       type: 'tool_activity',
       activity: {
         itemId: 'cmd-1', kind: 'shell', name: 'Command', status: 'running', summary: 'rtk git status',
+        sourceLocator: { turnId: 'codex-turn-1', toolIndex: 0 },
       },
     })
     expect(events).toContainEqual({ type: 'assistant_delta', text: 'hello ' })
@@ -205,6 +209,50 @@ describe('CodexChatAdapter', () => {
     expect(page.content.length).toBeLessThanOrEqual(24)
     expect(page.nextCursor).toBe(24)
     expect(server.requests.map((item) => item.method)).toContain('thread/read')
+  })
+
+  it('thread/read 不含 Tool 时按原生 Session locator 读取 JSONL，且兼容旧轮次序号', async () => {
+    const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-codex-source-'))
+    const nativeSessionId = '019fc244-749d-7080-98a4-1b9772fa3bca'
+    const sourceDirectory = path.join(codexHome, 'sessions', '2026', '08', '02')
+    fs.mkdirSync(sourceDirectory, { recursive: true })
+    fs.writeFileSync(path.join(sourceDirectory, `rollout-${nativeSessionId}.jsonl`), [
+      { type: 'session_meta', payload: { id: nativeSessionId } },
+      { type: 'turn_context', payload: { turn_id: 'turn-source-1' } },
+      { type: 'response_item', payload: {
+        type: 'custom_tool_call', id: 'ctc-source-1', call_id: 'call-source-1', name: 'exec',
+        input: 'const r = await tools.exec_command({ cmd: "rtk git status" })',
+        internal_chat_message_metadata_passthrough: { turn_id: 'turn-source-1' },
+      } },
+      { type: 'response_item', payload: {
+        type: 'custom_tool_call_output', id: 'ctco-source-1', call_id: 'call-source-1',
+        output: [{ type: 'input_text', text: 'clean output' }],
+      } },
+    ].map((record) => JSON.stringify(record)).join('\n'), 'utf8')
+    try {
+      const server = fakeServer()
+      const adapter = new CodexChatAdapter(() => server.child, codexHome)
+      const byTurnId = await adapter.readToolItem({
+        nativeSessionId, itemId: 'exec-transient', cursor: 0, limit: 65_536,
+        sourceLocator: { turnId: 'turn-source-1', toolIndex: 0 },
+      })
+      expect(byTurnId.available).toBe(true)
+      expect(byTurnId.content).toContain('ctc-source-1')
+      expect(byTurnId.content).toContain('clean output')
+
+      const byTurnIndex = await adapter.readToolItem({
+        nativeSessionId, itemId: 'exec-legacy', cursor: 0, limit: 65_536,
+        sourceLocator: { turnIndex: 0, toolIndex: 0 },
+      })
+      expect(byTurnIndex.content).toBe(byTurnId.content)
+
+      await expect(adapter.readToolItem({
+        nativeSessionId, itemId: 'exec-missing', cursor: 0, limit: 65_536,
+        sourceLocator: { turnId: 'turn-source-1', toolIndex: 1 },
+      })).resolves.toEqual({ available: false, content: '', nextCursor: null })
+    } finally {
+      fs.rmSync(codexHome, { recursive: true, force: true })
+    }
   })
 
   it('Archive、Restore 与 Delete 使用 Codex 原生 thread API', async () => {

@@ -377,15 +377,17 @@ export class NativeChatController {
     if (!thread || thread.version !== 2 || !thread.nativeSessionId) {
       throw new Error('native chat was not found')
     }
-    const allowed = thread.messages.some((message) =>
-      message.toolActivities?.some((activity) => activity.itemId === request.itemId),
-    )
-    if (!allowed) throw new Error('tool item was not found')
+    const located = locateToolActivity(thread.messages, request.itemId)
+    if (!located) throw new Error('tool item was not found')
     return this.options.runtime.readToolItem({
       chatId: request.chatId,
       provider: thread.provider,
       nativeSessionId: thread.nativeSessionId,
       itemId: request.itemId,
+      sourceLocator: located.activity.sourceLocator ?? {
+        turnIndex: located.turnIndex,
+        toolIndex: located.toolIndex,
+      },
       cursor: request.cursor ?? 0,
       limit: request.limit ?? 8192,
     })
@@ -396,6 +398,24 @@ export class NativeChatController {
     if (!thread || thread.version !== 2) throw new Error('native chat was not found')
     return thread
   }
+}
+
+function locateToolActivity(messages: ChatMessage[], itemId: string): {
+  activity: NativeToolActivity
+  turnIndex: number
+  toolIndex: number
+} | null {
+  let turnIndex = 0
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue
+    const activities = message.toolActivities ?? []
+    const toolIndex = activities.findIndex((activity) => activity.itemId === itemId)
+    if (toolIndex >= 0) {
+      return { activity: activities[toolIndex], turnIndex, toolIndex }
+    }
+    turnIndex++
+  }
+  return null
 }
 
 type NativeChatThreadSessionContext = Extract<

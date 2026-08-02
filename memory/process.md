@@ -2184,3 +2184,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 验证结果：App 23 suites / 149 tests、Core 26 suites / 278 tests 全绿；App/Core production build
   与 `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
 - 提交信息：`fix: 修复 Chat 消息与轮次耗时`
+
+## Codex 历史工具详情 Source Locator 修复（2026-08-02）
+
+- 根因不是 Memory Manager 不保存 tool output 本身，而是 Codex app-server 对历史 Session 的
+  `thread/read` 只重建了用户/助手消息，没有返回 Command 等 Tool Item；Memory Manager 保存的瞬时
+  `exec-*` item ID 因而无法命中。完整 call/output 仍存在 Codex 原始 Session JSONL 中。
+- 保持“不存对话原文 / tool output”红线：新产生的 Codex Tool Activity 只新增无正文的
+  `turnId + toolIndex` source locator；展开时先尝试原有 `thread/read + itemId`，未命中再从
+  `~/.codex/sessions` 或 `archived_sessions` 的原始 JSONL 按 locator 读取匹配的 call/output。
+- 旧 Chat 没有 locator 时，Controller 根据 Assistant 轮次和该轮工具序号生成兼容 locator；源 Session、
+  轮次、工具或 output 任一缺失时继续返回不可用，避免把其他 Command 的输出误配过来。
+- `simplify` 复核移除了 locator 查找中的非空断言和重复 payload 映射；回归测试覆盖新 locator 持久化、
+  旧轮次兼容、目标缺失、原有 ID 命中与分页路径。
+- 真实 Electron 中对截图会话的首条 Command 做只读展开验证，已恢复显示 RTK / flow-brainstorm 对应的
+  原始 call 与 output，不再出现“原生 Session 来源已失效”；未向 Memory Manager Chat 文件复制 output。
+- 最终基线：App 23 suites / 150 tests、Core 26 suites / 278 tests 全绿；App/Core production build 与
+  `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
+- 提交信息：`fix: 恢复 Codex 工具详情读取`

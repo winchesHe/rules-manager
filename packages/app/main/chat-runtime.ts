@@ -20,6 +20,13 @@ export interface NativeToolActivity {
   name: string
   status: 'running' | 'completed' | 'failed'
   summary?: string
+  sourceLocator?: NativeToolSourceLocator
+}
+
+export interface NativeToolSourceLocator {
+  turnId?: string
+  turnIndex?: number
+  toolIndex: number
 }
 
 export type NativeChatEvent =
@@ -37,6 +44,7 @@ export interface NativeTurnResult {
 export interface NativeToolItemReadRequest {
   nativeSessionId: string
   itemId: string
+  sourceLocator?: NativeToolSourceLocator
   cursor: number
   limit: number
 }
@@ -107,6 +115,7 @@ export class ChatRuntimeManager {
     provider: NativeChatProvider
     nativeSessionId: string
     itemId: string
+    sourceLocator?: NativeToolSourceLocator
     cursor: number
     limit: number
   }): Promise<NativeToolItemPage> {

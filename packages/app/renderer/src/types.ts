@@ -326,6 +326,11 @@ export interface NativeToolActivity {
   name: string
   status: 'running' | 'completed' | 'failed'
   summary?: string
+  sourceLocator?: {
+    turnId?: string
+    turnIndex?: number
+    toolIndex: number
+  }
 }
 
 export type NativeChatEvent =

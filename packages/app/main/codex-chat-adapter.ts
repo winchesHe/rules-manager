@@ -1,11 +1,15 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type {
   ChatProviderAdapter,
   NativeTurnRequest,
   NativeTurnResult,
   NativeToolItemPage,
   NativeToolItemReadRequest,
+  NativeToolSourceLocator,
 } from './chat-runtime.js'
 import { HOST_SESSION_POLICY } from './claude-chat-adapter.js'
 import { safeToolActivity } from './chat-event.js'
@@ -36,6 +40,7 @@ interface ActiveCodexTurn {
   turnId: string | null
   content: string
   agentMessages: Map<string, string>
+  toolIndexes: Map<string, number>
   contextUsage?: { usedTokens: number; maxTokens: number }
   resolve: (value: NativeTurnResult) => void
   reject: (error: Error) => void
@@ -121,7 +126,10 @@ export class CodexChatAdapter implements ChatProviderAdapter {
   private active: ActiveCodexTurn | null = null
   private unsubscribe: (() => void) | null = null
 
-  constructor(private readonly createProcess: CodexProcessFactory = defaultProcessFactory) {}
+  constructor(
+    private readonly createProcess: CodexProcessFactory = defaultProcessFactory,
+    private readonly codexHome = process.env.CODEX_HOME ?? path.join(os.homedir(), '.codex'),
+  ) {}
 
   start(request: NativeTurnRequest): Promise<NativeTurnResult> {
     return this.run(request, false)
@@ -149,13 +157,23 @@ export class CodexChatAdapter implements ChatProviderAdapter {
 
   async readToolItem(request: NativeToolItemReadRequest): Promise<NativeToolItemPage> {
     const client = await this.ensureClient()
-    const response = await client.request('thread/read', {
-      threadId: request.nativeSessionId,
-      includeTurns: true,
-    })
-    const match = findItemById(response, request.itemId)
-    if (!match) return { available: false, content: '', nextCursor: null }
-    return pageContent(JSON.stringify(match, null, 2), request.cursor, request.limit)
+    let match: Record<string, unknown> | null = null
+    try {
+      const response = await client.request('thread/read', {
+        threadId: request.nativeSessionId,
+        includeTurns: true,
+      })
+      match = findItemById(response, request.itemId)
+    } catch {
+      // The local JSONL remains authoritative when app-server cannot reconstruct old tool items.
+    }
+    if (match) return pageContent(JSON.stringify(match, null, 2), request.cursor, request.limit)
+    const sourceItem = request.sourceLocator
+      ? readSourceToolItem(this.codexHome, request.nativeSessionId, request.sourceLocator)
+      : null
+    return sourceItem
+      ? pageContent(JSON.stringify(sourceItem, null, 2), request.cursor, request.limit)
+      : { available: false, content: '', nextCursor: null }
   }
 
   async archive(nativeSessionId: string): Promise<void> {
@@ -209,6 +227,7 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         turnId: null,
         content: '',
         agentMessages: new Map(),
+        toolIndexes: new Map(),
         resolve,
         reject,
         ...(request.onEvent ? { onEvent: request.onEvent } : {}),
@@ -288,7 +307,16 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         item,
       })
       if (activity && activity.kind !== 'thinking') {
-        active.onEvent?.({ type: 'tool_activity', activity })
+        const existingToolIndex = active.toolIndexes.get(activity.itemId)
+        const toolIndex = existingToolIndex ?? active.toolIndexes.size
+        if (existingToolIndex === undefined) active.toolIndexes.set(activity.itemId, toolIndex)
+        active.onEvent?.({
+          type: 'tool_activity',
+          activity: {
+            ...activity,
+            ...(active.turnId ? { sourceLocator: { turnId: active.turnId, toolIndex } } : {}),
+          },
+        })
       }
       return
     }
@@ -375,6 +403,114 @@ function findItemById(value: unknown, itemId: string): Record<string, unknown> |
     if (match) return match
   }
   return null
+}
+
+function readSourceToolItem(
+  codexHome: string,
+  nativeSessionId: string,
+  locator: NativeToolSourceLocator,
+): { call: Record<string, unknown>; output: Record<string, unknown> } | null {
+  const sourcePath = findCodexSessionFile(codexHome, nativeSessionId)
+  if (!sourcePath) return null
+  let records: Array<Record<string, unknown>>
+  try {
+    records = fs.readFileSync(sourcePath, 'utf8')
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .flatMap((line) => {
+        try {
+          return [asRecord(JSON.parse(line) as unknown)]
+        } catch {
+          return []
+        }
+      })
+  } catch {
+    return null
+  }
+  const payloads = records.map((record) => asRecord(record.payload))
+  const turnId = locator.turnId ?? turnIdAt(records, locator.turnIndex)
+  if (!turnId) return null
+  const calls = payloads
+    .filter((payload) => isToolCall(payload) && sourceTurnId(payload) === turnId)
+  const call = calls[locator.toolIndex]
+  if (!call) return null
+  const callId = asString(call.call_id) ?? asString(call.callId)
+  if (!callId) return null
+  const output = payloads
+    .find((payload) => isToolOutput(payload) && sourceCallId(payload) === callId)
+  if (!output) return null
+  return { call, output }
+}
+
+function findCodexSessionFile(codexHome: string, nativeSessionId: string): string | null {
+  const date = uuidV7Date(nativeSessionId)
+  if (date) {
+    const dayDirectory = path.join(
+      codexHome,
+      'sessions',
+      String(date.getUTCFullYear()),
+      String(date.getUTCMonth() + 1).padStart(2, '0'),
+      String(date.getUTCDate()).padStart(2, '0'),
+    )
+    const direct = findSessionFile(dayDirectory, nativeSessionId, false)
+    if (direct) return direct
+  }
+  return findSessionFile(path.join(codexHome, 'sessions'), nativeSessionId, true)
+    ?? findSessionFile(path.join(codexHome, 'archived_sessions'), nativeSessionId, true)
+}
+
+function findSessionFile(
+  directory: string,
+  nativeSessionId: string,
+  recursive: boolean,
+): string | null {
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true })
+  } catch {
+    return null
+  }
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name)
+    if (entry.isFile() && entry.name.endsWith(`${nativeSessionId}.jsonl`)) return entryPath
+    if (recursive && entry.isDirectory()) {
+      const nested = findSessionFile(entryPath, nativeSessionId, true)
+      if (nested) return nested
+    }
+  }
+  return null
+}
+
+function uuidV7Date(value: string): Date | null {
+  const timestamp = Number.parseInt(value.replace(/-/g, '').slice(0, 12), 16)
+  if (!Number.isFinite(timestamp)) return null
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function turnIdAt(records: Array<Record<string, unknown>>, turnIndex: number | undefined): string | null {
+  if (turnIndex === undefined || !Number.isInteger(turnIndex) || turnIndex < 0) return null
+  const turnIds = records
+    .filter((record) => record.type === 'turn_context')
+    .map((record) => asString(asRecord(record.payload).turn_id))
+    .filter((value): value is string => value !== null)
+  return turnIds[turnIndex] ?? null
+}
+
+function isToolCall(payload: Record<string, unknown>): boolean {
+  return payload.type === 'custom_tool_call' || payload.type === 'function_call'
+}
+
+function isToolOutput(payload: Record<string, unknown>): boolean {
+  return payload.type === 'custom_tool_call_output' || payload.type === 'function_call_output'
+}
+
+function sourceTurnId(payload: Record<string, unknown>): string | null {
+  return asString(asRecord(payload.internal_chat_message_metadata_passthrough).turn_id)
+}
+
+function sourceCallId(payload: Record<string, unknown>): string | null {
+  return asString(payload.call_id) ?? asString(payload.callId)
 }
 
 function pageContent(content: string, cursor: number, limit: number): NativeToolItemPage {

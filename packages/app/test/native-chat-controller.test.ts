@@ -195,19 +195,26 @@ describe('NativeChatController', () => {
       createdAt: '2026-08-01T02:00:02.000Z', completedAt: '2026-08-01T02:00:02.000Z',
       toolActivities: [{
         itemId: 'allowed-item', kind: 'read', name: 'Read', status: 'completed', summary: 'README.md',
+        sourceLocator: { turnId: 'native-turn', toolIndex: 2 },
+      }, {
+        itemId: 'legacy-item', kind: 'shell', name: 'Command', status: 'completed', summary: 'pwd',
       }, {
         itemId: 'message-item', kind: 'tool', name: 'agentMessage', status: 'completed',
       }],
     })
+    const toolReads: Array<{ sourceLocator?: unknown }> = []
     const adapter: ChatProviderAdapter = {
       start: async () => { throw new Error('unexpected start') },
       resume: async () => { throw new Error('unexpected resume') },
       interrupt: async () => undefined,
-      readToolItem: async (request) => ({
-        available: true,
-        content: `${request.nativeSessionId}:${request.itemId}:${request.cursor ?? 0}`,
-        nextCursor: null,
-      }),
+      readToolItem: async (request) => {
+        toolReads.push(request)
+        return {
+          available: true,
+          content: `${request.nativeSessionId}:${request.itemId}:${request.cursor ?? 0}`,
+          nextCursor: null,
+        }
+      },
       archive: async () => undefined,
       unarchive: async () => undefined,
       delete: async () => undefined,
@@ -219,11 +226,21 @@ describe('NativeChatController', () => {
 
     expect(store.readThread('chat-tool')?.messages.at(-1)?.toolActivities).toEqual([{
       itemId: 'allowed-item', kind: 'read', name: 'Read', status: 'completed', summary: 'README.md',
+      sourceLocator: { turnId: 'native-turn', toolIndex: 2 },
+    }, {
+      itemId: 'legacy-item', kind: 'shell', name: 'Command', status: 'completed', summary: 'pwd',
     }])
 
     await expect(controller.readToolItem({
       chatId: 'chat-tool', itemId: 'allowed-item', cursor: 4, limit: 128,
     })).resolves.toMatchObject({ content: 'native-tool-session:allowed-item:4' })
+    expect(toolReads).toEqual([expect.objectContaining({
+      sourceLocator: { turnId: 'native-turn', toolIndex: 2 },
+    })])
+    await controller.readToolItem({ chatId: 'chat-tool', itemId: 'legacy-item' })
+    expect(toolReads.at(-1)).toEqual(expect.objectContaining({
+      sourceLocator: { turnIndex: 0, toolIndex: 1 },
+    }))
     await expect(controller.readToolItem({
       chatId: 'chat-tool', itemId: 'unknown-item', cursor: 0, limit: 128,
     })).rejects.toThrow('tool item was not found')
