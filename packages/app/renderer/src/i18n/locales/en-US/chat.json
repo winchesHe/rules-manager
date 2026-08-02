@@ -80,6 +80,8 @@
   "clearRange": "Clear",
   "selectedSessions": "Selected",
   "clearSelected": "Clear",
+  "noSelectedSessions": "No Sessions selected",
+  "sessionFilters": "Filters",
   "availableSessions": "Available Sessions",
   "selectAll": "Select all",
   "deselectAll": "Deselect all",

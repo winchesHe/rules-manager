@@ -150,7 +150,7 @@ describe('home workflow layout', () => {
     expect(source).toContain('data-chat-context-reopen')
     expect(source).toContain('isOpen={managementOpen')
     expect(source).toContain('data-session-context')
-    expect(source).toContain('max-h-28')
+    expect(source).toContain('min-h-0 flex-1 gap-1 overflow-y-auto')
     expect(source).toContain('overflow-y-auto')
     expect(source).toContain('min-w-0 max-w-full overflow-hidden')
     expect(source).toContain('break-words whitespace-pre-wrap')
@@ -185,6 +185,16 @@ describe('home workflow layout', () => {
     expect(source).toContain('toggleAvailableSessionSelection')
     expect(source).toContain("allItemsSelected ? t('deselectAll') : t('selectAll')")
     expect(source).toContain('data-session-context-select-all')
+  })
+
+  it('Session Context 固定已选区域并标明筛选区', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('flex h-44 flex-col border-b border-border p-4')
+    expect(source).toContain('data-session-context-selected')
+    expect(source).toContain("t('sessionFilters')")
+    expect(source).toContain("t('noSelectedSessions')")
+    expect(source).not.toContain('selected.length > 0 && (')
   })
 
   it('Composer 保留完整运行能力并按原型划分左右操作组', () => {

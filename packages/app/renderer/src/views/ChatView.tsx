@@ -1657,13 +1657,20 @@ function SessionContextPicker({
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" data-session-context>
       <div>
-        {selected.length > 0 && (
-          <div className="border-b border-border p-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
-              <Button onPress={() => onSelectedChange([])} size="sm" variant="ghost">{t('clearSelected')}</Button>
-            </div>
-            <div className="grid max-h-28 gap-1 overflow-y-auto pr-1">
+        <div className="flex h-44 flex-col border-b border-border p-4" data-session-context-selected>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
+            <Button
+              isDisabled={selected.length === 0}
+              onPress={() => onSelectedChange([])}
+              size="sm"
+              variant="ghost"
+            >
+              {t('clearSelected')}
+            </Button>
+          </div>
+          {selected.length > 0 ? (
+            <div className="grid min-h-0 flex-1 gap-1 overflow-y-auto pr-1">
               {selected.map((reference) => {
                 const item = knownItems.get(sessionReferenceKey(reference))
                 return (
@@ -1682,9 +1689,16 @@ function SessionContextPicker({
                 )
               })}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="grid min-h-0 flex-1 place-items-center text-center text-[11px] leading-5 text-muted">
+              {t('noSelectedSessions')}
+            </div>
+          )}
+        </div>
         <div className="border-b border-border p-4">
+          <div className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            {t('sessionFilters')}
+          </div>
           <Select aria-label={t('contextProject')} onSelectionChange={(key) => onProjectChange(String(key))} selectedKey={project}>
             <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
             <Select.Popover><ListBox><ListBox.Item id="all">{t('allProjects')}</ListBox.Item>{projectOptions.map((slug) => <ListBox.Item id={slug} key={slug}>{slug === 'default' ? t('defaultProject') : slug}</ListBox.Item>)}</ListBox></Select.Popover>

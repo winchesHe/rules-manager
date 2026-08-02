@@ -80,6 +80,8 @@
   "clearRange": "清除",
   "selectedSessions": "已选择",
   "clearSelected": "清空",
+  "noSelectedSessions": "尚未选择 Session",
+  "sessionFilters": "筛选",
   "availableSessions": "可选 Session",
   "selectAll": "全选",
   "deselectAll": "取消全选",

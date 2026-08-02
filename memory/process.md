@@ -2127,3 +2127,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留既有
   `tsdown define` 配置警告。
 - 提交信息：`feat: 支持全选当前 Session 结果`
+
+## Session Context 筛选与已选区域稳定（2026-08-02）
+
+- Session Context 明确拆成“已选择 → 筛选 → 可选 Session”三个区段；项目、日期、最近 7/30 天与
+  清除筛选上方新增“筛选”小标题，补齐中英文文案。
+- 已选择区改为始终渲染的 11rem 固定区域：0 条时显示空状态并禁用清空按钮，多条时在区段内部滚动，
+  不再因选择数量变化推动筛选区和可选列表上下跳动。
+- 新增 Renderer 布局契约并更新旧高度断言。真实 production Electron 在 1728×979 下分别测量空选与
+  全选 100 条：已选区均为 176px，筛选标题 top 均为 240px，可选列表 top 均为 402px。
+- 最终截图为 `docs/prototypes/chat-implementation-v7-context-sections.png`。`simplify` 复核仅整理 JSX
+  排版；App 23 suites / 147 tests、Core 26 suites / 278 tests 全绿，两端 production build 与
+  `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
+- 提交信息：`fix: 稳定 Session Context 区域布局`
