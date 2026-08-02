@@ -25,23 +25,23 @@
 
 :root.dark {
   color-scheme: dark;
-  --theme-background: 0 0% 4%;
-  --theme-sidebar: 0 0% 0%;
-  --theme-surface: 0 0% 8%;
-  --theme-surface-hover: 0 0% 13%;
+  --theme-background: 0 0% 12%;
+  --theme-sidebar: 0 0% 9%;
+  --theme-surface: 0 0% 15%;
+  --theme-surface-hover: 0 0% 19%;
   --theme-foreground: 0 0% 100%;
   --theme-muted: 0 0% 65%;
   --theme-primary: 0 0% 100%;
   --theme-primary-foreground: 0 0% 0%;
-  --theme-primary-soft: 0 0% 16%;
-  --theme-border: 0 0% 18%;
+  --theme-primary-soft: 0 0% 20%;
+  --theme-border: 0 0% 22%;
   --theme-danger: 0 60% 50%;
   --theme-danger-foreground: 0 0% 100%;
   --theme-success: 156 60% 40%;
   --theme-success-foreground: 0 0% 0%;
   --theme-warning: 42 80% 55%;
   --theme-warning-foreground: 0 0% 8%;
-  --theme-default: 0 0% 18%;
+  --theme-default: 0 0% 19%;
   --theme-default-foreground: 0 0% 100%;
   --background: var(--color-background);
   --surface: var(--color-surface);

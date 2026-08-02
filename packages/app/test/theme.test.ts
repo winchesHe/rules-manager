@@ -134,11 +134,13 @@ describe('APP theme', () => {
     expect(app).toContain('changeAppTheme')
   })
 
-  it('主题 token 符合暗黑白黑与明亮白蓝契约', () => {
+  it('主题 token 符合暗黑炭灰与明亮白蓝契约', () => {
     const styles = fs.readFileSync(path.join(rendererRoot, 'styles.css'), 'utf8')
     const dark = styles.match(/:root\.dark\s*{([\s\S]*?)\n}/)?.[1]
     const light = styles.match(/:root\.light\s*{([\s\S]*?)\n}/)?.[1]
-    expect(dark).toContain('--theme-background: 0 0% 4%')
+    expect(dark).toContain('--theme-background: 0 0% 12%')
+    expect(dark).toContain('--theme-sidebar: 0 0% 9%')
+    expect(dark).toContain('--theme-surface: 0 0% 15%')
     expect(dark).toContain('--theme-primary: 0 0% 100%')
     expect(dark).toContain('--theme-primary-foreground: 0 0% 0%')
     expect(light).toContain('--theme-sidebar: 0 0% 100%')

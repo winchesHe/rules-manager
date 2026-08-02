@@ -4,7 +4,7 @@
 
 ## 主题模式
 
-默认 **dark 模式**，支持 light 模式切换。dark 使用白黑中性色，light 使用白蓝配色；
+默认 **dark 模式**，支持 light 模式切换。dark 使用 Codex 风格深炭灰与白色前景，light 使用白蓝配色；
 用户选择保存在本机，重启后恢复上次主题。
 
 ## 色彩 Token
@@ -13,15 +13,15 @@
 
 | 语义 | CSS 变量 | 值（dark） | 值（light） | 用途 |
 |---|---|---|---|---|
-| 背景-主区域 | `--color-background` | `hsl(0 0% 4%)` | `hsl(214 40% 97%)` | workspace 主背景 |
-| 背景-侧边栏 | `--color-sidebar` | `hsl(0 0% 0%)` | `hsl(0 0% 100%)` | 侧边栏背景 |
-| 背景-卡片 | `--color-surface` | `hsl(0 0% 8%)` | `hsl(0 0% 100%)` | Card / Panel 背景 |
-| 背景-悬浮 | `--color-surface-hover` | `hsl(0 0% 13%)` | `hsl(214 100% 96%)` | 导航 hover / active |
+| 背景-主区域 | `--color-background` | `hsl(0 0% 12%)` | `hsl(214 40% 97%)` | workspace 主背景 |
+| 背景-侧边栏 | `--color-sidebar` | `hsl(0 0% 9%)` | `hsl(0 0% 100%)` | 侧边栏背景 |
+| 背景-卡片 | `--color-surface` | `hsl(0 0% 15%)` | `hsl(0 0% 100%)` | Card / Panel 背景 |
+| 背景-悬浮 | `--color-surface-hover` | `hsl(0 0% 19%)` | `hsl(214 100% 96%)` | 导航 hover / active |
 | 前景-主文字 | `--color-foreground` | `hsl(0 0% 100%)` | `hsl(222 47% 11%)` | 标题、正文 |
 | 前景-次文字 | `--color-muted` | `hsl(0 0% 65%)` | `hsl(215 16% 47%)` | 描述、标签 |
 | 强调色 | `--color-primary` | `hsl(0 0% 100%)` | `hsl(217 91% 60%)` | 主操作、active icon |
-| 强调色-柔 | `--color-primary-soft` | `hsl(0 0% 16%)` | `hsl(214 100% 93%)` | accent card 背景 |
-| 边框 | `--color-border` | `hsl(0 0% 18%)` | `hsl(214 32% 91%)` | 分隔线、卡片边框 |
+| 强调色-柔 | `--color-primary-soft` | `hsl(0 0% 20%)` | `hsl(214 100% 93%)` | accent card 背景 |
+| 边框 | `--color-border` | `hsl(0 0% 22%)` | `hsl(214 32% 91%)` | 分隔线、卡片边框 |
 | 危险 | `--color-danger` | `hsl(0 60% 50%)` | `hsl(0 65% 48%)` | 错误状态 |
 | 成功 | `--color-success` | `hsl(156 60% 40%)` | `hsl(156 55% 34%)` | 在线状态点 |
 

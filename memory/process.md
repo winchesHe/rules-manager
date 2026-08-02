@@ -1948,3 +1948,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   build 与 `git diff --check` 通过。App 独立 typecheck 仍只有既有跨 workspace `rootDir/TS6307`、
   JSON include 与 `RulesView` 类型债。
 - 提交信息：`feat: 持久化白黑与白蓝主题`
+
+## APP 暗色背景 Codex 炭灰化（2026-08-02）
+
+- 用户反馈上一轮 dark 主背景 `4%`、侧栏 `0%` 过黑；本轮保留白色前景、白色主操作、light 白蓝
+  配色和 `memory-manager.theme` 持久化，仅重排 dark 背景层级。
+- dark 主背景改为 `hsl(0 0% 12%)`（约 `#1f1f1f`），侧栏 `9%`、Surface `15%`、hover `19%`、
+  primary-soft `20%`、border `22%`、default `19%`，形成 Codex 风格深炭灰层次。
+- 主题契约先按新值失败、实现后恢复 6/6；App 全量 21 suites / 133 tests 与 production build 通过。
+  真实 Memory Manager 暗色窗口检查确认主背景不再接近纯黑，侧栏、主区、卡片和 hover 辨识清楚。
+- Computer Use 不允许读取 Codex 自身窗口；色阶以本机安装包可见静态资源和 Codex 当前视觉观感为参照，
+  并在目标 APP 实际窗口完成最终视觉检查。
+- 提交信息：`style: 调整暗色背景为 Codex 炭灰`

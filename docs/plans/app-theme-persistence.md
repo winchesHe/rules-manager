@@ -37,3 +37,16 @@
   App/Core production build 与 `git diff --check` 通过。
 - App 独立 typecheck 仍命中既有跨 workspace `rootDir/TS6307`、JSON include 与 `RulesView`
   类型债；本轮新增模块由 ts-jest 编译通过，完整 Renderer 已由 production build 验证。
+
+## 2026-08-02 暗色背景补充轮
+
+- 用户反馈上一版 `4% / 0%` 的主背景与侧栏接近纯黑，视觉过重；本轮只调整 dark token，
+  light 白蓝配色与主题持久化行为保持不变。
+- 参照 Codex 的深炭灰观感，将主背景提升到 `12%`，侧栏为 `9%`，Surface 为 `15%`，并同步
+  hover、soft、border 与 default 层级，避免单点换色破坏层次。
+- 观察点：暗色页面不再呈现纯黑，侧栏仍略深于主区，卡片与 hover 仍逐层变亮。
+- 验证方式：先更新暗色 token 契约复现失败，再运行主题定向测试、App 全量测试、production build
+  与 `git diff --check`；完成后同步本节状态与 `memory/process.md`。
+- 结果：主背景 `12%`、侧栏 `9%`、Surface `15%`、hover `19%`、soft `20%`、border `22%`；
+  主题定向 6/6、App 21 suites / 133 tests、production build 通过。真实 Memory Manager 暗色窗口
+  检查确认主区已变为深炭灰，侧栏、主区、卡片与 hover 层级清晰。
