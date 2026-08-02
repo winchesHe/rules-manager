@@ -11,6 +11,7 @@ import {
   Copy,
   Eye,
   FilePenLine,
+  History,
   MoreHorizontal,
   PanelRight,
   Pencil,
@@ -112,7 +113,7 @@ export function ChatView({
   const [selectedContext, setSelectedContext] = useState<NativeSessionReference[]>([])
   const [selectedContextItems, setSelectedContextItems] = useState<SessionContextItem[]>([])
   const [historyMode, setHistoryMode] = useState<'active' | 'archived'>('active')
-  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false)
+  const [historyPaneOpen, setHistoryPaneOpen] = useState(true)
   const [contextPaneOpen, setContextPaneOpen] = useState(
     () => readStoredContextPaneOpen(window.localStorage),
   )
@@ -136,7 +137,7 @@ export function ChatView({
   }, [selectedId])
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 1600px)')
+    const mediaQuery = window.matchMedia('(max-width: 1279px)')
     const syncLayout = () => setCompactLayout(mediaQuery.matches)
     syncLayout()
     mediaQuery.addEventListener('change', syncLayout)
@@ -144,16 +145,20 @@ export function ChatView({
   }, [])
 
   useEffect(() => {
-    if (!historyDrawerOpen && !compactContextOpen && !composerOptionsOpen) return
+    const hasEscapableOverlay =
+      composerOptionsOpen || (compactLayout && (historyPaneOpen || compactContextOpen))
+    if (!hasEscapableOverlay) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      setHistoryDrawerOpen(false)
-      setCompactContextOpen(false)
       setComposerOptionsOpen(false)
+      if (compactLayout) {
+        setHistoryPaneOpen(false)
+        setCompactContextOpen(false)
+      }
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [compactContextOpen, composerOptionsOpen, historyDrawerOpen])
+  }, [compactContextOpen, compactLayout, composerOptionsOpen, historyPaneOpen])
 
   useEffect(() => {
     void Promise.all([
@@ -432,14 +437,14 @@ export function ChatView({
   }
 
   function selectThread(id: string): void {
-    setHistoryDrawerOpen(false)
+    if (compactLayout) setHistoryPaneOpen(false)
     setSelectedId(id)
     selectedIdRef.current = id
     void refresh(id)
   }
 
   function startDraft(): void {
-    setHistoryDrawerOpen(false)
+    if (compactLayout) setHistoryPaneOpen(false)
     preserveDraftContextRef.current = false
     setSelectedId(null)
     selectedIdRef.current = null
@@ -661,30 +666,70 @@ export function ChatView({
   } else if (!compactLayout && !contextPaneOpen) {
     contextVisibilityClass = 'pointer-events-none translate-x-7 opacity-0'
   }
-  const overlayOpen = historyDrawerOpen || compactContextOpen
+  const overlayOpen = compactLayout && (historyPaneOpen || compactContextOpen)
+  const historyPane = (
+    <aside
+      aria-hidden={!historyPaneOpen}
+      aria-label={t('threadRail')}
+      className={`relative z-10 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-r border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-0 max-[1279px]:left-0 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-72 max-[1279px]:shadow-2xl ${historyPaneOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}
+      data-chat-history-pane
+      inert={!historyPaneOpen}
+    >
+      <div className="grid gap-3 border-b border-border p-3">
+        <div className="flex items-center justify-between gap-2">
+          <strong className="text-sm font-semibold">{t('threadRail')}</strong>
+          <Button isIconOnly onPress={() => setHistoryPaneOpen(false)} size="sm" variant="ghost"><X aria-label={t('closeHistory')} size={15} /></Button>
+        </div>
+        <Button className="h-9 gap-2 border border-border bg-surface-hover" fullWidth onPress={startDraft} variant="ghost"><Plus size={15} />{t('newChat')}</Button>
+        <div className="grid grid-cols-2 gap-1">
+          <Button className="h-8" onPress={() => setHistoryMode('active')} size="sm" variant={historyMode === 'active' ? 'primary' : 'ghost'}>{t('activeChats')}</Button>
+          <Button className="h-8" onPress={() => setHistoryMode('archived')} size="sm" variant={historyMode === 'archived' ? 'primary' : 'ghost'}>{t('archivedChats')}</Button>
+        </div>
+      </div>
+      <div className="min-h-0 overflow-y-auto p-2">
+        {loading ? <div className="grid place-items-center py-12"><Spinner color="accent" /></div> : visibleItems.length === 0 ? (
+          <p className="px-3 py-8 text-xs leading-5 text-muted">{t('empty')}</p>
+        ) : visibleItems.map((item) => {
+          const status = item.thread?.status ?? item.legacy?.status ?? 'completed'
+          const active = item.id === selectedId
+          return (
+            <button aria-current={active ? 'page' : undefined} className={`grid w-full gap-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${active ? 'bg-primary-soft' : ''}`} key={item.id} onClick={() => selectThread(item.id)} type="button">
+              <strong className="truncate text-xs font-medium text-foreground">{item.thread ? item.thread.kind === 'native-chat' ? item.thread.title : threadTitle(item.thread.request, t) : legacyTitle(item.legacy!, t)}</strong>
+              <span className="flex items-center justify-between gap-2 text-[10px] text-muted"><span>{t(`status.${status}`, { defaultValue: status })}</span>{!item.thread && <span>{t('legacy')}</span>}</span>
+            </button>
+          )
+        })}
+      </div>
+    </aside>
+  )
 
   return (
     <section aria-label={t('title')} className="relative h-screen min-h-0 overflow-hidden bg-background">
       <div
         className={`grid h-full min-h-0 transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${contextPaneOpen
           ? 'grid-cols-[minmax(0,1fr)_22rem]'
-          : 'grid-cols-[minmax(0,1fr)_0rem]'} max-[1600px]:grid-cols-1`}
+          : 'grid-cols-[minmax(0,1fr)_0rem]'} max-[1279px]:grid-cols-1`}
         data-chat-workspace
       >
         <main aria-label={t('conversation')} className="grid min-h-0 min-w-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden bg-background">
           <header className="window-no-drag relative z-20 flex min-w-0 items-center gap-1 border-b border-border px-3" data-chat-header>
             <Button
-              className="min-w-0 justify-start gap-2 px-2 text-sm text-foreground"
-              data-chat-history-trigger
+              className={historyPaneOpen ? 'bg-surface-hover' : undefined}
+              data-chat-history-toggle
+              isIconOnly
               onPress={() => {
                 setCompactContextOpen(false)
-                setHistoryDrawerOpen(true)
+                setHistoryPaneOpen((open) => !open)
               }}
+              size="sm"
               variant="ghost"
             >
-              <strong className="min-w-0 truncate font-semibold">{currentTitle}</strong>
-              <span className="shrink-0 text-xs font-normal text-muted">{currentSubtitle}</span>
+              <History aria-label={historyPaneOpen ? t('closeHistory') : t('openHistory')} size={16} />
             </Button>
+            <div className="flex min-w-0 items-baseline gap-2 px-1" data-chat-current-title>
+              <strong className="min-w-0 truncate text-sm font-semibold text-foreground">{currentTitle}</strong>
+              <span className="shrink-0 text-xs font-normal text-muted">{currentSubtitle}</span>
+            </div>
             {thread?.kind === 'native-chat' && (
               <Button
                 data-chat-management-trigger
@@ -724,24 +769,19 @@ export function ChatView({
                   {thread.status === 'cancelling' ? t('cancelling') : t('stopGeneration')}
                 </Button>
               )}
-              <Button
-                className="relative"
-                data-chat-context-toggle
-                isIconOnly
-                onPress={() => {
-                  setHistoryDrawerOpen(false)
-                  setContextOpen(!contextPanelOpen)
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                <PanelRight aria-label={contextPanelOpen ? t('collapseContext') : t('expandContext')} size={16} />
-                {selectedContext.length > 0 && (
-                  <span className="absolute right-0 top-0 grid min-w-3.5 place-items-center rounded-full bg-success px-1 text-[8px] font-bold text-success-foreground">
-                    {selectedContext.length}
-                  </span>
-                )}
-              </Button>
+              {!contextPanelOpen && (
+                <Button
+                  className="h-8 gap-1.5 border border-border bg-surface px-2.5 text-xs text-muted"
+                  data-chat-context-reopen
+                  onPress={() => setContextOpen(true)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <PanelRight aria-hidden="true" size={14} />
+                  {t('contextShort')}
+                  <span className="grid min-w-4 place-items-center rounded-full bg-primary-soft px-1 text-[9px] font-semibold text-success">{selectedContext.length}</span>
+                </Button>
+              )}
             </div>
           </header>
 
@@ -751,9 +791,14 @@ export function ChatView({
             </Alert>
           )}
 
-          <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden">
+          <div
+            className={`grid min-h-0 min-w-0 overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${historyPaneOpen ? 'grid-cols-[18rem_minmax(0,1fr)]' : 'grid-cols-[0rem_minmax(0,1fr)]'} max-[1279px]:grid-cols-1`}
+            data-chat-body
+          >
+            {historyPane}
+            <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden">
             <section
-              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-[clamp(1rem,4vw,3rem)] pb-8 pt-8"
+              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pb-8 pt-8"
               data-chat-conversation
               onScroll={updateFollowState}
               ref={conversationRef}
@@ -772,7 +817,7 @@ export function ChatView({
             </section>
 
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
-              <div className="bg-gradient-to-t from-background via-background to-transparent px-[clamp(1rem,4vw,3rem)] pb-4 pt-3" data-chat-composer>
+              <div className="bg-gradient-to-t from-background via-background to-transparent px-5 pb-4 pt-3" data-chat-composer>
                 <div className="mx-auto w-full max-w-[51.25rem] rounded-2xl border border-border bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_14px_36px_rgba(0,0,0,0.22)] motion-reduce:transition-none" data-chat-composer-surface>
                   <textarea
                     aria-label={t('message')}
@@ -787,9 +832,9 @@ export function ChatView({
                     placeholder={t('messagePlaceholder')}
                     value={composer}
                   />
-                  <div className="flex min-w-0 items-center gap-1 px-2 pb-2 pt-1 text-xs text-muted">
-                    <div className="relative" data-composer-options>
-                      <Button isIconOnly onPress={() => setComposerOptionsOpen((open) => !open)} size="sm" variant="ghost">
+                  <div className="flex min-h-11 min-w-0 items-center gap-2 px-2 pb-2 pt-1 text-xs text-muted">
+                    <div className="relative h-8" data-composer-options>
+                      <Button className="h-8 min-h-8 w-8 min-w-8" isIconOnly onPress={() => setComposerOptionsOpen((open) => !open)} size="sm" variant="ghost">
                         <Plus aria-label={t('moreOptions')} size={16} />
                       </Button>
                       {composerOptionsOpen && (
@@ -816,24 +861,24 @@ export function ChatView({
                         </div>
                       )}
                     </div>
-                    <Button className="gap-1 px-2" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
+                    <Button className="h-8 min-h-8 gap-1 border border-border bg-background/20 px-2" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
                       <PanelRight aria-hidden="true" size={14} />{t('contextShort')} <span className="font-semibold text-success">{selectedContext.length}</span>
                     </Button>
-                    <div className="flex min-w-0 items-center gap-1" data-composer-runtime>
+                    <div className="flex h-8 min-w-0 items-center gap-1" data-composer-runtime>
                       <Select aria-label={t('agent')} className="w-24" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => setProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
-                        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item><ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item></ListBox></Select.Popover>
                       </Select>
                       <Select aria-label={t('model')} className="w-36" onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))} selectedKey={model || '__default'}>
-                        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>{(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
                       <Select aria-label={t('effort')} className="w-24" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
-                        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{CHAT_EFFORTS.map((value) => <ListBox.Item id={value} key={value}>{value}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
                     </div>
-                    <div className="ml-auto flex shrink-0 items-center gap-2.5 pl-2" data-composer-actions>
+                    <div className="ml-auto flex h-8 shrink-0 items-center gap-2.5 border-l border-border pl-3 pr-0.5" data-composer-actions>
                       <span className="flex items-center gap-1 whitespace-nowrap text-[11px]"><ShieldCheck className="text-success" size={14} />{t('fullAccess')}</span>
                       <span
                         aria-label={contextUsage ? `${contextUsage.usedTokens} / ${contextUsage.maxTokens}` : t('contextUnavailable')}
@@ -842,9 +887,9 @@ export function ChatView({
                         title={contextUsage ? `${contextUsage.usedTokens} / ${contextUsage.maxTokens}` : t('contextUnavailable')}
                       />
                       {isSending && (
-                        <Button isIconOnly onPress={() => void stopChatTurn()} size="sm" variant="ghost"><Square aria-label={t('stopChat')} size={14} /></Button>
+                        <Button className="h-8 min-h-8 w-8 min-w-8" isIconOnly onPress={() => void stopChatTurn()} size="sm" variant="ghost"><Square aria-label={t('stopChat')} size={14} /></Button>
                       )}
-                      <Button aria-label={isSending ? t('queue', { count: queuedCount }) : t('send')} className="min-w-8 rounded-full bg-primary text-primary-foreground" isDisabled={!composer.trim()} isIconOnly onPress={sendChatMessage} size="sm">
+                      <Button aria-label={isSending ? t('queue', { count: queuedCount }) : t('send')} className="h-8 min-h-8 w-8 min-w-8 rounded-full bg-primary text-primary-foreground" isDisabled={!composer.trim()} isIconOnly onPress={sendChatMessage} size="sm">
                         <Send aria-hidden="true" size={15} />
                       </Button>
                     </div>
@@ -852,19 +897,29 @@ export function ChatView({
                 </div>
               </div>
             )}
+            </div>
           </div>
         </main>
 
         <aside
           aria-hidden={!contextPanelOpen}
           aria-label={t('context')}
-          className={`grid min-h-0 grid-rows-[3rem_minmax(0,1fr)_auto] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1600px]:fixed max-[1600px]:bottom-4 max-[1600px]:right-4 max-[1600px]:top-12 max-[1600px]:z-40 max-[1600px]:w-[22rem] max-[1600px]:rounded-2xl max-[1600px]:border max-[1600px]:shadow-2xl ${contextVisibilityClass}`}
+          className={`grid min-h-0 grid-rows-[3rem_minmax(0,1fr)_auto] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-4 max-[1279px]:right-4 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-[22rem] max-[1279px]:rounded-2xl max-[1279px]:border max-[1279px]:shadow-2xl ${contextVisibilityClass}`}
           data-chat-context-panel
           inert={!contextPanelOpen}
         >
-          <header className="flex items-center gap-2 border-b border-border px-4">
+          <header className="flex items-center gap-2 border-b border-border pl-4 pr-2">
             <strong className="text-sm font-semibold text-foreground">{t('sessionContext')}</strong>
             <Chip size="sm" variant="soft">{selectedContext.length}</Chip>
+            <Button
+              className="ml-auto h-8 gap-1.5 px-2 text-xs text-muted"
+              data-chat-context-close
+              onPress={() => setContextOpen(false)}
+              size="sm"
+              variant="ghost"
+            >
+              <PanelRight aria-hidden="true" size={14} />{t('collapse')}
+            </Button>
           </header>
           <div className="min-h-0 overflow-y-auto">
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
@@ -894,43 +949,10 @@ export function ChatView({
         aria-hidden={!overlayOpen}
         aria-label={t('closePanels')}
         className={`absolute inset-0 top-12 z-30 cursor-default bg-black/45 transition-opacity duration-200 motion-reduce:transition-none ${overlayOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
-        onClick={() => { setHistoryDrawerOpen(false); setCompactContextOpen(false) }}
+        onClick={() => { setHistoryPaneOpen(false); setCompactContextOpen(false) }}
         tabIndex={overlayOpen ? 0 : -1}
         type="button"
       />
-      <aside
-        aria-hidden={!historyDrawerOpen}
-        aria-label={t('threadRail')}
-        className={`absolute bottom-0 left-0 top-12 z-40 grid w-72 grid-rows-[auto_minmax(0,1fr)] border-r border-border bg-surface shadow-2xl transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none ${historyDrawerOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}
-        data-chat-history-drawer
-        inert={!historyDrawerOpen}
-      >
-        <div className="grid gap-3 border-b border-border p-3">
-          <div className="flex items-center justify-between gap-2">
-            <strong className="text-sm font-semibold">{t('threadRail')}</strong>
-            <Button isIconOnly onPress={() => setHistoryDrawerOpen(false)} size="sm" variant="ghost"><X aria-label={t('closeHistory')} size={15} /></Button>
-          </div>
-          <Button className="gap-2 border border-border bg-surface-hover" fullWidth onPress={startDraft} variant="ghost"><Plus size={15} />{t('newChat')}</Button>
-          <div className="grid grid-cols-2 gap-1">
-            <Button onPress={() => setHistoryMode('active')} size="sm" variant={historyMode === 'active' ? 'primary' : 'ghost'}>{t('activeChats')}</Button>
-            <Button onPress={() => setHistoryMode('archived')} size="sm" variant={historyMode === 'archived' ? 'primary' : 'ghost'}>{t('archivedChats')}</Button>
-          </div>
-        </div>
-        <div className="min-h-0 overflow-y-auto p-2">
-          {loading ? <div className="grid place-items-center py-12"><Spinner color="accent" /></div> : visibleItems.length === 0 ? (
-            <p className="px-3 py-8 text-xs leading-5 text-muted">{t('empty')}</p>
-          ) : visibleItems.map((item) => {
-            const status = item.thread?.status ?? item.legacy?.status ?? 'completed'
-            const active = item.id === selectedId
-            return (
-              <button aria-current={active ? 'page' : undefined} className={`grid w-full gap-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${active ? 'bg-primary-soft' : ''}`} key={item.id} onClick={() => selectThread(item.id)} type="button">
-                <strong className="truncate text-xs font-medium text-foreground">{item.thread ? item.thread.kind === 'native-chat' ? item.thread.title : threadTitle(item.thread.request, t) : legacyTitle(item.legacy!, t)}</strong>
-                <span className="flex items-center justify-between gap-2 text-[10px] text-muted"><span>{t(`status.${status}`, { defaultValue: status })}</span>{!item.thread && <span>{t('legacy')}</span>}</span>
-              </button>
-            )
-          })}
-        </div>
-      </aside>
       <Modal
         isOpen={managementOpen && thread?.kind === 'native-chat'}
         onOpenChange={setManagementOpen}

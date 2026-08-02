@@ -31,22 +31,23 @@ Chat 使用 `workspace + fluid`，占满 App Shell 内可用 viewport，页面�
 
 ```text
 ┌──────────────┬──────────────────────────────────┬──────────────────────┐
-│ 产品导航     │ Chat header / History trigger    │ Session Context      │
+│ 产品导航     │ History / Chat conversation      │ Session Context      │
 │ Scan         │ Messages + Tool activities       │ Selected refs        │
 │ Projects     │                                  │ Project / All        │
 │ Chat         │                                  │ Date range / 7d /30d │
 │ Rules        │ Composer + runtime controls      │ Session checklist    │
 └──────────────┴──────────────────────────────────┴──────────────────────┘
-                 ↳ 18rem History Drawer（按需覆盖）
+                 ↳ 18rem History（桌面默认展开，窄屏按需覆盖）
 ```
 
 常驻宽度为 `14rem + minmax(0, 1fr) + 22rem`，Conversation 与 Composer 共享 820px
 阅读线。Session Context 收起后中央列取得完整 22rem；页面不保留外层 Card。
 
-### 3.1 History Drawer
+### 3.1 History Pane
 
-- Chat Header 标题打开 18rem 覆盖式 Drawer；Drawer 不参与主 Grid 重排，包含 New Chat、
-  Active 和 Archived 入口。
+- Chat Header 的独立历史按钮控制 18rem History Pane；当前标题不承担打开历史的行为。桌面端 Pane
+  默认展开并参与 Chat 内部 Grid 重排，1279px 及以下改为带遮罩的覆盖式 Drawer。
+- 桌面端 Escape 只关闭临时 Composer 选项，不关闭常驻 History Pane；窄屏 Escape 可关闭覆盖式历史栏。
 - Active 默认按 Paseo 的最近活动时间分组和排序；支持重命名与 Archive。
 - New Chat 先创建 Renderer 内 Draft。首次发送前不写 ChatStore、不创建 Native Session；
   离开空 Draft 时直接丢弃。
@@ -77,9 +78,9 @@ Chat 使用 `workspace + fluid`，占满 App Shell 内可用 viewport，页面�
 
 ### 3.4 Session Context Pane
 
-- 桌面端宽 22rem，可由 Chat Header 或 Composer 收起/展开；桌面偏好保存到 Renderer
+- 桌面端宽 22rem，展开时由右栏自身 Header 收起，关闭后可由 Chat Header 或 Composer 恢复；桌面偏好保存到 Renderer
   `localStorage`，不进入 workspace config、DB 或 ChatStore。
-- 1600px 及以下改为带遮罩的覆盖式 Drawer；支持 Escape 关闭，关闭时使用 `inert` 隔离交互。
+- 1279px 及以下改为带遮罩的覆盖式 Drawer；支持 Escape 关闭，关闭时使用 `inert` 隔离交互。
 - Project 支持单项目、`default` 和 `all`；`all` 包含 `default`。
 - 支持起止日期和最近 7 天、最近 30 天快捷选择；日期按本机时区包含首尾自然日。
 - Session 列表按 `updatedAt DESC, id DESC` 分页查询并虚拟化，支持逐条选择。

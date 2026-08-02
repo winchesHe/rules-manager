@@ -1,6 +1,7 @@
 {
   "title": "Chat",
-  "threadRail": "对话列表",
+  "threadRail": "对话历史",
+  "openHistory": "打开对话历史",
   "closeHistory": "关闭对话历史",
   "newChat": "新建对话",
   "activeChats": "当前",
@@ -24,6 +25,7 @@
   "conversation": "对话",
   "context": "任务上下文",
   "contextShort": "上下文",
+  "collapse": "收起",
   "collapseContext": "收起 Session 上下文",
   "expandContext": "展开 Session 上下文",
   "contextUnavailable": "上下文用量暂不可用",

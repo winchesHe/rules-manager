@@ -2041,3 +2041,23 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   三张基线同构。Core 26 suites / 277 tests、App 23 suites / 140 tests 全绿；Core/App production
   build 与 `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
 - 提交信息：`refactor: 落地 Chat Codex Paseo 布局`
+
+## Chat 默认历史栏与双侧栏归属修正（2026-08-02）
+
+- 按最新版 HTML 将上一轮覆盖式 History Drawer 修正为 Chat 内部 18rem History Pane：桌面进入
+  Chat 默认展开并参与 Grid 重排，1279px 及以下才使用带遮罩的覆盖式 Drawer；产品级 14rem 导航
+  继续保持唯一常驻主导航。
+- Chat Header 将历史开关与当前标题拆开；Session Context 展开时由右栏 Header 的“收起”控制，
+  关闭后 Header 才显示“上下文 N”恢复入口。Composer 的 `+`、Context、Provider、Model、Effort、
+  Full access / Context Window 与发送按钮统一为 32px 基线。
+- 桌面 Escape 只关闭 Composer 次级菜单，不再误关默认 History Pane 或内联 Context；窄屏 Escape
+  继续关闭覆盖式历史/Context Drawer。选择对话或新建草稿也只在窄屏自动收起历史栏。
+- `DESIGN.md`、Chat 专项 spec 和实现 plan 已同步桌面常驻/窄屏覆盖边界；`simplify` 复核确认本轮
+  状态命名和 Escape 条件保持显式，没有引入额外抽象或业务行为变化。
+- Computer Use 在真实 production Electron 上完成默认进入 Chat、历史收起/恢复、Context 收起/恢复、
+  Composer 次级菜单打开和 Escape 关闭；默认态确认 History Pane 与 Context 同时存在，重启后的首次
+  Chat 进入仍默认展开历史栏。真实截图为 `chat-implementation-v2-default.png`、
+  `chat-implementation-v2-history-collapsed.png`、`chat-implementation-v2-context-collapsed.png`。
+- 最终自动化基线：App 23 suites / 140 tests、Core 26 suites / 277 tests 全绿；两端 production
+  build 通过。Core build 仅保留既有 `tsdown define` 配置警告。
+- 提交信息：`refactor: 默认展开 Chat 历史栏`

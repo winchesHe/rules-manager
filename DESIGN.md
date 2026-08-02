@@ -149,7 +149,7 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 - **Scan**：默认只展示最近扫描结果；“新建扫描”进入独立 Agent 配置页。
 - **Projects**：默认只展示可搜索、可筛选的项目列表；选择项目后进入独立详情，详情内切换 Sessions / Rules。
 - **Chat**：统一承载 Agent Run 的流式过程与可恢复正文；产品导航保持 Scan / Projects / Chat / Rules，
-  对话历史由 Chat Header 按需展开，中央对话负责 Request / Assistant / Artifact，右侧 Session
+  桌面端对话历史在 Chat 内默认展开并可独立收起，中央对话负责 Request / Assistant / Artifact，右侧 Session
   Context 负责选择当前 Chat 引用的历史 Session。
 - Chat 终态操作与 Run 状态一致：成功且有候选时提供审核出口；失败、取消或中断时提供“重新生成”，复用原请求创建新 Run 并保留旧 Thread；运行态不提供重复生成。
 - **Rules**：默认只展示候选规则队列；生成范围、单条审核、产物输出分别进入独立页面。
@@ -182,8 +182,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 
 - Chat 继续使用 `workspace + fluid`：14rem 产品导航是唯一常驻左栏，Chat 内部由 Conversation
   与可收起的 22rem Session Context 组成，不再常驻 Thread Rail，也不使用页面外层 Card。
-- Chat Header 标题是历史入口，展开 18rem 覆盖式 Drawer，承载 New Chat、Active/Archived 和
-  生命周期操作；Drawer 不重排 Conversation。1600px 及以下 Session Context 同样转为覆盖式 Drawer。
+- Chat Header 使用独立历史按钮控制 18rem 历史栏，当前标题不承担导航；桌面端历史栏默认展开并
+  重排 Conversation，1279px 及以下才转为覆盖式 Drawer。Session Context 保持独立开关与收起入口。
 - Conversation 与 Composer 共享 820px 阅读线；各滚动区独立，页面级容器不滚动。
 - Conversation 底部固定 Composer。首次发送前是临时 Draft；发送后一个 Chat 永久绑定一个
   Claude 或 Codex Native Session，Provider 不可切换。
@@ -197,8 +197,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 
 ### Chat Agent Stream
 
-- Chat 页面固定为 viewport 内可用高度，页面级容器不滚动；Conversation、Context 和按需展开的
-  历史 Drawer 分别拥有内部滚动区。
+- Chat 页面固定为 viewport 内可用高度，页面级容器不滚动；Conversation、Context 和历史栏分别
+  拥有内部滚动区。
 - Agent 执行过程参照 Paseo P1，使用无卡片的紧凑 Activity timeline。
   Provider 事件统一映射为 Thinking / Read / Search / Shell / Tool，不直接渲染
   Provider 原始 payload。

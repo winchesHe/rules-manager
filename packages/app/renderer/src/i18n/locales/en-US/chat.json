@@ -1,6 +1,7 @@
 {
   "title": "Chat",
-  "threadRail": "Threads",
+  "threadRail": "Chat history",
+  "openHistory": "Open chat history",
   "closeHistory": "Close chat history",
   "newChat": "New Chat",
   "activeChats": "Active",
@@ -24,6 +25,7 @@
   "conversation": "Conversation",
   "context": "Run context",
   "contextShort": "Context",
+  "collapse": "Collapse",
   "collapseContext": "Collapse Session Context",
   "expandContext": "Expand Session Context",
   "contextUnavailable": "Context usage unavailable",

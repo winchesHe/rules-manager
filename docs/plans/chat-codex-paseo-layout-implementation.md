@@ -8,16 +8,16 @@ Session Context 与主题能力；不能用静态假数据或仅视觉相似替�
 
 视觉基线：
 
-- 默认态：`docs/prototypes/chat-codex-paseo-layout-preview.png`
-- Session Context 收起态：`docs/prototypes/chat-codex-paseo-layout-collapsed-preview.png`
-- Chat 历史 Drawer：`docs/prototypes/chat-codex-paseo-layout-history-preview.png`
+- 默认态：`docs/prototypes/chat-layout-v2-preview.png`
+- Session Context 收起态：`docs/prototypes/chat-layout-v2-collapsed-preview.png`
+- Chat 历史收起态：`docs/prototypes/chat-layout-v2-focus-preview.png`
 
 ## 完整改动范围
 
 - App Shell：保留 14rem 产品导航和主题切换，Chat 工作区去掉页面 padding 与外层 Card；移除
   “Workspace”产品概念。
-- Chat Header：显示当前标题、对话管理与唯一 Session Context 开关；点击标题打开历史 Drawer。
-- Chat 历史：将现有常驻 16rem/4rem Thread Rail 改为 18rem 覆盖式 Drawer，保留 New Chat、
+- Chat Header：独立显示历史按钮、当前标题与对话管理；Session Context 关闭时显示恢复入口。
+- Chat 历史：将现有 16rem/4rem Thread Rail 改为桌面默认展开的 18rem 可收起 Pane，保留 New Chat、
   Active/Archived、选择、重命名、归档、恢复、删除和 resume-failed 续开。
 - Conversation：正文与 Composer 共享 820px 阅读线；短对话靠近底部；用户气泡、Assistant 正文、
   Activity timeline、复制与耗时对齐原型。
@@ -40,13 +40,13 @@ Session Context 与主题能力；不能用静态假数据或仅视觉相似替�
 
 1. 1728×979 真实 Electron 默认态与 HTML 基线同构：14rem 全局导航、48px Chat Header、
    弹性 Conversation、22rem Session Context、820px Composer，无常驻 Thread Rail 和外层 Card。
-2. 点击标题打开 18rem 历史 Drawer；Drawer 覆盖 Conversation 而不重排主 Grid，所有 Thread 生命周期操作可用。
+2. 桌面进入 Chat 时默认展开 18rem 历史栏；独立图标可收起/恢复并重排 Conversation，所有 Thread 生命周期操作可用。
 3. Session Context 可从 Header 和 Composer 打开；收起后中央列获得全部 22rem，重启后恢复桌面偏好。
 4. 发送、流式消息、停止/队列、Provider/model/effort/fast/Skills、Tool 展开、Context 选择和 Rules 操作无回归。
-5. 1600px 及以下使用覆盖式历史/Context Drawer；1024×768 无页面级横向滚动。
+5. 1279px 及以下使用覆盖式历史/Context Drawer；1024×768 无页面级横向滚动。
 6. 主题切换在新版布局有效；中文和英文界面不存在缺失 key。
 7. 定向布局/交互测试、App/Core 全量测试、App/Core production build 与 `git diff --check` 全部通过。
-8. 输出真实 App 的默认、Context 收起、历史 Drawer 三张截图，并与 HTML 三张基线逐项对照。
+8. 输出真实 App 的默认、Context 收起、历史收起三张截图，并与 HTML 三张基线逐项对照。
 
 ## 观察点与验证方式
 
@@ -54,3 +54,21 @@ Session Context 与主题能力；不能用静态假数据或仅视觉相似替�
 - 每完成一个布局区块运行 App 定向测试；完成交互后用真实 IPC 数据 smoke，而不是只加载静态组件。
 - 最后以 1728×979、1440×900、1024×768 三档启动 Electron，检查滚动所有权、遮罩、展开/收起、主题与视觉对齐。
 - 最终执行两端全量测试和 production build，并把截图、尺寸与功能核对结果写入过程记录。
+
+## 第二轮：默认历史栏与控件归属修正
+
+最新版 HTML 将上一轮覆盖式历史 Drawer 改为 Chat 内部的 18rem 可收起历史栏，桌面进入 Chat
+时默认展开且不遮罩 Conversation；1279px 及以下才降级为覆盖式 Drawer。Header 的历史按钮与
+当前标题分离，Session Context 展开时在右栏自身 Header 内收起，关闭后主 Header 才显示恢复入口。
+
+本轮观察点与验证方式：
+
+- 1728×979 默认结构必须为 `224px 产品导航 + 288px 历史栏 + 864px Conversation + 352px Context`，
+  历史栏不产生 backdrop；收起历史后 Conversation 增加 288px。
+- 当前标题不再承担历史触发；独立历史图标、右栏“收起”和关闭后的“上下文 N”按钮均可由
+  Computer Use 点击并观察状态变化。
+- Composer 内容宽 820px；`+`、Context、Provider、Model、Effort、运行操作组与发送按钮均为
+  32px 高并共享垂直基线。
+- 1279px 及以下历史栏与 Context 使用遮罩式 Drawer；桌面与窄屏都不得产生页面级横向溢出。
+- 先更新布局契约使旧覆盖式默认结构失败，再实现并执行 App/Core 全量测试、两端构建；最终必须
+  使用 Computer Use 操作真实 Electron App 并保存默认、历史收起、Context 收起三张截图。
