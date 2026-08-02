@@ -1934,3 +1934,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 最终自动化基线：Core 26 suites / 277 tests、App 20 suites / 127 tests 全绿；Core/App production
   build 与 `git diff --check` 通过。
 - 提交信息：`refactor: 精简 Chat 常驻信息`。
+
+## APP 主题配色与持久化（2026-08-02）
+
+- 主题偏好由 Renderer `localStorage` 保存为 `memory-manager.theme = dark | light`；缺失、非法或
+  读取失败回退 dark，写入失败不阻断当前会话切换。主题不进入 workspace config、DB 或 ChatStore。
+- 新增 `renderer/src/theme.ts` 统一主题校验、读写、DOM class 应用与初始化；`main.tsx` 在
+  `createRoot` 前恢复已保存主题，避免重启时闪回 dark，`App.tsx` 切换时同步更新页面与持久化。
+- 暗黑模式改为白黑灰阶（黑背景、白前景和白色主操作）；明亮模式改为白蓝（白 Surface、浅蓝背景、
+  蓝色主操作）。success / danger / warning 继续保留状态语义色。
+- 新增 6 项主题契约测试，覆盖合法/非法偏好、存储异常、class 清理、初始化恢复、切换保存与配色 token。
+- 最终自动化基线：App 21 suites / 133 tests、Core 26 suites / 277 tests 全绿；两端 production
+  build 与 `git diff --check` 通过。App 独立 typecheck 仍只有既有跨 workspace `rootDir/TS6307`、
+  JSON include 与 `RulesView` 类型债。
+- 提交信息：`feat: 持久化白黑与白蓝主题`

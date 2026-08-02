@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Tooltip } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -16,8 +16,9 @@ import { ChatView } from './views/ChatView'
 import { RulesView } from './views/RulesView'
 import type { RulesSection } from './views/RulesView'
 import { SettingsView } from './views/SettingsView'
+import { changeAppTheme, readStoredTheme } from './theme'
+import type { ThemeMode } from './theme'
 
-type ThemeMode = 'dark' | 'light'
 type ContentViewId = 'overview' | 'projects' | 'chat' | 'rules'
 type ViewId = ContentViewId | 'settings'
 
@@ -45,13 +46,7 @@ export function App() {
   const [selectedChatThreadId, setSelectedChatThreadId] = useState<string | null>(null)
   const [activeRulesSection, setActiveRulesSection] = useState<RulesSection>('overview')
   const [rulesViewKey, setRulesViewKey] = useState(0)
-  const [theme, setTheme] = useState<ThemeMode>('dark')
-
-  useEffect(() => {
-    const root = document.documentElement
-    root.classList.remove('dark', 'light')
-    root.classList.add(theme)
-  }, [theme])
+  const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme(window.localStorage))
 
   function openSettings(): void {
     if (activeView !== 'settings') setPreviousView(activeView)
@@ -141,7 +136,11 @@ export function App() {
                   aria-label={theme === 'dark' ? t('switchLight') : t('switchDark')}
                   className="shrink-0 text-muted hover:bg-surface-hover hover:text-foreground"
                   isIconOnly
-                  onPress={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+                  onPress={() => {
+                    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                    changeAppTheme(nextTheme)
+                    setTheme(nextTheme)
+                  }}
                   variant="ghost"
                 >
                   {theme === 'dark' ? (

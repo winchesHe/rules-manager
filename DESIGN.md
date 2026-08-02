@@ -4,7 +4,8 @@
 
 ## 主题模式
 
-默认 **dark 模式**（侧边栏 + 工作区统一暗色调），支持 light 模式切换。
+默认 **dark 模式**，支持 light 模式切换。dark 使用白黑中性色，light 使用白蓝配色；
+用户选择保存在本机，重启后恢复上次主题。
 
 ## 色彩 Token
 
@@ -12,15 +13,15 @@
 
 | 语义 | CSS 变量 | 值（dark） | 值（light） | 用途 |
 |---|---|---|---|---|
-| 背景-主区域 | `--color-background` | `hsl(220 14% 10%)` | `hsl(220 18% 96%)` | workspace 主背景 |
-| 背景-侧边栏 | `--color-sidebar` | `hsl(220 14% 8%)` | `hsl(0 0% 100%)` | 侧边栏背景 |
-| 背景-卡片 | `--color-surface` | `hsl(220 12% 13%)` | `hsl(0 0% 100%)` | Card / Panel 背景 |
-| 背景-悬浮 | `--color-surface-hover` | `hsl(220 12% 16%)` | `hsl(220 16% 94%)` | 导航 hover / active |
-| 前景-主文字 | `--color-foreground` | `hsl(220 10% 94%)` | `hsl(220 18% 16%)` | 标题、正文 |
-| 前景-次文字 | `--color-muted` | `hsl(220 10% 55%)` | `hsl(220 10% 44%)` | 描述、标签 |
-| 强调色 | `--color-primary` | `hsl(156 50% 45%)` | `hsl(156 55% 34%)` | 品牌绿，active icon |
-| 强调色-柔 | `--color-primary-soft` | `hsl(156 40% 20%)` | `hsl(156 45% 92%)` | accent card 背景 |
-| 边框 | `--color-border` | `hsl(220 12% 18%)` | `hsl(220 14% 88%)` | 分隔线、卡片边框 |
+| 背景-主区域 | `--color-background` | `hsl(0 0% 4%)` | `hsl(214 40% 97%)` | workspace 主背景 |
+| 背景-侧边栏 | `--color-sidebar` | `hsl(0 0% 0%)` | `hsl(0 0% 100%)` | 侧边栏背景 |
+| 背景-卡片 | `--color-surface` | `hsl(0 0% 8%)` | `hsl(0 0% 100%)` | Card / Panel 背景 |
+| 背景-悬浮 | `--color-surface-hover` | `hsl(0 0% 13%)` | `hsl(214 100% 96%)` | 导航 hover / active |
+| 前景-主文字 | `--color-foreground` | `hsl(0 0% 100%)` | `hsl(222 47% 11%)` | 标题、正文 |
+| 前景-次文字 | `--color-muted` | `hsl(0 0% 65%)` | `hsl(215 16% 47%)` | 描述、标签 |
+| 强调色 | `--color-primary` | `hsl(0 0% 100%)` | `hsl(217 91% 60%)` | 主操作、active icon |
+| 强调色-柔 | `--color-primary-soft` | `hsl(0 0% 16%)` | `hsl(214 100% 93%)` | accent card 背景 |
+| 边框 | `--color-border` | `hsl(0 0% 18%)` | `hsl(214 32% 91%)` | 分隔线、卡片边框 |
 | 危险 | `--color-danger` | `hsl(0 60% 50%)` | `hsl(0 65% 48%)` | 错误状态 |
 | 成功 | `--color-success` | `hsl(156 60% 40%)` | `hsl(156 55% 34%)` | 在线状态点 |
 
@@ -249,13 +250,13 @@ font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe
 @import "@heroui/react/styles";
 
 @theme {
-  --color-sidebar: hsl(220 14% 8%);
-  --color-surface: hsl(220 12% 13%);
-  --color-surface-hover: hsl(220 12% 16%);
-  --color-muted: hsl(220 10% 55%);
-  --color-border: hsl(220 12% 18%);
-  --color-primary: hsl(156 50% 45%);
-  --color-primary-soft: hsl(156 40% 20%);
+  --color-sidebar: hsl(var(--theme-sidebar));
+  --color-surface: hsl(var(--theme-surface));
+  --color-surface-hover: hsl(var(--theme-surface-hover));
+  --color-muted: hsl(var(--theme-muted));
+  --color-border: hsl(var(--theme-border));
+  --color-primary: hsl(var(--theme-primary));
+  --color-primary-soft: hsl(var(--theme-primary-soft));
 }
 ```
 
