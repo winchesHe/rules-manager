@@ -56,6 +56,7 @@ import {
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
+  toggleAvailableSessionSelection,
   virtualWindowRange,
   visibleProjectResponses,
 } from './chat-view-model'
@@ -1637,6 +1638,8 @@ function SessionContextPicker({
   })
   const visibleItems = items.slice(start, end)
   const selectedKeys = new Set(selected.map(sessionReferenceKey))
+  const allItemsSelected = items.length > 0
+    && items.every((item) => selectedKeys.has(sessionReferenceKey(item)))
   const knownItems = new Map(selectedItems.map((item) => [sessionReferenceKey(item), item]))
   const projectOptions = ['default', ...projects.map((item) => item.slug)]
     .filter((value, index, values) => values.indexOf(value) === index)
@@ -1698,7 +1701,22 @@ function SessionContextPicker({
         </div>
       </div>
       <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] p-4" data-session-context-list>
-        <div className="mb-2 flex items-center justify-between text-xs text-muted"><span>{t('availableSessions')}</span><span>{items.length}</span></div>
+        <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted">
+          <span>{t('availableSessions')}</span>
+          <div className="flex items-center gap-1">
+            <span>{items.length}</span>
+            <Button
+              className="h-6 min-h-6 px-2 text-[10px]"
+              data-session-context-select-all
+              isDisabled={items.length === 0}
+              onPress={() => onSelectedChange(toggleAvailableSessionSelection(selected, items))}
+              size="sm"
+              variant="ghost"
+            >
+              {allItemsSelected ? t('deselectAll') : t('selectAll')}
+            </Button>
+          </div>
+        </div>
         <div
           className="relative min-h-0 overflow-y-auto rounded-lg border border-border"
           onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}

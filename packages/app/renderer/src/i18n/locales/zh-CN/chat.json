@@ -81,6 +81,8 @@
   "selectedSessions": "已选择",
   "clearSelected": "清空",
   "availableSessions": "可选 Session",
+  "selectAll": "全选",
+  "deselectAll": "取消全选",
   "removeSession": "移除 Session",
   "sourceMissing": "来源失效",
   "noContextSessions": "当前筛选下没有 Session。",

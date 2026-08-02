@@ -1,5 +1,6 @@
 import type {
   GenerationChatThread,
+  NativeSessionReference,
   ProjectGenerationResponse,
 } from '../types'
 
@@ -83,4 +84,24 @@ export function virtualWindowRange({
     Math.ceil((scrollTop + Math.max(0, viewportHeight)) / rowHeight) + overscan,
   )
   return { start, end }
+}
+
+export function toggleAvailableSessionSelection(
+  selected: NativeSessionReference[],
+  available: NativeSessionReference[],
+): NativeSessionReference[] {
+  const availableKeys = new Set(available.map(sessionReferenceKey))
+  const selectedKeys = new Set(selected.map(sessionReferenceKey))
+  const allAvailableSelected = available.length > 0
+    && available.every((reference) => selectedKeys.has(sessionReferenceKey(reference)))
+  if (allAvailableSelected) {
+    return selected.filter((reference) => !availableKeys.has(sessionReferenceKey(reference)))
+  }
+  const merged = new Map(selected.map((reference) => [sessionReferenceKey(reference), reference]))
+  for (const reference of available) merged.set(sessionReferenceKey(reference), reference)
+  return [...merged.values()]
+}
+
+function sessionReferenceKey(reference: NativeSessionReference): string {
+  return `${reference.agent}\0${reference.id}`
 }

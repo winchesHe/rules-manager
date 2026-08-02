@@ -4,6 +4,7 @@ import {
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
+  toggleAvailableSessionSelection,
   virtualWindowRange,
   visibleProjectResponses,
 } from '../renderer/src/views/chat-view-model.js'
@@ -100,6 +101,21 @@ describe('chat view model', () => {
       scrollTop: 0,
       viewportHeight: 580,
     })).toEqual({ start: 0, end: 14 })
+  })
+
+  it('全选只切换当前筛选结果并保留筛选外选择', () => {
+    const outside = { agent: 'claude', id: 'outside' }
+    const available = [
+      { agent: 'codex', id: 'one' },
+      { agent: 'opencode', id: 'two' },
+    ]
+    const selected = toggleAvailableSessionSelection(
+      [outside, available[0]],
+      available,
+    )
+
+    expect(selected).toEqual([outside, available[0], available[1]])
+    expect(toggleAvailableSessionSelection(selected, available)).toEqual([outside])
   })
 
   it('同一 Activity 的 running / completed 更新合并为一行', () => {

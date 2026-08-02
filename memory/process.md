@@ -2112,3 +2112,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   Core 26 suites / 278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留
   既有 `tsdown define` 配置警告。
 - 提交信息：`fix: 填满 Session Context 剩余空间`
+
+## Session Context 当前结果全选（2026-08-02）
+
+- 在“可选 Session / 数量”标题行增加全选切换按钮；当前结果未全部选择时显示“全选”，全部选择后
+  显示“取消全选”，空结果时禁用。
+- `toggleAvailableSessionSelection` 使用 `agent + id` 去重：全选合并当前已加载结果并保留其他筛选下
+  已选项；取消全选仅移除当前结果，不影响筛选外选择。现有单项选择、清空和 Thread 持久化继续复用
+  `updateSelectedContext`。
+- 新增中英文文案、选择纯函数测试和 Renderer 布局契约。真实 production Electron 草稿态验证
+  `0 / 全选 → 100 / 取消全选 → 0 / 全选`，未创建或修改持久化 Thread；最终截图为
+  `docs/prototypes/chat-implementation-v6-context-select-all.png`。
+- `simplify` 复核确认选择合并逻辑边界清晰，无需额外抽象；App 23 suites / 146 tests、Core 26 suites /
+  278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留既有
+  `tsdown define` 配置警告。
+- 提交信息：`feat: 支持全选当前 Session 结果`

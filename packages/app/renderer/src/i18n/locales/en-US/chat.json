@@ -81,6 +81,8 @@
   "selectedSessions": "Selected",
   "clearSelected": "Clear",
   "availableSessions": "Available Sessions",
+  "selectAll": "Select all",
+  "deselectAll": "Deselect all",
   "removeSession": "Remove Session",
   "sourceMissing": "Source missing",
   "noContextSessions": "No Sessions match these filters.",

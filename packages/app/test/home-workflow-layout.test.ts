@@ -179,6 +179,14 @@ describe('home workflow layout', () => {
     expect(source).not.toContain('style={{ height: viewportHeight }}')
   })
 
+  it('Session Context 可全选和取消全选当前筛选结果', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('toggleAvailableSessionSelection')
+    expect(source).toContain("allItemsSelected ? t('deselectAll') : t('selectAll')")
+    expect(source).toContain('data-session-context-select-all')
+  })
+
   it('Composer 保留完整运行能力并按原型划分左右操作组', () => {
     const source = read('views/ChatView.tsx')
 
