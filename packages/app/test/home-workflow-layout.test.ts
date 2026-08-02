@@ -168,6 +168,17 @@ describe('home workflow layout', () => {
     expect(source).not.toContain('{item.agent} · {item.id}</strong>')
   })
 
+  it('Session Context 列表占满右栏剩余高度', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]')
+    expect(source).toContain('data-session-context-list')
+    expect(source).toContain('ResizeObserver')
+    expect(source).toContain('virtualWindowRange')
+    expect(source).not.toContain('const viewportHeight = 290')
+    expect(source).not.toContain('style={{ height: viewportHeight }}')
+  })
+
   it('Composer 保留完整运行能力并按原型划分左右操作组', () => {
     const source = read('views/ChatView.tsx')
 

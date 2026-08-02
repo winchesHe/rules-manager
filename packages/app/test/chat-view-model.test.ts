@@ -4,6 +4,7 @@ import {
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
+  virtualWindowRange,
   visibleProjectResponses,
 } from '../renderer/src/views/chat-view-model.js'
 
@@ -82,6 +83,23 @@ describe('chat view model', () => {
       clientHeight: 400,
       scrollHeight: 1_000,
     })).toBe(false)
+  })
+
+  it('Session viewport 变高时扩大虚拟渲染范围', () => {
+    expect(virtualWindowRange({
+      itemCount: 100,
+      overscan: 4,
+      rowHeight: 58,
+      scrollTop: 0,
+      viewportHeight: 290,
+    })).toEqual({ start: 0, end: 9 })
+    expect(virtualWindowRange({
+      itemCount: 100,
+      overscan: 4,
+      rowHeight: 58,
+      scrollTop: 0,
+      viewportHeight: 580,
+    })).toEqual({ start: 0, end: 14 })
   })
 
   it('同一 Activity 的 running / completed 更新合并为一行', () => {

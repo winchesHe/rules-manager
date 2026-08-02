@@ -63,3 +63,24 @@ export function shouldFollowStream({
 }): boolean {
   return scrollHeight - scrollTop - clientHeight <= threshold
 }
+
+export function virtualWindowRange({
+  itemCount,
+  overscan,
+  rowHeight,
+  scrollTop,
+  viewportHeight,
+}: {
+  itemCount: number
+  overscan: number
+  rowHeight: number
+  scrollTop: number
+  viewportHeight: number
+}): { start: number; end: number } {
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan)
+  const end = Math.min(
+    itemCount,
+    Math.ceil((scrollTop + Math.max(0, viewportHeight)) / rowHeight) + overscan,
+  )
+  return { start, end }
+}

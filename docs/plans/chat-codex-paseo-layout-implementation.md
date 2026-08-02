@@ -104,3 +104,18 @@ Session Context 与主题能力；不能用静态假数据或仅视觉相似替�
   10px 字号，激活态使用 Surface Raised。
 - 先新增 Renderer 源码契约并确认旧实现失败，再实现主题 token 和精确类名；随后运行 App 全量测试、
   production build 与 `git diff --check`，最后通过真实 Electron 截图逐项复核上述尺寸与层级。
+
+## 第五轮：Session Context 剩余空间利用
+
+右栏 Header、筛选条件和底部隐私说明保持不变；Session Context 内容改为 `auto + minmax(0, 1fr)`
+纵向布局，可选 Session 区域占满全部剩余高度。虚拟列表不再使用固定 290px viewport，而由
+`ResizeObserver` 读取实际容器高度并据此计算可见范围。
+
+本轮验收标准与验证方式：
+
+- 1728×979 下 Session 列表从筛选区下方连续延伸到隐私说明上方，不再在“加载更多”后留下大片空白。
+- 列表内部独立滚动，“加载更多”位于列表区域底部；隐私说明继续固定在右栏底部。
+- 1279px 以下覆盖式 Context Drawer 继续满足 `min-height: 0`，不产生页面级溢出。
+- 新增虚拟窗口纯函数测试，覆盖 viewport 变高时渲染行数同步增加；布局契约禁止恢复固定 290px 高度。
+- 运行 App/Core 全量测试、两端 production build 和 `git diff --check`，最后在真实 production
+  Electron 中测量列表区域并保存右栏截图。

@@ -56,6 +56,7 @@ import {
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
+  virtualWindowRange,
   visibleProjectResponses,
 } from './chat-view-model'
 import {
@@ -1027,7 +1028,7 @@ export function ChatView({
               <PanelRight aria-hidden="true" size={14} />{t('collapse')}
             </Button>
           </header>
-          <div className="min-h-0 overflow-y-auto">
+          <div className="min-h-0 overflow-hidden">
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
               <SessionContextPicker
                 cursor={contextCursor}
@@ -1623,104 +1624,122 @@ function SessionContextPicker({
 }) {
   const { t } = useTranslation('chat')
   const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const listViewportRef = useRef<HTMLDivElement | null>(null)
   const rowHeight = 58
-  const viewportHeight = 290
   const overscan = 4
-  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan)
-  const end = Math.min(items.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan)
+  const { start, end } = virtualWindowRange({
+    itemCount: items.length,
+    overscan,
+    rowHeight,
+    scrollTop,
+    viewportHeight,
+  })
   const visibleItems = items.slice(start, end)
   const selectedKeys = new Set(selected.map(sessionReferenceKey))
   const knownItems = new Map(selectedItems.map((item) => [sessionReferenceKey(item), item]))
   const projectOptions = ['default', ...projects.map((item) => item.slug)]
     .filter((value, index, values) => values.indexOf(value) === index)
 
+  useEffect(() => {
+    const viewport = listViewportRef.current
+    if (!viewport) return
+    const updateHeight = () => setViewportHeight(viewport.clientHeight)
+    updateHeight()
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(viewport)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <section data-session-context>
-      {selected.length > 0 && (
+    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" data-session-context>
+      <div>
+        {selected.length > 0 && (
+          <div className="border-b border-border p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
+              <Button onPress={() => onSelectedChange([])} size="sm" variant="ghost">{t('clearSelected')}</Button>
+            </div>
+            <div className="grid max-h-28 gap-1 overflow-y-auto pr-1">
+              {selected.map((reference) => {
+                const item = knownItems.get(sessionReferenceKey(reference))
+                return (
+                  <button
+                    className="flex w-full min-w-0 items-center gap-2 rounded-lg bg-surface-hover px-2 py-1.5 text-left text-xs"
+                    key={sessionReferenceKey(reference)}
+                    onClick={() => onSelectedChange(selected.filter((current) => sessionReferenceKey(current) !== sessionReferenceKey(reference)))}
+                    type="button"
+                    title={`${reference.agent} · ${reference.id}`}
+                  >
+                    <span className="grid size-4 shrink-0 place-items-center rounded bg-success/15 text-[9px] font-bold text-success">{reference.agent.slice(0, 1).toUpperCase()}</span>
+                    <span className="min-w-0 flex-1 truncate">{sessionDisplayName(item ?? reference)}</span>
+                    {item && !item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
+                    <span aria-label={t('removeSession')}>×</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
         <div className="border-b border-border p-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-muted">{t('selectedSessions')}</span>
-            <Button onPress={() => onSelectedChange([])} size="sm" variant="ghost">{t('clearSelected')}</Button>
+          <Select aria-label={t('contextProject')} onSelectionChange={(key) => onProjectChange(String(key))} selectedKey={project}>
+            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+            <Select.Popover><ListBox><ListBox.Item id="all">{t('allProjects')}</ListBox.Item>{projectOptions.map((slug) => <ListBox.Item id={slug} key={slug}>{slug === 'default' ? t('defaultProject') : slug}</ListBox.Item>)}</ListBox></Select.Popover>
+          </Select>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <input aria-label={t('contextFrom')} className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground" onChange={(event) => onRangeChange(event.target.value, to)} type="date" value={from} />
+            <input aria-label={t('contextTo')} className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground" onChange={(event) => onRangeChange(from, event.target.value)} type="date" value={to} />
           </div>
-          <div className="grid max-h-28 gap-1 overflow-y-auto pr-1">
-            {selected.map((reference) => {
-              const item = knownItems.get(sessionReferenceKey(reference))
-              return (
-                <button
-                  className="flex w-full min-w-0 items-center gap-2 rounded-lg bg-surface-hover px-2 py-1.5 text-left text-xs"
-                  key={sessionReferenceKey(reference)}
-                  onClick={() => onSelectedChange(selected.filter((current) => sessionReferenceKey(current) !== sessionReferenceKey(reference)))}
-                  type="button"
-                  title={`${reference.agent} · ${reference.id}`}
-                >
-                  <span className="grid size-4 shrink-0 place-items-center rounded bg-success/15 text-[9px] font-bold text-success">{reference.agent.slice(0, 1).toUpperCase()}</span>
-                  <span className="min-w-0 flex-1 truncate">{sessionDisplayName(item ?? reference)}</span>
-                  {item && !item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
-                  <span aria-label={t('removeSession')}>×</span>
-                </button>
-              )
-            })}
+          <div className="mt-2 flex gap-1">
+            <Button onPress={() => onRecentDays(7)} size="sm" variant="ghost">{t('recent7Days')}</Button>
+            <Button onPress={() => onRecentDays(30)} size="sm" variant="ghost">{t('recent30Days')}</Button>
+            {(from || to) && <Button onPress={() => onRangeChange('', '')} size="sm" variant="ghost">{t('clearRange')}</Button>}
           </div>
-        </div>
-      )}
-      <div className="border-b border-border p-4">
-        <Select aria-label={t('contextProject')} onSelectionChange={(key) => onProjectChange(String(key))} selectedKey={project}>
-          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-          <Select.Popover><ListBox><ListBox.Item id="all">{t('allProjects')}</ListBox.Item>{projectOptions.map((slug) => <ListBox.Item id={slug} key={slug}>{slug === 'default' ? t('defaultProject') : slug}</ListBox.Item>)}</ListBox></Select.Popover>
-        </Select>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <input aria-label={t('contextFrom')} className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground" onChange={(event) => onRangeChange(event.target.value, to)} type="date" value={from} />
-          <input aria-label={t('contextTo')} className="min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-xs text-foreground" onChange={(event) => onRangeChange(from, event.target.value)} type="date" value={to} />
-        </div>
-        <div className="mt-2 flex gap-1">
-          <Button onPress={() => onRecentDays(7)} size="sm" variant="ghost">{t('recent7Days')}</Button>
-          <Button onPress={() => onRecentDays(30)} size="sm" variant="ghost">{t('recent30Days')}</Button>
-          {(from || to) && <Button onPress={() => onRangeChange('', '')} size="sm" variant="ghost">{t('clearRange')}</Button>}
         </div>
       </div>
-      <div className="p-4">
+      <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] p-4" data-session-context-list>
         <div className="mb-2 flex items-center justify-between text-xs text-muted"><span>{t('availableSessions')}</span><span>{items.length}</span></div>
         <div
-        className="relative overflow-y-auto rounded-lg border border-border"
-        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-        style={{ height: viewportHeight }}
-      >
-        <div style={{ height: items.length * rowHeight }}>
-          <div style={{ transform: `translateY(${start * rowHeight}px)` }}>
-            {visibleItems.map((item) => {
-              const active = selectedKeys.has(sessionReferenceKey(item))
-              return (
-                <button
-                  aria-pressed={active}
-                  className={`flex h-[58px] w-full items-center gap-2 border-b border-border px-2 text-left text-xs ${
-                    active ? 'bg-primary-soft' : 'hover:bg-surface-hover'
-                  }`}
-                  key={sessionReferenceKey(item)}
-                  onClick={() => onSelectedChange(active
-                    ? selected.filter((reference) => sessionReferenceKey(reference) !== sessionReferenceKey(item))
-                    : [...selected, { agent: item.agent, id: item.id }])}
-                  title={`${item.agent} · ${item.id}`}
-                  type="button"
-                >
-                  {active ? <CheckCircle2 className="shrink-0 text-primary" size={14} /> : <span className="size-3.5 shrink-0 rounded-full border border-border" />}
-                  <span className="min-w-0 flex-1">
-                    <strong className="block truncate font-medium text-foreground">{sessionDisplayName(item)}</strong>
-                    <span className="block truncate text-muted">{item.agent} · {item.slug} · {formatDateTime(item.updatedAt, currentLocale())}</span>
-                  </span>
-                  {!item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
-                </button>
-              )
-            })}
+          className="relative min-h-0 overflow-y-auto rounded-lg border border-border"
+          onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+          ref={listViewportRef}
+        >
+          <div style={{ height: items.length * rowHeight }}>
+            <div style={{ transform: `translateY(${start * rowHeight}px)` }}>
+              {visibleItems.map((item) => {
+                const active = selectedKeys.has(sessionReferenceKey(item))
+                return (
+                  <button
+                    aria-pressed={active}
+                    className={`flex h-[58px] w-full items-center gap-2 border-b border-border px-2 text-left text-xs ${
+                      active ? 'bg-primary-soft' : 'hover:bg-surface-hover'
+                    }`}
+                    key={sessionReferenceKey(item)}
+                    onClick={() => onSelectedChange(active
+                      ? selected.filter((reference) => sessionReferenceKey(reference) !== sessionReferenceKey(item))
+                      : [...selected, { agent: item.agent, id: item.id }])}
+                    title={`${item.agent} · ${item.id}`}
+                    type="button"
+                  >
+                    {active ? <CheckCircle2 className="shrink-0 text-primary" size={14} /> : <span className="size-3.5 shrink-0 rounded-full border border-border" />}
+                    <span className="min-w-0 flex-1">
+                      <strong className="block truncate font-medium text-foreground">{sessionDisplayName(item)}</strong>
+                      <span className="block truncate text-muted">{item.agent} · {item.slug} · {formatDateTime(item.updatedAt, currentLocale())}</span>
+                    </span>
+                    {!item.sourceAvailable && <span className="text-danger">{t('sourceMissing')}</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+          {loading && <div className="absolute inset-0 grid place-items-center bg-surface/70"><Spinner color="accent" /></div>}
+          {!loading && items.length === 0 && <div className="absolute inset-0 grid place-items-center px-3 text-center text-xs text-muted">{t('noContextSessions')}</div>}
         </div>
-        {loading && <div className="absolute inset-0 grid place-items-center bg-surface/70"><Spinner color="accent" /></div>}
-        {!loading && items.length === 0 && <div className="absolute inset-0 grid place-items-center px-3 text-center text-xs text-muted">{t('noContextSessions')}</div>}
-      </div>
-      {cursor && (
-        <Button className="mt-2" fullWidth isDisabled={loading} onPress={onLoadMore} size="sm" variant="ghost">
-          {t('loadMore')}
-        </Button>
-      )}
+        {cursor && (
+          <Button className="mt-2" fullWidth isDisabled={loading} onPress={onLoadMore} size="sm" variant="ghost">
+            {t('loadMore')}
+          </Button>
+        )}
       </div>
     </section>
   )

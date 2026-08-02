@@ -2096,3 +2096,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   未引入额外抽象；App 23 suites / 142 tests、Core 26 suites / 278 tests 全绿，两端 production build
   与 `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
 - 提交信息：`fix: 对齐 Chat 历史栏顶部样式`
+
+## Session Context 剩余空间利用修正（2026-08-02）
+
+- 根因是 `SessionContextPicker` 仍按普通文档流排列，虚拟列表 viewport 固定为 290px；右栏父 Grid
+  虽然分配了剩余高度，但子列表不会伸展，因此“加载更多”和底部隐私说明之间出现大片空白。
+- Picker 改为 `auto + minmax(0, 1fr)` 两行 Grid，可选 Session 区域再拆为标题、弹性列表和加载按钮；
+  隐私说明继续由外层 Grid 固定在右栏底部，列表独立滚动。
+- 使用 `ResizeObserver` 读取列表真实高度，并通过纯函数 `virtualWindowRange` 计算虚拟渲染区；新增测试
+  确认 viewport 从 290px 增长到 580px 时可见范围从 9 条扩大到 14 条，同时布局契约禁止恢复固定高度。
+- 1728×979 production Electron 实测：Session Context 内容区 858px，列表区域 707px，滚动 viewport
+  609px、渲染 15 行，列表区域底部与隐私说明顶部间距为 0；最终截图为
+  `docs/prototypes/chat-implementation-v5-context-filled.png`。
+- `simplify` 复核确认 ResizeObserver 生命周期和纯函数边界保持直接；App 23 suites / 144 tests、
+  Core 26 suites / 278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留
+  既有 `tsdown define` 配置警告。
+- 提交信息：`fix: 填满 Session Context 剩余空间`
