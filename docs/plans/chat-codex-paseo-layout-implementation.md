@@ -154,3 +154,14 @@ Session Context 顶部区继续保持“已选择 → 筛选 → 可选 Session�
 - Context aside 从三行 Grid 改为 Header + 内容两行，不再为底部说明预留高度。
 - 中英文隐私说明 key 一并移除，避免保留无引用文案。
 - 真实 App 验证说明消失，且可选 Session 列表底部扩展到右栏底部。
+
+## 第九轮：Context Window hover 可用性
+
+修复 Composer Context Window 圆形指示器只有 Tooltip 内容、没有有效 HeroUI Trigger 的问题。使用
+显式 `Tooltip.Trigger` 承接 hover/focus 事件，并扩大命中区，Tooltip 立即展示具体 token 用量。
+
+本轮验收标准与验证方式：
+
+- 指示器保留原有 16px 圆形进度视觉，外层提供 24px hover/focus 命中区。
+- hover 与键盘 focus 均能展示 `used / max (percent)`；无用量时展示不可用文案。
+- 自动化布局契约要求显式 Trigger；真实 Electron hover 后确认 Tooltip 挂载并截图。

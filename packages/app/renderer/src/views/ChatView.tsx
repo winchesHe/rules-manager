@@ -730,6 +730,9 @@ export function ChatView({
   const contextPercent = contextUsage && contextUsage.maxTokens > 0
     ? Math.min(100, Math.round((contextUsage.usedTokens / contextUsage.maxTokens) * 100))
     : 0
+  const contextUsageLabel = contextUsage
+    ? formatContextUsage(contextUsage, contextPercent)
+    : t('contextUnavailable')
   const contextPanelOpen = compactLayout ? compactContextOpen : contextPaneOpen
   let contextVisibilityClass = 'translate-x-0 opacity-100'
   if (compactLayout && !compactContextOpen) {
@@ -983,15 +986,20 @@ export function ChatView({
                     </div>
                     <div className="ml-auto flex h-8 shrink-0 items-center gap-2.5 border-l border-border pl-3 pr-0.5" data-composer-actions>
                       <span className="flex items-center gap-1 whitespace-nowrap text-[11px]"><ShieldCheck className="text-success" size={14} />{t('fullAccess')}</span>
-                      <Tooltip>
-                        <span
-                          aria-label={contextUsage ? formatContextUsage(contextUsage, contextPercent) : t('contextUnavailable')}
-                          className="size-4 rounded-full border-2 border-border"
-                          style={contextUsage ? { background: `conic-gradient(var(--color-success) ${contextPercent}%, transparent 0)` } : undefined}
-                          tabIndex={0}
-                        />
+                      <Tooltip delay={0}>
+                        <Tooltip.Trigger
+                          aria-label={contextUsageLabel}
+                          className="grid size-6 shrink-0 place-items-center rounded-full"
+                          data-context-usage-trigger
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="size-4 rounded-full border-2 border-border"
+                            style={contextUsage ? { background: `conic-gradient(var(--color-success) ${contextPercent}%, transparent 0)` } : undefined}
+                          />
+                        </Tooltip.Trigger>
                         <Tooltip.Content>
-                          {contextUsage ? formatContextUsage(contextUsage, contextPercent) : t('contextUnavailable')}
+                          {contextUsageLabel}
                         </Tooltip.Content>
                       </Tooltip>
                       {isSending && (

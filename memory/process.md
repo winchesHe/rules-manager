@@ -2153,3 +2153,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留既有
   `tsdown define` 配置警告。
 - 提交信息：`fix: 扩展 Session Context 列表空间`
+
+## Composer Context Window Tooltip 修复（2026-08-02）
+
+- 根因是圆形 Context Window 指示器使用原生 `span` 直接作为 HeroUI Tooltip 子节点，没有消费
+  Tooltip Trigger 注入的 hover/focus 事件；真实 Electron 悬停 1.2 秒仍无 Tooltip 挂载。
+- 改为显式 `Tooltip.Trigger`，外层提供 24×24px 命中区，内部继续保留 16px 圆形进度视觉，并将
+  delay 设为 0；用量与不可用文案统一复用 `contextUsageLabel`。
+- 1728×979 production Electron 实测 hover 150ms 后出现 Tooltip，内容为
+  `94,397 / 200,000 (47%)`；最终截图为 `docs/prototypes/chat-implementation-v9-context-tooltip.png`。
+- 新增 Renderer 结构回归契约；`simplify` 复核后提取重复 label。App 23 suites / 147 tests、Core
+  26 suites / 278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留
+  既有 `tsdown define` 配置警告。
+- 提交信息：`fix: 修复 Context Window hover 提示`
