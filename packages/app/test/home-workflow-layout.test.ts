@@ -171,10 +171,13 @@ describe('home workflow layout', () => {
   it('Session Context 列表占满右栏剩余高度', () => {
     const source = read('views/ChatView.tsx')
 
+    expect(source).toContain('grid-rows-[3rem_minmax(0,1fr)]')
     expect(source).toContain('grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]')
     expect(source).toContain('data-session-context-list')
     expect(source).toContain('ResizeObserver')
     expect(source).toContain('virtualWindowRange')
+    expect(source).not.toContain("t('privacy')")
+    expect(source).not.toContain('grid-rows-[3rem_minmax(0,1fr)_auto]')
     expect(source).not.toContain('const viewportHeight = 290')
     expect(source).not.toContain('style={{ height: viewportHeight }}')
   })

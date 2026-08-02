@@ -1012,7 +1012,7 @@ export function ChatView({
         <aside
           aria-hidden={!contextPanelOpen}
           aria-label={t('context')}
-          className={`grid min-h-0 grid-rows-[3rem_minmax(0,1fr)_auto] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-4 max-[1279px]:right-4 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-[22rem] max-[1279px]:rounded-2xl max-[1279px]:border max-[1279px]:shadow-2xl ${contextVisibilityClass}`}
+          className={`grid min-h-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-4 max-[1279px]:right-4 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-[22rem] max-[1279px]:rounded-2xl max-[1279px]:border max-[1279px]:shadow-2xl ${contextVisibilityClass}`}
           data-chat-context-panel
           inert={!contextPanelOpen}
         >
@@ -1049,7 +1049,6 @@ export function ChatView({
               />
             )}
           </div>
-          <p className="border-t border-border p-4 text-[11px] leading-5 text-muted">{t('privacy')}</p>
         </aside>
       </div>
 

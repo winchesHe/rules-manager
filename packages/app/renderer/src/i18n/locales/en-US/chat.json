@@ -117,7 +117,6 @@
   "noCandidates": "No rule candidates were generated.",
   "candidateReasoning": "Reasoning",
   "candidateEvidence": "Evidence references",
-  "privacy": "Only visible conversation and structured results are saved; hidden prompts, Session content, and tool output are not.",
   "scopeRecent": "Recent activity",
   "scopeFull": "Full history",
   "scopeProjects_one": "{{count}} project",

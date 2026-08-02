@@ -2140,3 +2140,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   排版；App 23 suites / 147 tests、Core 26 suites / 278 tests 全绿，两端 production build 与
   `git diff --check` 通过。Core build 仅保留既有 `tsdown define` 配置警告。
 - 提交信息：`fix: 稳定 Session Context 区域布局`
+
+## Session Context 底部空间释放（2026-08-02）
+
+- 删除右栏底部“只保存可见对话……”说明及中英文 `privacy` 文案 key，Context aside 从 Header、内容、
+  说明三行 Grid 简化为 Header + 内容两行。
+- Session Context Picker 直接占满 Header 下方全部空间；已选择、筛选、全选、加载更多与虚拟列表行为
+  保持不变。
+- 1728×979 production Electron 实测右栏与可选 Session 区域 bottom 均为 979px，列表 viewport 为
+  473px，说明文案不可见；最终截图为 `docs/prototypes/chat-implementation-v8-context-expanded.png`。
+- `simplify` 复核确认本轮仅删除冗余布局行，无需额外抽象；App 23 suites / 147 tests、Core 26 suites /
+  278 tests 全绿，两端 production build 与 `git diff --check` 通过。Core build 仅保留既有
+  `tsdown define` 配置警告。
+- 提交信息：`fix: 扩展 Session Context 列表空间`

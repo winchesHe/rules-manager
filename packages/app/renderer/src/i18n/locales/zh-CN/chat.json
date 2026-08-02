@@ -117,7 +117,6 @@
   "noCandidates": "本次没有生成候选规则。",
   "candidateReasoning": "推理说明",
   "candidateEvidence": "Evidence 引用",
-  "privacy": "只保存可见对话和结构化结果；不保存隐藏 Prompt、Session 原文或 tool output。",
   "scopeRecent": "最近活动",
   "scopeFull": "全部历史",
   "scopeProjects_one": "{{count}} 个项目",
