@@ -2278,3 +2278,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   App 25 suites / 155 tests 全绿；App production build 与 `git diff --check` 通过，既有 Markstream PURE
   注释警告保持不变。
 - 提交信息：`feat: 支持定位项目与 Session 来源`
+
+## Chat Composer Skill Picker（2026-08-02）
+
+- 将不适合大量 Skill 的 HeroUI 单选下拉替换为固定 28rem 宽、最高 32rem 且受视口约束的 Composer
+  多选 Picker；弹层内部独立滚动，不再覆盖整段 Conversation。
+- 主进程合并 Provider 专属与 `.agents/skills` 通用 Skill 时，只读取 `SKILL.md` frontmatter 中最长
+  240 字符的描述和来源类型；不向 Renderer 暴露 Skill 正文或文件路径，Provider 同名 Skill 优先。
+- Picker 支持名称/描述多词搜索、已选 chip、最近使用、方向键 + Enter、Escape、点击外部关闭和 `$`
+  快捷唤起；连续选择时保持打开，Composer 与 Picker 均可移除已选项。
+- Skill 在编辑阶段独立于消息正文，发送前统一组装为 `/skill-a /skill-b\n\n用户消息`，继续兼容原生
+  Agent Skill 识别；发送后清空本轮选择并将最近使用写入本机 UI 偏好。
+- 真实 Electron 开发窗口验证弹层边界、独立滚动、搜索自动聚焦、连续多选、chip 移除和 `$` 唤起；
+  App 26 suites / 161 tests 与 production build 通过，build 仅保留既有 Markstream PURE 注释警告。
+- 提交信息：`feat: 优化 Chat Skill 多选体验`

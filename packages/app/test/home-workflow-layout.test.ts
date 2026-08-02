@@ -204,8 +204,7 @@ describe('home workflow layout', () => {
     const source = read('views/ChatView.tsx')
 
     expect(source).toContain('data-composer-options')
-    expect(source).toContain("t('fastMode')")
-    expect(source).toContain("t('skills')")
+    expect(source).toContain('<ChatSkillPicker')
     expect(source).toContain('data-composer-context')
     expect(source).toContain('data-composer-runtime')
     expect(source).toContain('data-composer-actions')
@@ -220,6 +219,22 @@ describe('home workflow layout', () => {
     expect(source).toContain('liveUsage')
     expect(source).toContain('stopChatTurn')
     expect(source).toContain('queueRef.current')
+  })
+
+  it('Composer Skills 使用可搜索多选 Picker 而不是普通 Select', () => {
+    const source = read('views/ChatView.tsx')
+    const picker = read('views/ChatSkillPicker.tsx')
+
+    expect(source).toContain('<ChatSkillPicker')
+    expect(source).toContain('data-composer-skills')
+    expect(source).toContain('composeMessageWithSkills')
+    expect(source).toContain('setSelectedSkills([])')
+    expect(picker).toContain('data-skill-picker')
+    expect(picker).toContain("t('searchSkillsPlaceholder')")
+    expect(picker).toContain('aria-multiselectable="true"')
+    expect(picker).toContain("event.key === 'ArrowDown'")
+    expect(picker).toContain("event.key === 'Enter'")
+    expect(picker).toContain('h-[min(32rem,calc(100vh-8rem))]')
   })
 
   it('Chat 直接展示 Activity timeline、elapsed，并只在 completed 后展示 Rules', () => {
@@ -573,7 +588,7 @@ describe('home workflow layout', () => {
     expect(chatSource).toContain("label={t('agent')}")
     expect(chatSource).toContain("label={t('model')}")
     expect(chatSource).toContain("label={t('effort')}")
-    expect(chatSource).toContain("label={t('fastMode')}")
+    expect(read('views/ChatSkillPicker.tsx')).toContain("aria-label={t('fastMode')}")
   })
 
   it('Rules Dashboard 使用任务摘要和统一状态辅助栏', () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Switch, Tooltip } from '@heroui/react'
+import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Tooltip } from '@heroui/react'
 import MarkdownRender from 'markstream-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -24,7 +24,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  SlidersHorizontal,
   Square,
   SquareTerminal,
   Trash2,
@@ -66,6 +65,12 @@ import {
   readStoredContextPaneOpen,
   writeStoredContextPaneOpen,
 } from './chat-layout-preference'
+import { ChatSkillPicker } from './ChatSkillPicker'
+import type { ChatSkillOption } from './chat-skill-picker-model'
+import {
+  composeMessageWithSkills,
+  updateRecentSkillNames,
+} from './chat-skill-picker-model'
 
 interface QueuedChatTurn {
   message: string
@@ -110,8 +115,9 @@ export function ChatView({
   const [effort, setEffort] = useState<(typeof CHAT_EFFORTS)[number]>('high')
   const [fastMode, setFastMode] = useState(false)
   const [providerSnapshot, setProviderSnapshot] = useState<ProviderSnapshot>({ entries: [], refreshing: false })
-  const [skills, setSkills] = useState<Array<{ name: string }>>([])
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null)
+  const [skills, setSkills] = useState<ChatSkillOption[]>([])
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([])
+  const [recentSkills, setRecentSkills] = useState<string[]>(() => readRecentSkills(window.localStorage))
   const [liveAssistant, setLiveAssistant] = useState('')
   const [liveStartedAt, setLiveStartedAt] = useState<string | null>(null)
   const [liveTools, setLiveTools] = useState<NativeToolActivity[]>([])
@@ -150,6 +156,7 @@ export function ChatView({
   const preserveDraftContextRef = useRef(false)
   const conversationRef = useRef<HTMLElement | null>(null)
   const followStreamRef = useRef(true)
+  const composerOptionsRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     selectedIdRef.current = selectedId
@@ -178,6 +185,15 @@ export function ChatView({
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [compactContextOpen, compactLayout, composerOptionsOpen, historyPaneOpen])
+
+  useEffect(() => {
+    if (!composerOptionsOpen) return
+    const closeOnOutsidePress = (event: MouseEvent) => {
+      if (!composerOptionsRef.current?.contains(event.target as Node)) setComposerOptionsOpen(false)
+    }
+    window.addEventListener('mousedown', closeOnOutsidePress)
+    return () => window.removeEventListener('mousedown', closeOnOutsidePress)
+  }, [composerOptionsOpen])
 
   useEffect(() => {
     void Promise.all([
@@ -258,8 +274,12 @@ export function ChatView({
   }, [contextProject, contextFrom, contextTo])
 
   useEffect(() => {
-    void window.api.invoke<Array<{ name: string }>>('chat.skills', provider)
-      .then(setSkills)
+    void window.api.invoke<ChatSkillOption[]>('chat.skills', provider)
+      .then((available) => {
+        setSkills(available)
+        const availableNames = new Set(available.map((skill) => skill.name))
+        setSelectedSkills((current) => current.filter((name) => availableNames.has(name)))
+      })
       .catch(() => setSkills([]))
   }, [provider])
 
@@ -529,6 +549,7 @@ export function ChatView({
     setThread(null)
     setLegacy(null)
     setComposer('')
+    setSelectedSkills([])
     setLiveAssistant('')
     setLiveStartedAt(null)
     setLiveTools([])
@@ -551,13 +572,16 @@ export function ChatView({
     setFastMode(source.defaultTurnConfig.fastMode)
     setSelectedContext(source.sessionContext.selected.map((reference) => ({ ...reference })))
     setComposer('')
+    setSelectedSkills([])
     setError(null)
   }
 
   function sendChatMessage(): void {
-    const message = composer.trim()
-    if (!message) return
+    const rawMessage = composer.trim()
+    if (!rawMessage) return
     if (thread && thread.kind !== 'native-chat') return
+    const usedSkills = [...selectedSkills]
+    const message = composeMessageWithSkills(rawMessage, usedSkills)
     const turn: QueuedChatTurn = {
       message,
       provider: thread?.provider ?? provider,
@@ -565,6 +589,14 @@ export function ChatView({
       ...(!thread ? { sessionContext: selectedContext.map((reference) => ({ ...reference })) } : {}),
     }
     setComposer('')
+    setSelectedSkills([])
+    if (usedSkills.length > 0) {
+      setRecentSkills((current) => {
+        const next = updateRecentSkillNames(current, usedSkills)
+        writeRecentSkills(window.localStorage, next)
+        return next
+      })
+    }
     if (sendingRef.current) {
       queueRef.current.push(turn)
       setQueuedCount(queueRef.current.length)
@@ -941,7 +973,15 @@ export function ChatView({
                   <textarea
                     aria-label={t('message')}
                     className="block max-h-44 min-h-16 w-full resize-none bg-transparent px-4 pb-1 pt-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted"
-                    onChange={(event) => setComposer(event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      if (/(^|\s)\$$/.test(value)) {
+                        setComposer(value.slice(0, -1))
+                        setComposerOptionsOpen(true)
+                      } else {
+                        setComposer(value)
+                      }
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' && !event.shiftKey) {
                         event.preventDefault()
@@ -951,33 +991,39 @@ export function ChatView({
                     placeholder={t('messagePlaceholder')}
                     value={composer}
                   />
+                  {selectedSkills.length > 0 && (
+                    <div className="flex max-h-20 flex-wrap gap-1.5 overflow-y-auto px-3 pb-1" data-composer-skills>
+                      {selectedSkills.map((name) => (
+                        <button
+                          aria-label={t('removeSkill', { name })}
+                          className="flex items-center gap-1 rounded-full bg-primary-soft px-2 py-1 text-xs text-foreground transition-colors hover:bg-surface-hover"
+                          key={name}
+                          onClick={() => setSelectedSkills((current) => current.filter((item) => item !== name))}
+                          type="button"
+                        >
+                          /{name}<X aria-hidden="true" size={12} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex min-h-11 min-w-0 items-center gap-2 px-2 pb-2 pt-1 text-xs text-muted">
-                    <div className="relative h-8" data-composer-options>
-                      <Button className="h-8 min-h-8 w-8 min-w-8" isIconOnly onPress={() => setComposerOptionsOpen((open) => !open)} size="sm" variant="ghost">
+                    <div className="relative h-8" data-composer-options ref={composerOptionsRef}>
+                      <Button aria-label={t('openSkillPicker')} className={`h-8 min-h-8 min-w-8 ${selectedSkills.length > 0 ? 'gap-1 px-2' : 'w-8'}`} isIconOnly={selectedSkills.length === 0} onPress={() => setComposerOptionsOpen((open) => !open)} size="sm" variant="ghost">
                         <Plus aria-label={t('moreOptions')} size={16} />
+                        {selectedSkills.length > 0 && <span className="text-[11px] font-semibold text-success">{selectedSkills.length}</span>}
                       </Button>
                       {composerOptionsOpen && (
-                        <div className="absolute bottom-10 left-0 z-50 grid w-64 gap-3 rounded-xl border border-border bg-surface p-3 shadow-2xl">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="flex items-center gap-2 text-xs text-foreground"><SlidersHorizontal size={14} />{t('fastMode')}</span>
-                            <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={setFastMode}>
-                              <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control></Switch.Content>
-                            </Switch>
-                          </div>
-                          <Select
-                            aria-label={t('skills')}
-                            onSelectionChange={(key) => {
-                              const name = String(key)
-                              setComposer((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}/${name} `)
-                              setSelectedSkill(null)
-                              setComposerOptionsOpen(false)
-                            }}
-                            selectedKey={selectedSkill}
-                          >
-                            <Select.Trigger><Select.Value>{t('skills')}</Select.Value><Select.Indicator /></Select.Trigger>
-                            <Select.Popover><ListBox>{skills.map((skill) => <ListBox.Item id={skill.name} key={skill.name}>{skill.name}</ListBox.Item>)}</ListBox></Select.Popover>
-                          </Select>
-                        </div>
+                        <ChatSkillPicker
+                          fastMode={fastMode}
+                          onClose={() => setComposerOptionsOpen(false)}
+                          onFastModeChange={setFastMode}
+                          onToggle={(name) => setSelectedSkills((current) => current.includes(name)
+                            ? current.filter((item) => item !== name)
+                            : [...current, name])}
+                          recentNames={recentSkills}
+                          selectedNames={selectedSkills}
+                          skills={skills}
+                        />
                       )}
                     </div>
                     <Button className="h-8 min-h-8 gap-1 border border-border bg-background/20 px-2" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
@@ -1979,4 +2025,24 @@ function isNativeChatEvent(value: unknown): value is NativeChatEvent {
     && typeof activity.name === 'string'
     && typeof activity.status === 'string'
     && (activity.summary === undefined || typeof activity.summary === 'string')
+}
+
+const RECENT_SKILLS_STORAGE_KEY = 'memory-manager.chat.recent-skills'
+
+function readRecentSkills(storage: Storage): string[] {
+  try {
+    const value: unknown = JSON.parse(storage.getItem(RECENT_SKILLS_STORAGE_KEY) ?? '[]')
+    if (!Array.isArray(value)) return []
+    return value.filter((item): item is string => typeof item === 'string').slice(0, 6)
+  } catch {
+    return []
+  }
+}
+
+function writeRecentSkills(storage: Storage, names: string[]): void {
+  try {
+    storage.setItem(RECENT_SKILLS_STORAGE_KEY, JSON.stringify(names))
+  } catch {
+    // UI 偏好写入失败不应阻止消息发送。
+  }
 }
