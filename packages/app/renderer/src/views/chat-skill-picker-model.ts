@@ -42,3 +42,11 @@ export function updateRecentSkillNames(current: string[], used: string[]): strin
   return [...usedUnique, ...current.filter((name) => !usedSet.has(name))]
     .slice(0, RECENT_SKILL_LIMIT)
 }
+
+export function consumeSkillPickerTrigger(value: string): {
+  composer: string
+  triggered: boolean
+} {
+  if (!/(^|\s)\/$/.test(value)) return { composer: value, triggered: false }
+  return { composer: value.slice(0, -1), triggered: true }
+}

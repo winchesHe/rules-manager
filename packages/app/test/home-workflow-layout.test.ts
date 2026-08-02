@@ -228,6 +228,7 @@ describe('home workflow layout', () => {
     expect(source).toContain('<ChatSkillPicker')
     expect(source).toContain('data-composer-skills')
     expect(source).toContain('composeMessageWithSkills')
+    expect(source).toContain('consumeSkillPickerTrigger')
     expect(source).toContain('setSelectedSkills([])')
     expect(picker).toContain('data-skill-picker')
     expect(picker).toContain("t('searchSkillsPlaceholder')")

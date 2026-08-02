@@ -69,6 +69,7 @@ import { ChatSkillPicker } from './ChatSkillPicker'
 import type { ChatSkillOption } from './chat-skill-picker-model'
 import {
   composeMessageWithSkills,
+  consumeSkillPickerTrigger,
   updateRecentSkillNames,
 } from './chat-skill-picker-model'
 
@@ -974,12 +975,10 @@ export function ChatView({
                     aria-label={t('message')}
                     className="block max-h-44 min-h-16 w-full resize-none bg-transparent px-4 pb-1 pt-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted"
                     onChange={(event) => {
-                      const value = event.target.value
-                      if (/(^|\s)\$$/.test(value)) {
-                        setComposer(value.slice(0, -1))
+                      const trigger = consumeSkillPickerTrigger(event.target.value)
+                      setComposer(trigger.composer)
+                      if (trigger.triggered) {
                         setComposerOptionsOpen(true)
-                      } else {
-                        setComposer(value)
                       }
                     }}
                     onKeyDown={(event) => {

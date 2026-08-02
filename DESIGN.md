@@ -198,7 +198,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 - Full access 是固定运行模式，必须在 Composer 附近常驻显示；页面不提供 Permission Mode 或
   working directory 控件。
 - Skill 作为“下一条消息附件”展示：Composer 使用固定尺寸、可搜索的多选 Picker，支持名称与描述搜索、
-  最近使用、键盘选择和 chip 移除；发送时再转换为原生 `/skill-name` 前缀，发送后清空本轮选择。
+  最近使用、键盘选择和 chip 移除，输入独立 `/` 可快捷唤起；发送时再转换为原生 `/skill-name` 前缀，
+  发送后清空本轮选择。
 
 ### Chat Agent Stream
 

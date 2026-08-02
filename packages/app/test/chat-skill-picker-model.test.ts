@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 import {
   composeMessageWithSkills,
+  consumeSkillPickerTrigger,
   filterChatSkills,
   orderChatSkills,
   updateRecentSkillNames,
@@ -34,5 +35,18 @@ describe('chat skill picker model', () => {
   it('最近使用去重、前置并限制数量', () => {
     expect(updateRecentSkillNames(['a', 'b', 'c', 'd', 'e', 'f'], ['c', 'new']))
       .toEqual(['c', 'new', 'a', 'b', 'd', 'e'])
+  })
+
+  it('只消费开头或空格后的独立斜杠触发字符', () => {
+    expect(consumeSkillPickerTrigger('/')).toEqual({ composer: '', triggered: true })
+    expect(consumeSkillPickerTrigger('请使用 /')).toEqual({ composer: '请使用 ', triggered: true })
+    expect(consumeSkillPickerTrigger('https://example.com/')).toEqual({
+      composer: 'https://example.com/',
+      triggered: false,
+    })
+    expect(consumeSkillPickerTrigger('/Users/me/file')).toEqual({
+      composer: '/Users/me/file',
+      triggered: false,
+    })
   })
 })
