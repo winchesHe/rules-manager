@@ -1472,7 +1472,9 @@ function MarkdownMessage({ content, final }: MarkdownMessageProps) {
   return (
     <div className="chat-markdown text-sm leading-7 text-foreground">
       <MarkdownRender
+        batchRendering={false}
         content={content}
+        deferNodesUntilVisible={false}
         fade={false}
         final={final}
         isDark={isDark}

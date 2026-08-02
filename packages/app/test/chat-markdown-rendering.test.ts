@@ -16,6 +16,8 @@ describe('Chat Markdown rendering', () => {
     expect(source).toContain('<MarkdownMessage content={message.content} final />')
     expect(source).toContain('<MarkdownMessage content={assistant} final={false} />')
     expect(source).toContain('<MarkdownMessage content={assistantContent} final />')
+    expect(source).toContain('batchRendering={false}')
+    expect(source).toContain('deferNodesUntilVisible={false}')
     expect(source).toContain('renderCodeBlocksAsPre')
     expect(source).toContain('<p className="break-words whitespace-pre-wrap">{message.content}</p>')
   })

@@ -2219,3 +2219,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `git diff --check` 通过。App 独立 typecheck 仍被既有 tsconfig `rootDir/files` 边界和既有 RulesView
   类型错误阻断，本轮 production build 已通过；build 另有 Markstream 产物 PURE 注释位置警告。
 - 提交信息：`feat: 支持 Chat 流式 Markdown 渲染`
+
+## Chat Markdown 灰色占位骨架修复（2026-08-02）
+
+- 截图中的灰色长条是 Markstream 的 `node-placeholder`，不是 Assistant 输出；默认的
+  `deferNodesUntilVisible + batchRendering` 在 Electron 自定义 Conversation 滚动容器中没有及时将
+  已完成长回复的后续节点挂载，导致列表内容长期停留在骨架态。
+- `MarkdownMessage` 显式关闭节点可视区延迟与分批占位，保留 Markdown parser、历史 `final=true` 和
+  流式 `final=false` 行为；Tool Activity、复制原文和耗时区域不变。
+- 第一次只关闭可视区延迟后真实页面仍有骨架，因此补充关闭分批占位并重新加载验证；截图位置的六条
+  “同时还完成”列表、本周总结和收尾事项均完整显示，灰色块消失。
+- `simplify` 复核确认两个显式配置直接表达 Electron 容器兼容要求，无需增加包装状态或额外抽象。
+- 最终基线：App 24 suites / 152 tests、Core 26 suites / 278 tests 全绿；App/Core production build 与
+  `git diff --check` 通过。既有 Core build `tsdown define` 与 Markstream PURE 注释位置警告保持不变。
+- 提交信息：`fix: 移除 Chat Markdown 占位骨架`
