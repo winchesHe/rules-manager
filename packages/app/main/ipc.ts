@@ -40,6 +40,10 @@ import {
   listAutoMemorySources,
   readAutoMemorySource,
 } from '../../core/src/auto-memories.js'
+import {
+  listClaudeProjectMemoryPublishTargets,
+  publishProjectRulesToClaudeMemory,
+} from '../../core/src/project-memory-publish.js'
 import { ScanController, type ScanControllerEvent } from './scan-controller.js'
 import { listCompletedScans, loadLatestCompletedScan } from './scan-history.js'
 import {
@@ -330,6 +334,46 @@ export function registerIpcHandlers(): void {
       throw new Error('memory id is required')
     }
     return readAutoMemorySource(agent, memoryId)
+  })
+  ipcMain.handle('rules.memories.publishTargets', () =>
+    listClaudeProjectMemoryPublishTargets())
+  ipcMain.handle('rules.memories.publishProjectRules', (_event, value: unknown) => {
+    if (!value || typeof value !== 'object') {
+      throw new Error('invalid project memory publish request')
+    }
+    const {
+      memoryId,
+      ruleIds,
+      expectedRevision,
+      expectedTopicRevision,
+    } = value as {
+      memoryId?: unknown
+      ruleIds?: unknown
+      expectedRevision?: unknown
+      expectedTopicRevision?: unknown
+    }
+    if (typeof memoryId !== 'string' || !memoryId.trim()) {
+      throw new Error('project memory target is required')
+    }
+    if (
+      !Array.isArray(ruleIds)
+      || ruleIds.length === 0
+      || ruleIds.some((id) => typeof id !== 'string' || !id.trim())
+    ) {
+      throw new Error('project rule ids are required')
+    }
+    if (typeof expectedRevision !== 'string') {
+      throw new Error('project memory revision is required')
+    }
+    if (expectedTopicRevision !== null && typeof expectedTopicRevision !== 'string') {
+      throw new Error('invalid project memory topic revision')
+    }
+    return publishProjectRulesToClaudeMemory({
+      memoryId,
+      ruleIds: ruleIds as string[],
+      expectedRevision,
+      expectedTopicRevision: expectedTopicRevision as string | null,
+    })
   })
 
   ipcMain.handle('rules.output', () => {

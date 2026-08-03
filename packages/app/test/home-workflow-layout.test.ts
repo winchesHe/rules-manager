@@ -534,6 +534,24 @@ describe('home workflow layout', () => {
     expect(memoryPage).not.toContain('<textarea')
   })
 
+  it('已接受的项目规则可显式发布到一个 Claude Project Memory', () => {
+    const source = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const outputPage = source.slice(
+      source.indexOf('function OutputRulesPage'),
+      source.indexOf('type GenerationEventMetadata'),
+    )
+
+    expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishTargets'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishProjectRules'")
+    expect(ipcSource).toContain('publishProjectRulesToClaudeMemory')
+    expect(outputPage).toContain("'rules.memories.publishTargets'")
+    expect(outputPage).toContain("'rules.memories.publishProjectRules'")
+    expect(outputPage).toContain('selectedProjectRuleIds')
+    expect(outputPage).toContain('expectedTopicRevision')
+    expect(outputPage).toContain("tr('publish.projectMemoryDescription')")
+  })
+
   it('Rules Generate 在后台 Worker 运行并提供可恢复、可取消的流式详情页', () => {
     const source = read('views/RulesView.tsx')
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')

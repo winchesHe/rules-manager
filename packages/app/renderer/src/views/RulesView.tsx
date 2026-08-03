@@ -51,6 +51,8 @@ import type {
   AutoMemoryListResult,
   AutoMemoryReadResult,
   AutoMemorySource,
+  ClaudeProjectMemoryPublishResult,
+  ClaudeProjectMemoryPublishTarget,
   GenerationEventEnvelope,
   GenerationHistoryEntry,
   GenerationMode,
@@ -88,6 +90,7 @@ type RulesPage =
   | 'review'
   | 'output'
 export type RulesSection = 'overview' | 'agents' | 'memories' | 'generated'
+const NO_SELECTION_KEY = '__none__'
 type GenerateMode = GenerationMode
 type GenerationPhaseKey = 'evidence' | 'generate' | 'validate' | 'save'
 
@@ -3860,20 +3863,27 @@ function formatEvidenceTimestamp(value: string): string {
 function OutputRulesPage({ onBack }: { onBack: () => void }) {
   const [accepted, setAccepted] = useState<RuleCandidate[]>([])
   const [targets, setTargets] = useState<GlobalInstructionReadResult[]>([])
+  const [memoryTargets, setMemoryTargets] = useState<ClaudeProjectMemoryPublishTarget[]>([])
   const [selectedAgents, setSelectedAgents] = useState<GlobalInstructionAgent[]>([])
+  const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null)
+  const [selectedProjectRuleIds, setSelectedProjectRuleIds] = useState<string[]>([])
+  const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
+  const [memoryPublishing, setMemoryPublishing] = useState(false)
   const [outputting, setOutputting] = useState(false)
   const [paths, setPaths] = useState<string[]>([])
   const [publishResult, setPublishResult] = useState<AgentInstructionPublishSummary | null>(null)
+  const [memoryPublishResult, setMemoryPublishResult] = useState<ClaudeProjectMemoryPublishResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let current = true
     void afterNextPaint(async () => {
-      const [rows, instructionResult] = await Promise.all([
+      const [rows, instructionResult, projectMemoryTargets] = await Promise.all([
         window.api.invoke<RuleCandidate[]>('rules.candidates', 'accepted'),
         window.api.invoke<GlobalInstructionListResult>('rules.instructions.list'),
+        window.api.invoke<ClaudeProjectMemoryPublishTarget[]>('rules.memories.publishTargets'),
       ])
       const instructionTargets = await Promise.all(
         instructionResult.sources.map((source) =>
@@ -3883,12 +3893,13 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
           ),
         ),
       )
-      return { rows, instructionTargets }
+      return { rows, instructionTargets, projectMemoryTargets }
     })
-      .then(({ rows, instructionTargets }) => {
+      .then(({ rows, instructionTargets, projectMemoryTargets }) => {
         if (!current) return
         setAccepted(rows)
         setTargets(instructionTargets)
+        setMemoryTargets(projectMemoryTargets)
       })
       .catch((reason: unknown) => {
         if (current) setError(reason instanceof Error ? reason.message : String(reason))
@@ -3903,6 +3914,18 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
 
   const globalRules = accepted.filter((candidate) => candidate.scope === 'global')
   const projectRules = accepted.filter((candidate) => candidate.scope === 'project')
+  const projectSlugs = useMemo(
+    () => [...new Set(projectRules.flatMap((candidate) =>
+      candidate.project_slug ? [candidate.project_slug] : []))].sort((left, right) =>
+      left.localeCompare(right, currentLocale())),
+    [projectRules],
+  )
+  const selectedProjectRules = projectRules.filter(
+    (candidate) => candidate.project_slug === selectedProjectSlug,
+  )
+  const selectedMemoryTarget = memoryTargets.find(
+    (target) => target.memoryId === selectedMemoryId,
+  )
 
   function toggleAgent(agent: GlobalInstructionAgent): void {
     setSelectedAgents((current) =>
@@ -3911,6 +3934,52 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
         : [...current, agent],
     )
     setPublishResult(null)
+  }
+
+  function selectProject(projectSlug: string | null): void {
+    setSelectedProjectSlug(projectSlug)
+    setSelectedProjectRuleIds([])
+    setMemoryPublishResult(null)
+  }
+
+  function toggleProjectRule(ruleId: string): void {
+    setSelectedProjectRuleIds((current) => current.includes(ruleId)
+      ? current.filter((id) => id !== ruleId)
+      : [...current, ruleId])
+    setMemoryPublishResult(null)
+  }
+
+  async function publishProjectMemory(): Promise<void> {
+    if (!selectedMemoryTarget || selectedProjectRuleIds.length === 0) return
+    setMemoryPublishing(true)
+    setMemoryPublishResult(null)
+    setError(null)
+    try {
+      const result = await afterNextPaint(() =>
+        window.api.invoke<ClaudeProjectMemoryPublishResult>(
+          'rules.memories.publishProjectRules',
+          {
+            memoryId: selectedMemoryTarget.memoryId,
+            ruleIds: selectedProjectRuleIds,
+            expectedRevision: selectedMemoryTarget.revision,
+            expectedTopicRevision: selectedMemoryTarget.topicRevision,
+          },
+        ),
+      )
+      setMemoryPublishResult(result)
+      setMemoryTargets((current) => current.map((target) =>
+        target.memoryId === result.memoryId
+          ? {
+              ...target,
+              revision: result.revision,
+              topicRevision: result.topicRevision,
+            }
+          : target))
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setMemoryPublishing(false)
+    }
   }
 
   async function publish(): Promise<void> {
@@ -4014,6 +4083,48 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
                 <p className="text-sm leading-6 text-muted">
                   {tr('publish.projectDescription')}
                 </p>
+                <Select
+                  aria-label={tr('publish.projectSelect')}
+                  className="mt-4 max-w-md"
+                  onSelectionChange={(key) => {
+                    const value = String(key)
+                    selectProject(value === NO_SELECTION_KEY ? null : value)
+                  }}
+                  selectedKey={selectedProjectSlug ?? NO_SELECTION_KEY}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id={NO_SELECTION_KEY} textValue={tr('publish.projectSelectPlaceholder')}>
+                        {tr('publish.projectSelectPlaceholder')}
+                      </ListBox.Item>
+                      {projectSlugs.map((slug) => (
+                        <ListBox.Item id={slug} key={slug} textValue={slug}>{slug}</ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                {selectedProjectSlug && (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-border">
+                    {selectedProjectRules.map((candidate) => (
+                      <label
+                        className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 border-b border-border px-3 py-3 last:border-b-0 hover:bg-surface-hover"
+                        key={candidate.id}
+                      >
+                        <input
+                          checked={selectedProjectRuleIds.includes(candidate.id)}
+                          className="mt-1 size-4 accent-primary"
+                          onChange={() => toggleProjectRule(candidate.id)}
+                          type="checkbox"
+                        />
+                        <span className="text-sm leading-6 text-foreground">{candidate.rule_text}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <Button
                   className="mt-3 gap-2"
                   isDisabled={projectRules.length === 0 || outputting}
@@ -4082,7 +4193,80 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
               </Card.Footer>
             </Card>
 
+            <Card className="border border-border bg-surface shadow-none">
+              <Card.Header className="border-b border-border px-5 py-4">
+                <div>
+                  <h2 className="font-medium text-foreground">{tr('publish.projectMemoryTitle')}</h2>
+                  <p className="mt-1 text-sm text-muted">{tr('publish.projectMemoryDescription')}</p>
+                </div>
+              </Card.Header>
+              <Card.Content className="grid gap-3 px-4 py-4">
+                <Select
+                  aria-label={tr('publish.memoryTargetSelect')}
+                  onSelectionChange={(key) => {
+                    const value = String(key)
+                    setSelectedMemoryId(value === NO_SELECTION_KEY ? null : value)
+                    setMemoryPublishResult(null)
+                  }}
+                  selectedKey={selectedMemoryId ?? NO_SELECTION_KEY}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id={NO_SELECTION_KEY} textValue={tr('publish.memoryTargetPlaceholder')}>
+                        {tr('publish.memoryTargetPlaceholder')}
+                      </ListBox.Item>
+                      {memoryTargets.map((target) => (
+                        <ListBox.Item
+                          id={target.memoryId}
+                          isDisabled={!target.writable}
+                          key={target.memoryId}
+                          textValue={target.displayName}
+                        >
+                          <span className="block font-medium">{target.displayName}</span>
+                          <span className="mt-0.5 block max-w-72 truncate text-xs text-muted">
+                            {target.reason ?? target.path}
+                          </span>
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <p className="text-xs leading-5 text-muted">
+                  {tr('publish.projectMemorySelection', { count: selectedProjectRuleIds.length })}
+                </p>
+              </Card.Content>
+              <Card.Footer className="border-t border-border px-4 py-3">
+                <Button
+                  className="w-full gap-2 bg-primary text-primary-foreground"
+                  isDisabled={!selectedMemoryTarget?.writable || selectedProjectRuleIds.length === 0 || memoryPublishing}
+                  onPress={() => void publishProjectMemory()}
+                >
+                  {memoryPublishing ? <Spinner color="current" size="sm" /> : <Brain aria-hidden="true" size={16} />}
+                  {memoryPublishing
+                    ? tr('actions.publishing')
+                    : tr('actions.publishProjectMemory', { count: selectedProjectRuleIds.length })}
+                </Button>
+              </Card.Footer>
+            </Card>
+
             {error && <ErrorAlert message={error} title={tr('errors.publish')} />}
+            {memoryPublishResult && (
+              <Alert status="success">
+                <Alert.Content>
+                  <Alert.Title>{tr(`publish.projectMemoryStatus.${memoryPublishResult.status}`)}</Alert.Title>
+                  <Alert.Description>
+                    {tr('publish.projectMemoryComplete', {
+                      project: memoryPublishResult.projectSlug,
+                      count: memoryPublishResult.ruleCount,
+                    })}
+                  </Alert.Description>
+                </Alert.Content>
+              </Alert>
+            )}
             {publishResult && (
               <Card className="border border-border bg-surface shadow-none">
                 <Card.Header className="border-b border-border px-4 py-3">

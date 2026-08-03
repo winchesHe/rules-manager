@@ -553,6 +553,27 @@ export interface AutoMemoryReadResult {
   content: string
 }
 
+export interface ClaudeProjectMemoryPublishTarget {
+  memoryId: string
+  displayName: string
+  path: string
+  revision: string
+  topicRevision: string | null
+  writable: boolean
+  reason?: string
+}
+
+export interface ClaudeProjectMemoryPublishResult {
+  memoryId: string
+  path: string
+  topicPath: string
+  projectSlug: string
+  ruleCount: number
+  status: 'published' | 'unchanged'
+  revision: string
+  topicRevision: string
+}
+
 export interface AgentInstructionPublishSummary {
   ruleCount: number
   results: Array<{

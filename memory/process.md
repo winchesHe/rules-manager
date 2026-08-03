@@ -2360,3 +2360,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 27 suites / 173 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
   PURE 注释警告。
 - 提交信息：`fix: 对齐候选规则状态动作`
+
+## Claude Project Memory 项目规则发布（2026-08-03）
+
+- 已接受规则发布页新增独立的项目级流程：用户必须依次显式选择项目、勾选该项目的 accepted project
+  rules，并选择一个已发现的 Claude Project Memory；项目 slug 不会自动映射到 Claude 的不透明目录。
+- 发布只替换 `MEMORY.md` 顶部的 Memory Manager managed block，并维护固定 topic
+  `memory-manager-rules.md`；Claude 自身内容保持不变。Memory 与 topic 都使用 SHA-256 preview revision 做
+  compare-and-swap，单文件以同目录临时文件、fsync、rename 原子替换。
+- 写入边界拒绝跨项目、非 accepted、非 project、未知规则、保留 marker、超 24 KiB / 160 行、损坏
+  managed marker、非受管同名 topic，以及 Memory 文件或项目内父目录 symlink；Codex 暂不提供项目级目标。
+- 真实 Electron 验证项目选择、规则勾选、可读 Memory 目标列表和三项齐备后按钮启用；验收未点击最终发布，
+  因此没有改动本机 Claude Memory。`simplify` 复核收敛了选择哨兵并补强 symlink 与 marker 边界。
+- Core 28 suites / 290 tests、App 27 suites / 174 tests、Core/App production build 与
+  `git diff --check` 通过。App 独立 typecheck 仍受既有跨 workspace `rootDir/files` 配置和
+  `RulesView` 的 `history` 类型错误阻断；build 仅保留既有 Core `tsdown define` 与 Markstream PURE
+  注释警告。
+- 提交信息：`feat: 支持发布项目规则到 Claude Memory`
