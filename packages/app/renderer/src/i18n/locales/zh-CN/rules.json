@@ -393,12 +393,30 @@
   },
   "publish": {
     "title": "发布已接受规则",
-    "description": "预览已接受规则，并明确选择接收全局规则的 Agent 文件。",
+    "description": "先选择规则范围，再配置对应的发布目标。不同范围不会共享目标或发布状态。",
+    "tabsLabel": "发布内容",
+    "tabs": {
+      "project": "项目规则",
+      "global": "全局规则",
+      "memory": "Memory"
+    },
+    "workbenchSummary": "{{count}} 条已接受规则。勾选项用于当前发布操作。",
+    "selectRules": "选择规则",
+    "selectionHelp": "只有勾选的规则会发布到所选 Agent 指令文件或项目 Memory。",
+    "selectionSummary": "已选择 {{selected}} / {{total}}",
+    "projectRuleMeta": "项目规则 · {{project}}",
+    "selectedRules": "已选择 {{count}} 条规则",
+    "footer": {
+      "agents": "已选择 {{count}} 个 Agent 全局指令文件",
+      "claude": "请选择 Claude Project Memory 目标",
+      "codex": "请选择 Codex 项目工作目录"
+    },
     "loading": "正在加载已接受规则和 Agent 文件",
     "preview": "已接受规则预览",
     "previewSummary": "{{global}} 条全局规则 · {{project}} 条项目规则",
     "globalRules": "全局规则",
-    "emptyGlobal": "没有已接受的全局规则。",
+    "emptyGlobalTitle": "没有已接受的全局规则",
+    "emptyGlobal": "接受至少一条全局规则后，这里才会显示 Agent 目标和发布操作。",
     "projectRules": "项目规则",
     "projectDescription": "勾选的规则用于发布到下方项目 Memory；也可以把该项目全部已接受规则单独导出为 Memory Manager 文件。",
     "projectOutputDescription": "导出 {{project}} 的全部已接受规则到 rules/projects/{{project}}.md，供其他流程读取；不会发布到 Agent 或 Memory。",
@@ -435,7 +453,7 @@
       "published": "Codex Memory note 已提交",
       "unchanged": "Codex Memory note 无需更新"
     },
-    "targets": "将全局规则发布到",
+    "targets": "发布到 Agent 全局规则",
     "noDefault": "默认不选择任何 Agent。",
     "fileCreated": "将创建文件",
     "results": "发布结果",

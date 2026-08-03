@@ -2566,3 +2566,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   工作台底部约 965px，文档高度与视口均为 1024px，无额外纵向滚动。390px 下最小高度回退为 0，
   无横向溢出；浏览器控制台无 warning/error。
 - 提交信息：`style: 让原型工作台填满视口`
+
+## 已接受规则发布台落入真实 App（2026-08-03）
+
+- 将 `OutputRulesPage` 按已确认的 HTML 原型重构为单一满高工作台：顶部使用「项目规则 / 全局规则 /
+  Memory」三个范围 tab；中间固定为规则选择区与目标配置区；底部只保留当前上下文的一项主操作。
+- 项目规则默认全选当前项目的 accepted rules；Agent 目标保持显式多选。Memory 范围内 Claude 与 Codex
+  改为互斥 tab，继续复用既有目标发现、默认空选、revision 校验、发布 IPC 与成功/失败反馈。
+- 项目规则导出移动到工作台标题栏，仍始终导出当前项目全部 accepted rules，不受勾选状态影响。全局规则为
+  0 时改为占满工作台的居中空状态，不展示无效的 Agent 目标和底部发布操作。
+- 真实 Electron 截图依次对比项目规则、Claude Memory、Codex Memory 和全局空状态：页面标题、三 tab、
+  1296px 级工作台边界、约 22rem 目标栏、规则行、底部操作栏均与原型同构；工作台填满剩余视口，页面下方
+  不再出现原截图标注的大块空白。验收只切换页面和 tab，未选择发布目标、未触发发布或导出。
+- App 27 suites / 178 tests、production build 与 `git diff --check` 通过；build 只保留既有 Markstream
+  PURE 注释警告。App typecheck 仍被既有 workspace `rootDir` / `TS6307` 配置错误及 `RulesSection`
+  的 `history` 类型错误阻断，本次 `OutputRulesPage` 改动区域没有新增 typecheck 报错。
+- 提交信息：`feat: 重构已接受规则发布台`

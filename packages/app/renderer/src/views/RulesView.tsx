@@ -3887,6 +3887,8 @@ function OutputRulesPage({
   initialProjectSlug?: string | null
   onBack: () => void
 }) {
+  const [publishTab, setPublishTab] = useState<'project' | 'global' | 'memory'>('project')
+  const [memoryProvider, setMemoryProvider] = useState<'claude' | 'codex'>('claude')
   const [accepted, setAccepted] = useState<RuleCandidate[]>([])
   const [targets, setTargets] = useState<GlobalInstructionReadResult[]>([])
   const [memoryTargets, setMemoryTargets] = useState<ClaudeProjectMemoryPublishTarget[]>([])
@@ -3983,6 +3985,7 @@ function OutputRulesPage({
     () => accepted.filter((candidate) => candidate.scope === 'project'),
     [accepted],
   )
+  const hasNoGlobalRules = publishTab === 'global' && globalRules.length === 0
   const projectSlugs = useMemo(
     () => [...new Set(projectRules.flatMap((candidate) =>
       candidate.project_slug ? [candidate.project_slug] : []))].sort((left, right) =>
@@ -4031,7 +4034,11 @@ function OutputRulesPage({
 
   function selectProject(projectSlug: string | null): void {
     setSelectedProjectSlug(projectSlug)
-    setSelectedProjectRuleIds([])
+    setSelectedProjectRuleIds(projectSlug
+      ? projectRules
+        .filter((candidate) => candidate.project_slug === projectSlug)
+        .map((candidate) => candidate.id)
+      : [])
     setMemoryPublishResult(null)
     setCodexMemoryPublishResult(null)
   }
@@ -4166,68 +4173,134 @@ function OutputRulesPage({
   }
 
   return (
-    <>
-      <BackButton label={tr('actions.back')} onPress={onBack} />
+    <PageShell
+      archetype="task"
+      className="min-h-[calc(100dvh-6rem)] !gap-3"
+      density="compact"
+      width="wide"
+    >
       <PageHeader
+        actions={(
+          <Button className="gap-2 text-muted" onPress={onBack} size="sm" variant="ghost">
+            <ArrowLeft aria-hidden="true" size={16} />
+            {tr('actions.back')}
+          </Button>
+        )}
+        className="mb-0"
         description={tr('publish.description')}
         title={tr('publish.title')}
       />
+      <nav
+        aria-label={tr('publish.tabsLabel')}
+        className="grid w-full max-w-[28rem] grid-cols-3 gap-1 rounded-xl border border-border bg-background p-1"
+        data-publish-tabs="true"
+      >
+        {(['project', 'global', 'memory'] as const).map((tab) => {
+          const count = tab === 'global' ? globalRules.length : projectRules.length
+          const selected = publishTab === tab
+          return (
+            <button
+              aria-selected={selected}
+              className={`flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
+                selected
+                  ? 'bg-surface text-foreground shadow-sm'
+                  : 'text-muted hover:bg-surface-hover hover:text-foreground'
+              }`}
+              data-publish-tab={tab}
+              key={tab}
+              onClick={() => setPublishTab(tab)}
+              role="tab"
+              type="button"
+            >
+              {tr(`publish.tabs.${tab}`)}
+              <span className={`min-w-5 rounded-md px-1.5 py-0.5 text-xs tabular-nums ${selected ? 'bg-primary-soft text-primary' : 'bg-surface-hover text-muted'}`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </nav>
       {loading ? (
         <ViewLoading label={tr('publish.loading')} />
       ) : (
-        <div className="grid min-w-0 items-start grid-cols-[minmax(0,1fr)_minmax(24rem,26rem)] gap-5 max-xl:grid-cols-1">
-          <div className="grid min-w-0 content-start gap-4">
-            <Card className="min-w-0 border border-border bg-surface shadow-none">
-              <Card.Header className="border-b border-border px-5 py-4">
-                <div>
-                  <h2 className="font-medium text-foreground">{tr('publish.preview')}</h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {tr('publish.previewSummary', {
-                      global: globalRules.length,
-                      project: projectRules.length,
-                    })}
-                  </p>
+        <div
+          className={`grid min-h-[calc(100dvh-13rem)] min-w-0 items-stretch overflow-hidden rounded-xl border border-border bg-surface ${hasNoGlobalRules ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_22rem] max-xl:grid-cols-1'}`}
+          data-publish-workbench="true"
+        >
+          <div className="min-w-0" data-publish-rules-pane="true">
+            <Card className="h-full min-w-0 rounded-none border-0 bg-surface shadow-none">
+              <Card.Header className="block border-b border-border px-4 py-3">
+                <div className="flex w-full items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="truncate font-medium text-foreground">
+                      {publishTab === 'global'
+                        ? tr('publish.globalRules')
+                        : selectedProjectSlug ?? tr('publish.projectRules')}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {tr('publish.workbenchSummary', {
+                        count: publishTab === 'global' ? globalRules.length : selectedProjectRules.length,
+                      })}
+                    </p>
+                  </div>
+                  {publishTab !== 'global' && (
+                    <Button
+                      className="shrink-0 gap-2"
+                      isDisabled={!selectedProjectSlug || outputting}
+                      onPress={() => void exportProjectRules()}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      {outputting ? <Spinner color="current" size="sm" /> : <FileOutput aria-hidden="true" size={16} />}
+                      {tr('actions.writeProjectOutput')}
+                    </Button>
+                  )}
                 </div>
               </Card.Header>
               <Card.Content className="p-0">
-                <div className="border-b border-border px-5 py-4">
+                {publishTab === 'global' && (
+                <div className={globalRules.length === 0 ? 'grid min-h-[calc(100dvh-20rem)] place-items-center px-4 py-8 text-center' : 'px-4 py-4'}>
+                  {globalRules.length === 0 ? (
+                    <div className="max-w-sm">
+                      <span className="mx-auto grid size-10 place-items-center rounded-full bg-background text-sm font-medium text-muted">0</span>
+                      <h3 className="mt-3 text-sm font-medium text-foreground">{tr('publish.emptyGlobalTitle')}</h3>
+                      <p className="mt-1 text-sm leading-6 text-muted">{tr('publish.emptyGlobal')}</p>
+                    </div>
+                  ) : (
+                  <>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-medium text-foreground">{tr('publish.globalRules')}</h3>
                     <Chip size="sm" variant="soft">{globalRules.length}</Chip>
                   </div>
-                  {globalRules.length > 0 ? (
-                    <ul className="grid gap-2">
-                      {globalRules.map((candidate) => (
-                        <li className="rounded-lg bg-background px-3 py-2.5 text-sm leading-6 text-foreground" key={candidate.id}>
-                          {candidate.rule_text}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted">{tr('publish.emptyGlobal')}</p>
+                  <ul className="grid gap-2">
+                    {globalRules.map((candidate) => (
+                      <li className="rounded-lg bg-background px-3 py-2.5 text-sm leading-6 text-foreground" key={candidate.id}>
+                        {candidate.rule_text}
+                      </li>
+                    ))}
+                  </ul>
+                  </>
                   )}
                 </div>
-                <div className="px-5 py-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-medium text-foreground">{tr('publish.projectRules')}</h3>
-                    <Chip size="sm" variant="soft">{projectRules.length}</Chip>
-                  </div>
-                  <p className="text-sm leading-6 text-muted">
-                    {tr('publish.projectDescription')}
-                  </p>
-                  {projectSlugs.length === 1 ? (
-                    <div className="mt-4 flex max-w-md items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
-                      <span className="min-w-0 truncate text-sm font-medium text-foreground">
-                        {projectSlugs[0]}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted">
-                        {tr('publish.projectRuleCount', { count: projectRules.length })}
-                      </span>
+                )}
+                {publishTab !== 'global' && (
+                <div className="px-4 py-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground">{tr('publish.selectRules')}</h3>
+                      <p className="mt-1 text-xs leading-5 text-muted">{tr('publish.selectionHelp')}</p>
                     </div>
-                  ) : (
+                    <span className="shrink-0 text-xs tabular-nums text-muted">
+                      {tr('publish.selectionSummary', {
+                        selected: selectedProjectRuleIds.length,
+                        total: selectedProjectRules.length,
+                      })}
+                    </span>
+                  </div>
+                  {projectSlugs.length > 1 && (
                     <Select
                       aria-label={tr('publish.projectSelect')}
-                      className="mt-4 max-w-md"
+                      className="mb-3 max-w-md"
                       onSelectionChange={(key) => selectProject(String(key))}
                       placeholder={tr('publish.projectSelectPlaceholder')}
                       selectedKey={selectedProjectSlug}
@@ -4258,27 +4331,18 @@ function OutputRulesPage({
                             onChange={() => toggleProjectRule(candidate.id)}
                             type="checkbox"
                           />
-                          <span className="text-sm leading-6 text-foreground">{candidate.rule_text}</span>
+                          <span className="text-sm leading-6 text-foreground">
+                            {candidate.rule_text}
+                            <span className="mt-1 block text-xs text-muted">
+                              {tr('publish.projectRuleMeta', { project: candidate.project_slug })}
+                            </span>
+                          </span>
                         </label>
                       ))}
                     </div>
                   )}
-                  <Button
-                    className="mt-3 gap-2"
-                    isDisabled={!selectedProjectSlug || outputting}
-                    onPress={() => void exportProjectRules()}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {outputting ? <Spinner color="current" size="sm" /> : <FileOutput aria-hidden="true" size={16} />}
-                    {tr('actions.writeProjectOutput')}
-                  </Button>
-                  <p className="mt-2 max-w-2xl text-xs leading-5 text-muted">
-                    {selectedProjectSlug
-                      ? tr('publish.projectOutputDescription', { project: selectedProjectSlug })
-                      : tr('publish.projectOutputDescriptionEmpty')}
-                  </p>
                 </div>
+                )}
               </Card.Content>
             </Card>
             {paths.length > 0 && (
@@ -4293,9 +4357,11 @@ function OutputRulesPage({
             )}
           </div>
 
-          <aside className="sticky top-4 grid min-w-0 max-h-[calc(100dvh-2rem)] content-start gap-4 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 max-xl:static max-xl:max-h-none max-xl:overflow-visible max-xl:pr-0">
-            <Card className="min-w-0 overflow-hidden border border-border bg-surface shadow-none">
-              <Card.Header className="border-b border-border px-5 py-4">
+          {!hasNoGlobalRules && (
+          <aside className="min-w-0 border-l border-border max-xl:border-l-0 max-xl:border-t" data-publish-target-pane="true">
+            {publishTab !== 'memory' && (
+            <Card className="min-w-0 overflow-hidden rounded-none border-0 bg-surface shadow-none">
+              <Card.Header className="border-b border-border px-4 py-3">
                 <div>
                   <h2 className="font-medium text-foreground">{tr('publish.targets')}</h2>
                   <p className="mt-1 text-sm text-muted">{tr('publish.noDefault')}</p>
@@ -4333,31 +4399,37 @@ function OutputRulesPage({
                   )
                 })}
               </Card.Content>
-              <Card.Footer className="border-t border-border px-4 py-3">
-                <Button
-                  className="w-full gap-2 bg-primary text-primary-foreground"
-                  isDisabled={globalRules.length === 0 || selectedAgents.length === 0 || publishing}
-                  onPress={() => void publish()}
-                >
-                  {publishing ? <Spinner color="current" size="sm" /> : <Save aria-hidden="true" size={16} />}
-                  {publishing
-                    ? tr('actions.publishing')
-                    : tr('actions.publishAgents', { count: selectedAgents.length })}
-                </Button>
-              </Card.Footer>
             </Card>
+            )}
 
+            {publishTab === 'memory' && (
             <Card
-              className="min-w-0 overflow-hidden border border-border bg-surface shadow-none"
+              className="min-w-0 overflow-hidden rounded-none border-0 bg-surface shadow-none"
               data-project-memory-targets
             >
-              <Card.Header className="border-b border-border px-5 py-4">
+              <Card.Header className="border-b border-border px-4 py-3">
                 <div>
                   <h2 className="font-medium text-foreground">{tr('publish.projectMemoryTargetsTitle')}</h2>
                   <p className="mt-1 text-sm text-muted">{tr('publish.projectMemoryTargetsDescription')}</p>
                 </div>
               </Card.Header>
               <Card.Content className="p-0">
+                <div className="grid grid-cols-2 gap-1 bg-background p-1.5" role="tablist">
+                  {(['claude', 'codex'] as const).map((provider) => (
+                    <button
+                      aria-selected={memoryProvider === provider}
+                      className={`h-9 rounded-lg text-sm font-medium transition-colors ${memoryProvider === provider ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}
+                      data-memory-provider={provider}
+                      key={provider}
+                      onClick={() => setMemoryProvider(provider)}
+                      role="tab"
+                      type="button"
+                    >
+                      {provider === 'claude' ? 'Claude' : 'Codex'}
+                    </button>
+                  ))}
+                </div>
+                {memoryProvider === 'claude' && (
                 <section className="grid gap-3 px-4 py-4">
                   <div>
                     <h3 className="text-sm font-medium text-foreground">{tr('publish.projectMemoryTitle')}</h3>
@@ -4401,18 +4473,10 @@ function OutputRulesPage({
                   <p className="text-xs leading-5 text-muted">
                     {tr('publish.projectMemorySelection', { count: selectedProjectRuleIds.length })}
                   </p>
-                  <Button
-                    className="w-full gap-2 bg-primary text-primary-foreground"
-                    isDisabled={!selectedMemoryTarget?.writable || selectedProjectRuleIds.length === 0 || memoryPublishing}
-                    onPress={() => void publishProjectMemory()}
-                  >
-                    {memoryPublishing ? <Spinner color="current" size="sm" /> : <Brain aria-hidden="true" size={16} />}
-                    {memoryPublishing
-                      ? tr('actions.publishing')
-                      : tr('actions.publishProjectMemory', { count: selectedProjectRuleIds.length })}
-                  </Button>
                 </section>
+                )}
 
+                {memoryProvider === 'codex' && (
                 <section className="grid gap-3 border-t border-border px-4 py-4">
                   <div>
                     <h3 className="text-sm font-medium text-foreground">{tr('publish.codexProjectMemoryTitle')}</h3>
@@ -4478,27 +4542,11 @@ function OutputRulesPage({
                       })}
                     </p>
                   )}
-                  <Button
-                    className="w-full gap-2 bg-primary text-primary-foreground"
-                    isDisabled={
-                      !selectedCodexMemoryTarget?.writable
-                      || selectedProjectRuleIds.length === 0
-                      || codexMemoryPublishing
-                    }
-                    onPress={() => void publishCodexProjectMemory()}
-                  >
-                    {codexMemoryPublishing
-                      ? <Spinner color="current" size="sm" />
-                      : <Terminal aria-hidden="true" size={16} />}
-                    {codexMemoryPublishing
-                      ? tr('actions.publishing')
-                      : tr('actions.publishCodexProjectMemory', {
-                          count: selectedProjectRuleIds.length,
-                        })}
-                  </Button>
                 </section>
+                )}
               </Card.Content>
             </Card>
+            )}
 
             {error && <ErrorAlert message={error} title={tr('errors.publish')} />}
             {memoryPublishResult && (
@@ -4558,9 +4606,68 @@ function OutputRulesPage({
               </Card>
             )}
           </aside>
+          )}
+          {!hasNoGlobalRules && (
+          <footer
+            className="col-span-full flex min-w-0 items-center justify-between gap-4 border-t border-border bg-background px-4 py-3 max-sm:flex-col max-sm:items-stretch"
+            data-publish-footer="true"
+          >
+            <div className="min-w-0">
+              <strong className="block text-sm font-medium text-foreground">
+                {tr('publish.selectedRules', {
+                  count: publishTab === 'global' ? globalRules.length : selectedProjectRuleIds.length,
+                })}
+              </strong>
+              <span className="mt-0.5 block truncate text-xs text-muted">
+                {publishTab === 'memory'
+                  ? tr(`publish.footer.${memoryProvider}`)
+                  : tr('publish.footer.agents', { count: selectedAgents.length })}
+              </span>
+            </div>
+            {publishTab === 'memory' ? (
+              memoryProvider === 'claude' ? (
+                <Button
+                  className="shrink-0 gap-2 bg-primary text-primary-foreground"
+                  data-primary-publish-action="true"
+                  isDisabled={!selectedMemoryTarget?.writable || selectedProjectRuleIds.length === 0 || memoryPublishing}
+                  onPress={() => void publishProjectMemory()}
+                >
+                  {memoryPublishing ? <Spinner color="current" size="sm" /> : <Brain aria-hidden="true" size={16} />}
+                  {memoryPublishing
+                    ? tr('actions.publishing')
+                    : tr('actions.publishProjectMemory', { count: selectedProjectRuleIds.length })}
+                </Button>
+              ) : (
+                <Button
+                  className="shrink-0 gap-2 bg-primary text-primary-foreground"
+                  data-primary-publish-action="true"
+                  isDisabled={!selectedCodexMemoryTarget?.writable || selectedProjectRuleIds.length === 0 || codexMemoryPublishing}
+                  onPress={() => void publishCodexProjectMemory()}
+                >
+                  {codexMemoryPublishing ? <Spinner color="current" size="sm" /> : <Terminal aria-hidden="true" size={16} />}
+                  {codexMemoryPublishing
+                    ? tr('actions.publishing')
+                    : tr('actions.publishCodexProjectMemory', { count: selectedProjectRuleIds.length })}
+                </Button>
+              )
+            ) : (
+              <Button
+                className="shrink-0 gap-2 bg-primary text-primary-foreground"
+                data-primary-publish-action="true"
+                isDisabled={globalRules.length === 0 || selectedAgents.length === 0 || publishing}
+                onPress={() => void publish()}
+              >
+                {publishing ? <Spinner color="current" size="sm" /> : <Save aria-hidden="true" size={16} />}
+                {publishing
+                  ? tr('actions.publishing')
+                  : tr('actions.publishAgents', { count: selectedAgents.length })}
+              </Button>
+            )}
+          </footer>
+          )}
         </div>
       )}
-    </>
+    </PageShell>
   )
 }
 

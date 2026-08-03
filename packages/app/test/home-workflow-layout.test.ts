@@ -579,17 +579,12 @@ describe('home workflow layout', () => {
     expect(memoryPage).not.toContain('<textarea')
   })
 
-  it('已接受的项目规则可显式发布到一个 Claude Project Memory', () => {
+  it('已接受规则通过独立 Memory 范围发布到 Claude 或 Codex', () => {
     const source = read('views/RulesView.tsx')
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
     const outputPage = source.slice(
       source.indexOf('function OutputRulesPage'),
       source.indexOf('type GenerationEventMetadata'),
-    )
-    const memoryTargetsMarker = outputPage.indexOf('data-project-memory-targets')
-    const memoryTargetsCard = outputPage.slice(
-      outputPage.lastIndexOf('<Card', memoryTargetsMarker),
-      outputPage.indexOf('{error &&', memoryTargetsMarker),
     )
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishTargets'")
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishProjectRules'")
@@ -599,13 +594,16 @@ describe('home workflow layout', () => {
     expect(outputPage).toContain('selectedProjectRuleIds')
     expect(outputPage).toContain('expectedTopicRevision')
     expect(outputPage).toContain("tr('publish.projectMemoryDescription')")
-    expect(memoryTargetsMarker).toBeGreaterThan(-1)
-    expect(memoryTargetsCard.match(/<Card(?:\s|>)/g)).toHaveLength(1)
-    expect(memoryTargetsCard).toContain("tr('publish.projectMemoryTargetsTitle')")
-    expect(memoryTargetsCard).toContain("tr('publish.projectMemoryTitle')")
-    expect(memoryTargetsCard).toContain("tr('publish.codexProjectMemoryTitle')")
-    expect(memoryTargetsCard).toContain('onPress={() => void publishProjectMemory()}')
-    expect(memoryTargetsCard).toContain('onPress={() => void publishCodexProjectMemory()}')
+    expect(outputPage).toContain('data-publish-tab={tab}')
+    expect(outputPage).toContain("(['project', 'global', 'memory'] as const)")
+    expect(outputPage).toContain("publishTab === 'memory'")
+    expect(outputPage).toContain("(['claude', 'codex'] as const)")
+    expect(outputPage).toContain('data-memory-provider={provider}')
+    expect(outputPage).toContain("memoryProvider === 'claude'")
+    expect(outputPage).toContain('onPress={() => void publishProjectMemory()}')
+    expect(outputPage).toContain('onPress={() => void publishCodexProjectMemory()}')
+    expect(outputPage).toContain('data-publish-footer="true"')
+    expect(outputPage).toContain('data-primary-publish-action="true"')
   })
 
   it('项目规则导出只写当前项目，并明确区别于 Agent 和 Memory 发布', () => {
@@ -616,7 +614,7 @@ describe('home workflow layout', () => {
       source.indexOf('type GenerationEventMetadata'),
     )
     const projectSelector = outputPage.slice(
-      outputPage.indexOf("tr('publish.projectDescription')"),
+      outputPage.indexOf("tr('publish.selectRules')"),
       outputPage.indexOf('{selectedProjectSlug && ('),
     )
     const targetSidebarStart = outputPage.indexOf('<aside className=')
@@ -626,16 +624,17 @@ describe('home workflow layout', () => {
     expect(ipcSource).toContain('runRulesOutput({ project: projectSlug })')
     expect(ipcSource).not.toContain('runRulesOutput({ all: true })')
     expect(outputPage).toContain("window.api.invoke<string[]>('rules.output', selectedProjectSlug)")
-    expect(outputPage).toContain("tr('publish.projectOutputDescription'")
-    expect(projectSelector).toContain('projectSlugs.length === 1')
+    expect(projectSelector).toContain('projectSlugs.length > 1')
     expect(projectSelector).toContain("placeholder={tr('publish.projectSelectPlaceholder')}")
     expect(projectSelector).not.toContain('id={NO_SELECTION_KEY}')
-    expect(projectSelector).toContain("tr('publish.projectRuleCount'")
-    expect(outputPage).toContain('items-start')
-    expect(outputPage).toContain('minmax(24rem,26rem)')
-    expect(outputPage).toContain('max-h-[calc(100dvh-2rem)]')
-    expect(outputPage).toContain('overflow-x-hidden overflow-y-auto')
-    expect(projectOutputFeedback).toBeGreaterThan(outputPage.indexOf('<Card className="min-w-0'))
+    expect(projectSelector).toContain("tr('publish.selectionSummary'")
+    expect(outputPage).toContain('data-publish-workbench="true"')
+    expect(outputPage).toContain('min-h-[calc(100dvh-13rem)]')
+    expect(outputPage).toContain('grid-cols-[minmax(0,1fr)_22rem]')
+    expect(outputPage).toContain('data-publish-rules-pane="true"')
+    expect(outputPage).toContain('data-publish-target-pane="true"')
+    expect(outputPage).not.toContain('sticky top-4')
+    expect(projectOutputFeedback).toBeGreaterThan(outputPage.indexOf('data-publish-rules-pane="true"'))
     expect(projectOutputFeedback).toBeLessThan(targetSidebarStart)
   })
 

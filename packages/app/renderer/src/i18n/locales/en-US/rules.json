@@ -393,12 +393,30 @@
   },
   "publish": {
     "title": "Publish accepted rules",
-    "description": "Preview accepted rules and explicitly choose which Agent files receive global rules.",
+    "description": "Choose a rule scope, then configure its publish target. Targets and publish state are isolated by scope.",
+    "tabsLabel": "Publish content",
+    "tabs": {
+      "project": "Project rules",
+      "global": "Global rules",
+      "memory": "Memory"
+    },
+    "workbenchSummary": "{{count}} accepted rules. Checked rules are used by the current publish action.",
+    "selectRules": "Select rules",
+    "selectionHelp": "Only checked rules are published to the selected Agent instruction files or project Memory.",
+    "selectionSummary": "{{selected}} / {{total}} selected",
+    "projectRuleMeta": "Project rule · {{project}}",
+    "selectedRules": "{{count}} rules selected",
+    "footer": {
+      "agents": "{{count}} Agent instruction files selected",
+      "claude": "Select a Claude Project Memory target",
+      "codex": "Select a Codex project working directory"
+    },
     "loading": "Loading accepted rules and Agent files",
     "preview": "Accepted rule preview",
     "previewSummary": "{{global}} global · {{project}} project rules",
     "globalRules": "Global rules",
-    "emptyGlobal": "No accepted global rules.",
+    "emptyGlobalTitle": "No accepted global rules",
+    "emptyGlobal": "Accept at least one global rule to configure Agent targets and publish it here.",
     "projectRules": "Project rules",
     "projectDescription": "Checked rules are published to a project Memory below. You can also export every accepted rule for this project as a standalone Memory Manager file.",
     "projectOutputDescription": "Exports every accepted rule for {{project}} to rules/projects/{{project}}.md for other workflows. This does not publish to an Agent or Memory.",
@@ -435,7 +453,7 @@
       "published": "Codex Memory note submitted",
       "unchanged": "Codex Memory note already up to date"
     },
-    "targets": "Publish global rules to",
+    "targets": "Publish to Agent global rules",
     "noDefault": "No Agent is selected by default.",
     "fileCreated": "File will be created",
     "results": "Publish results",
