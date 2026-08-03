@@ -317,7 +317,7 @@
     .rule-copy { font-size: 13px; line-height: 1.65; text-wrap: pretty; }
     .rule-meta { display: block; margin-top: 8px; color: var(--muted); font-size: 11px; }
 
-    .target-tabs {
+    .destination-tabs, .target-tabs {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 3px;
@@ -326,6 +326,8 @@
       background: var(--surface-subtle);
       padding: 3px;
     }
+    .destination-tabs { border: 1px solid var(--border); }
+    .destination-tab,
     .target-tab {
       min-width: 0;
       height: 34px;
@@ -339,7 +341,9 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .destination-tab:hover,
     .target-tab:hover { color: var(--foreground); }
+    .destination-tab.active,
     .target-tab.active { background: var(--surface); color: var(--foreground); box-shadow: 0 1px 3px rgb(28 48 73 / 10%); }
     .target-config { display: grid; gap: 14px; }
     .target-name h4 { margin: 0; font-size: 13px; font-weight: 700; }
@@ -374,6 +378,37 @@
       font-size: 10px;
     }
     .helper { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .agent-list {
+      display: grid;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .agent-option {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+      background: var(--surface);
+      padding: 10px 11px;
+    }
+    .agent-option + .agent-option { border-top: 1px solid var(--border); }
+    .agent-option:hover { background: var(--surface-hover); }
+    .agent-option.selected { background: var(--surface-selected); }
+    .agent-option input { width: 15px; height: 15px; margin: 0; accent-color: var(--primary); }
+    .agent-copy { min-width: 0; }
+    .agent-copy strong { display: block; font-size: 11px; font-weight: 700; }
+    .agent-copy code {
+      display: block;
+      overflow: hidden;
+      margin-top: 3px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 9px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .inline-status {
       display: none;
       border-radius: 9px;
@@ -575,7 +610,7 @@
           <header class="task-header">
             <div class="task-title">
               <h2>agent-workspace</h2>
-              <p>1 条已接受规则。勾选项用于发布到项目 Memory。</p>
+              <p>1 条已接受规则。勾选项可发布到 Agent 全局规则或项目 Memory。</p>
             </div>
             <button class="secondary-button" id="export-button" type="button">导出全部 1 条规则</button>
           </header>
@@ -585,7 +620,7 @@
               <div class="pane-heading">
                 <div>
                   <h3 id="rules-heading">选择规则</h3>
-                  <p>只有勾选的规则会发布到 Claude 或 Codex Memory。</p>
+                  <p>只有勾选的规则会发布到所选 Agent 指令文件或项目 Memory。</p>
                 </div>
                 <span class="selection-count" id="selection-count">已选择 1 / 1</span>
               </div>
@@ -605,16 +640,38 @@
               <div class="pane-heading">
                 <div>
                   <h3 id="target-heading">发布目标</h3>
-                  <p>选择一种项目 Memory，再明确选择目标。</p>
+                  <p>先选择发布方式，再明确选择目标。</p>
                 </div>
               </div>
 
-              <div class="target-tabs" role="tablist" aria-label="项目 Memory 类型">
-                <button class="target-tab active" id="claude-target-tab" type="button" role="tab" aria-selected="true" aria-controls="claude-config" data-target="claude">Claude</button>
-                <button class="target-tab" id="codex-target-tab" type="button" role="tab" aria-selected="false" aria-controls="codex-config" data-target="codex">Codex</button>
+              <div class="destination-tabs" role="tablist" aria-label="发布方式">
+                <button class="destination-tab active" id="agent-destination-tab" type="button" role="tab" aria-selected="true" aria-controls="agent-config" data-destination="agent">Agent 全局规则</button>
+                <button class="destination-tab" id="memory-destination-tab" type="button" role="tab" aria-selected="false" aria-controls="memory-config" data-destination="memory">项目 Memory</button>
               </div>
 
-              <div class="target-config" id="claude-config" role="tabpanel" aria-labelledby="claude-target-tab">
+              <div class="target-config" id="agent-config" role="tabpanel" aria-labelledby="agent-destination-tab">
+                <div class="target-name">
+                  <h4>Agent 全局指令文件</h4>
+                  <p>将勾选规则写入明确选择的 Agent 全局规则文件，可同时发布到多个 Agent。</p>
+                </div>
+                <div class="agent-list" aria-label="选择 Agent">
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Claude"><span class="agent-copy"><strong>Claude</strong><code>~/.claude/CLAUDE.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Codex"><span class="agent-copy"><strong>Codex</strong><code>~/.codex/AGENTS.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Copilot"><span class="agent-copy"><strong>Copilot</strong><code>~/.copilot/copilot-instructions.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="OpenCode"><span class="agent-copy"><strong>OpenCode</strong><code>~/.config/opencode/AGENTS.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Pi"><span class="agent-copy"><strong>Pi</strong><code>~/.pi/agent/AGENTS.md</code></span></label>
+                </div>
+                <p class="helper">默认不选择任何 Agent，发布前必须显式确认目标。</p>
+                <div class="inline-status" id="agent-status" role="status">原型模拟完成：规则已发布到所选 Agent 全局指令文件。</div>
+              </div>
+
+              <div id="memory-config" role="tabpanel" aria-labelledby="memory-destination-tab" hidden>
+                <div class="target-tabs" role="tablist" aria-label="项目 Memory 类型">
+                  <button class="target-tab active" id="claude-target-tab" type="button" role="tab" aria-selected="true" aria-controls="claude-config" data-target="claude">Claude</button>
+                  <button class="target-tab" id="codex-target-tab" type="button" role="tab" aria-selected="false" aria-controls="codex-config" data-target="codex">Codex</button>
+                </div>
+
+                <div class="target-config" id="claude-config" role="tabpanel" aria-labelledby="claude-target-tab">
                 <div class="target-name">
                   <h4>Claude Project Memory</h4>
                   <p>更新 Memory Manager 受管区块，不覆盖 Claude 自己维护的内容。</p>
@@ -633,9 +690,9 @@
                 </div>
                 <p class="helper">项目和 Memory 目标不会根据名称自动关联。</p>
                 <div class="inline-status" id="claude-status" role="status">原型模拟完成：1 条规则已发布到 Claude Project Memory。</div>
-              </div>
+                </div>
 
-              <div class="target-config" id="codex-config" role="tabpanel" aria-labelledby="codex-target-tab" hidden>
+                <div class="target-config" id="codex-config" role="tabpanel" aria-labelledby="codex-target-tab" hidden>
                 <div class="target-name">
                   <h4>Codex 项目 Memory</h4>
                   <p>为所选工作目录维护 ad-hoc note，Codex 会在后台合并。</p>
@@ -654,6 +711,7 @@
                 </div>
                 <p class="helper">工作目录来自 Session metadata，不根据项目名称推断。</p>
                 <div class="inline-status" id="codex-status" role="status">原型模拟完成：1 条规则已提交给 Codex Memory。</div>
+                </div>
               </div>
             </aside>
           </div>
@@ -661,9 +719,9 @@
           <footer class="action-bar">
             <div class="action-summary">
               <strong id="action-title">已选择 1 条规则</strong>
-              <span id="action-detail">请选择 Claude Project Memory 目标</span>
+              <span id="action-detail">请选择至少一个 Agent</span>
             </div>
-            <button class="primary-button" id="publish-button" type="button" disabled>发布到 Claude Memory</button>
+            <button class="primary-button" id="publish-button" type="button" disabled>发布到 0 个 Agent</button>
           </footer>
         </section>
 
@@ -694,12 +752,16 @@
   <script>
     const html = document.documentElement;
     const scopeTabs = [...document.querySelectorAll('.scope-tab')];
+    const destinationTabs = [...document.querySelectorAll('.destination-tab')];
     const targetTabs = [...document.querySelectorAll('.target-tab')];
     const projectView = document.getElementById('project-view');
     const globalView = document.getElementById('global-view');
     const ruleCheckbox = document.getElementById('project-rule');
     const ruleRow = document.getElementById('project-rule-row');
     const selectionCount = document.getElementById('selection-count');
+    const agentConfig = document.getElementById('agent-config');
+    const memoryConfig = document.getElementById('memory-config');
+    const agentCheckboxes = [...document.querySelectorAll('.agent-checkbox')];
     const claudeSelect = document.getElementById('claude-target');
     const codexSelect = document.getElementById('codex-target');
     const claudeConfig = document.getElementById('claude-config');
@@ -713,6 +775,7 @@
     const toast = document.getElementById('toast');
     const themeToggle = document.getElementById('theme-toggle');
     const themeLabel = document.getElementById('theme-label');
+    let activeDestination = 'agent';
     let activeTarget = 'claude';
     let toastTimer = null;
 
@@ -731,28 +794,42 @@
       return activeTarget === 'claude' ? claudeSelect.value : codexSelect.value;
     }
 
+    function selectedAgents() {
+      return agentCheckboxes.filter((checkbox) => checkbox.checked);
+    }
+
     function clearPublishStatuses() {
+      document.getElementById('agent-status').classList.remove('visible');
       document.getElementById('claude-status').classList.remove('visible');
       document.getElementById('codex-status').classList.remove('visible');
     }
 
     function updateActionBar() {
       const count = selectedRuleCount();
-      const targetValue = activeTargetValue();
-      const targetLabel = activeTarget === 'claude' ? 'Claude Project Memory' : 'Codex 项目 Memory';
 
       selectionCount.textContent = `已选择 ${count} / 1`;
       ruleRow.classList.toggle('selected', ruleCheckbox.checked);
       actionTitle.textContent = `已选择 ${count} 条规则`;
-      publishButton.textContent = activeTarget === 'claude' ? '发布到 Claude Memory' : '提交到 Codex Memory';
-      publishButton.disabled = count === 0 || !targetValue;
 
       if (count === 0) {
         actionDetail.textContent = '选择至少一条规则后继续';
-      } else if (!targetValue) {
-        actionDetail.textContent = `请选择 ${targetLabel} 目标`;
+        publishButton.disabled = true;
+        return;
+      }
+
+      if (activeDestination === 'agent') {
+        const agents = selectedAgents();
+        publishButton.textContent = `发布到 ${agents.length} 个 Agent`;
+        publishButton.disabled = agents.length === 0;
+        actionDetail.textContent = agents.length === 0
+          ? '请选择至少一个 Agent 全局指令文件'
+          : `将发布到 ${agents.map((checkbox) => checkbox.value).join('、')}`;
       } else {
-        actionDetail.textContent = `将发布到 ${targetLabel}`;
+        const targetValue = activeTargetValue();
+        const targetLabel = activeTarget === 'claude' ? 'Claude Project Memory' : 'Codex 项目 Memory';
+        publishButton.textContent = activeTarget === 'claude' ? '发布到 Claude Memory' : '提交到 Codex Memory';
+        publishButton.disabled = !targetValue;
+        actionDetail.textContent = targetValue ? `将发布到 ${targetLabel}` : `请选择 ${targetLabel} 目标`;
       }
     }
 
@@ -766,6 +843,21 @@
         });
         projectView.hidden = !projectActive;
         globalView.hidden = projectActive;
+      });
+    });
+
+    destinationTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        activeDestination = tab.dataset.destination;
+        destinationTabs.forEach((item) => {
+          const active = item === tab;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', String(active));
+        });
+        agentConfig.hidden = activeDestination !== 'agent';
+        memoryConfig.hidden = activeDestination !== 'memory';
+        clearPublishStatuses();
+        updateActionBar();
       });
     });
 
@@ -787,6 +879,14 @@
     ruleCheckbox.addEventListener('change', () => {
       clearPublishStatuses();
       updateActionBar();
+    });
+
+    agentCheckboxes.forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        checkbox.closest('.agent-option').classList.toggle('selected', checkbox.checked);
+        clearPublishStatuses();
+        updateActionBar();
+      });
     });
 
     claudeSelect.addEventListener('change', () => {
@@ -811,6 +911,11 @@
 
     publishButton.addEventListener('click', () => {
       if (publishButton.disabled) return;
+      if (activeDestination === 'agent') {
+        document.getElementById('agent-status').classList.add('visible');
+        showToast(`已模拟发布到 ${selectedAgents().length} 个 Agent 全局指令文件`);
+        return;
+      }
       const status = document.getElementById(`${activeTarget}-status`);
       status.classList.add('visible');
       showToast(activeTarget === 'claude' ? '已模拟发布到 Claude Project Memory' : '已模拟提交到 Codex Memory');

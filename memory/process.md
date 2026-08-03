@@ -2511,3 +2511,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   可读，浏览器控制台无 warning/error。未运行 App 测试，因为本轮仅新增独立文档原型，使用静态和视觉
   验收替代。
 - 提交信息：`docs: 新增已接受规则发布台原型`
+
+## 发布台原型补回 Agent 全局规则目标（2026-08-03）
+
+- 首版原型只保留 Claude/Codex 项目 Memory，错误移除了将 accepted rules 发布到 Agent 全局指令文件的
+  能力。现将右侧目标改为「Agent 全局规则 / 项目 Memory」两级发布方式，避免把规则来源范围与发布目标
+  混为同一概念。
+- Agent 模式显式多选 Claude、Codex、Copilot、OpenCode、Pi，并展示各自全局指令文件路径；Memory 模式
+  继续以 Claude/Codex 互斥切换选择具体 Project Memory 或 cwd。两种方式仍共用一个动态 Primary Action。
+- 规则勾选同时约束 Agent 与 Memory 发布；独立「导出全部规则」仍不受勾选状态影响。所有动作继续只在
+  原型内模拟，不调用本机 API 或修改规则、Memory 文件。
+- 静态契约与浏览器交互通过：Agent 多选后主按钮显示目标数量，切换 Memory 后恢复 Claude/Codex 目标
+  校验；390×844 无横向溢出，页面始终只有一个 Primary Action，浏览器控制台无 warning/error。
+- 提交信息：`fix: 补回原型 Agent 全局规则发布目标`
