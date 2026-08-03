@@ -2498,3 +2498,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 27 suites / 178 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
   PURE 注释警告。
 - 提交信息：`fix: 合并项目 Memory 发布入口`
+
+## 已接受规则发布台 HTML 原型（2026-08-03）
+
+- 新增独立 HTML 原型，将原发布页重组为按「项目规则 / 全局规则」切换的单任务发布台；默认进入当前
+  非空的项目规则范围，全局规则为 0 时展示紧凑空状态，不渲染无效的 Agent 目标配置。
+- 项目规则区明确区分两类动作：勾选项只用于发布到项目 Memory，「导出全部规则」始终导出该项目全部
+  accepted rules。Claude/Codex 改为互斥目标切换，并共用一个随当前上下文更新的 Primary Action。
+- 原型只模拟选择、发布、导出和反馈，不调用 Memory Manager API，不修改 Renderer、Core、IPC 或本机
+  Memory 文件；实现范围与观察点记录在 `docs/plans/rules-publish-task-workbench-prototype.md`。
+- 静态契约、`git diff --check` 与浏览器交互通过；1440×900、390×844 均无横向溢出，Light/Dark 主题
+  可读，浏览器控制台无 warning/error。未运行 App 测试，因为本轮仅新增独立文档原型，使用静态和视觉
+  验收替代。
+- 提交信息：`docs: 新增已接受规则发布台原型`
