@@ -3950,14 +3950,31 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
     }
   }, [selectedProjectSlug])
 
-  const globalRules = accepted.filter((candidate) => candidate.scope === 'global')
-  const projectRules = accepted.filter((candidate) => candidate.scope === 'project')
+  const globalRules = useMemo(
+    () => accepted.filter((candidate) => candidate.scope === 'global'),
+    [accepted],
+  )
+  const projectRules = useMemo(
+    () => accepted.filter((candidate) => candidate.scope === 'project'),
+    [accepted],
+  )
   const projectSlugs = useMemo(
     () => [...new Set(projectRules.flatMap((candidate) =>
       candidate.project_slug ? [candidate.project_slug] : []))].sort((left, right) =>
       left.localeCompare(right, currentLocale())),
     [projectRules],
   )
+
+  useEffect(() => {
+    if (projectSlugs.length === 1 && selectedProjectSlug !== projectSlugs[0]) {
+      selectProject(projectSlugs[0])
+      return
+    }
+    if (selectedProjectSlug && !projectSlugs.includes(selectedProjectSlug)) {
+      selectProject(null)
+    }
+  }, [projectSlugs, selectedProjectSlug])
+
   const selectedProjectRules = projectRules.filter(
     (candidate) => candidate.project_slug === selectedProjectSlug,
   )
@@ -4162,30 +4179,36 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
                 <p className="text-sm leading-6 text-muted">
                   {tr('publish.projectDescription')}
                 </p>
-                <Select
-                  aria-label={tr('publish.projectSelect')}
-                  className="mt-4 max-w-md"
-                  onSelectionChange={(key) => {
-                    const value = String(key)
-                    selectProject(value === NO_SELECTION_KEY ? null : value)
-                  }}
-                  selectedKey={selectedProjectSlug ?? NO_SELECTION_KEY}
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id={NO_SELECTION_KEY} textValue={tr('publish.projectSelectPlaceholder')}>
-                        {tr('publish.projectSelectPlaceholder')}
-                      </ListBox.Item>
-                      {projectSlugs.map((slug) => (
-                        <ListBox.Item id={slug} key={slug} textValue={slug}>{slug}</ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                {projectSlugs.length === 1 ? (
+                  <div className="mt-4 flex max-w-md items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
+                    <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                      {projectSlugs[0]}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted">
+                      {tr('publish.projectRuleCount', { count: projectRules.length })}
+                    </span>
+                  </div>
+                ) : (
+                  <Select
+                    aria-label={tr('publish.projectSelect')}
+                    className="mt-4 max-w-md"
+                    onSelectionChange={(key) => selectProject(String(key))}
+                    placeholder={tr('publish.projectSelectPlaceholder')}
+                    selectedKey={selectedProjectSlug}
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {projectSlugs.map((slug) => (
+                          <ListBox.Item id={slug} key={slug} textValue={slug}>{slug}</ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                )}
                 {selectedProjectSlug && (
                   <div className="mt-3 overflow-hidden rounded-xl border border-border">
                     {selectedProjectRules.map((candidate) => (

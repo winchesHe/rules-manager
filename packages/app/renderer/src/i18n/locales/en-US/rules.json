@@ -405,6 +405,8 @@
     "projectOutputDescriptionEmpty": "Select a project to export all of its accepted rules as a standalone file. This does not publish to an Agent or Memory.",
     "projectSelect": "Select project",
     "projectSelectPlaceholder": "Select a project first",
+    "projectRuleCount_one": "{{count}} accepted rule",
+    "projectRuleCount_other": "{{count}} accepted rules",
     "projectMemoryTitle": "Publish to Claude Project Memory",
     "projectMemoryDescription": "Only the Memory Manager managed block and memory-manager-rules.md are updated. Claude-managed content is preserved.",
     "memoryTargetSelect": "Select Claude Project Memory",

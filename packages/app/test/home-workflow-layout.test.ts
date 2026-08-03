@@ -541,7 +541,6 @@ describe('home workflow layout', () => {
       source.indexOf('function OutputRulesPage'),
       source.indexOf('type GenerationEventMetadata'),
     )
-
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishTargets'")
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishProjectRules'")
     expect(ipcSource).toContain('publishProjectRulesToClaudeMemory')
@@ -559,12 +558,20 @@ describe('home workflow layout', () => {
       source.indexOf('function OutputRulesPage'),
       source.indexOf('type GenerationEventMetadata'),
     )
+    const projectSelector = outputPage.slice(
+      outputPage.indexOf("tr('publish.projectDescription')"),
+      outputPage.indexOf('{selectedProjectSlug && ('),
+    )
 
     expect(ipcSource).toContain("ipcMain.handle('rules.output', (_event, projectSlug: unknown)")
     expect(ipcSource).toContain('runRulesOutput({ project: projectSlug })')
     expect(ipcSource).not.toContain('runRulesOutput({ all: true })')
     expect(outputPage).toContain("window.api.invoke<string[]>('rules.output', selectedProjectSlug)")
     expect(outputPage).toContain("tr('publish.projectOutputDescription'")
+    expect(projectSelector).toContain('projectSlugs.length === 1')
+    expect(projectSelector).toContain("placeholder={tr('publish.projectSelectPlaceholder')}")
+    expect(projectSelector).not.toContain('id={NO_SELECTION_KEY}')
+    expect(projectSelector).toContain("tr('publish.projectRuleCount'")
     expect(outputPage).toContain('items-start')
     expect(outputPage).toContain('minmax(24rem,26rem)')
     expect(outputPage).toContain('max-h-[calc(100dvh-2rem)]')

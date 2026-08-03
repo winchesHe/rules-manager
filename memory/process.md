@@ -2424,3 +2424,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 定向布局 43 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream PURE
   注释警告。
 - 提交信息：`fix: 加宽规则发布目标栏`
+
+## 项目规则单项目选择简化（2026-08-03）
+
+- 发布页的「项目」表示 accepted project rule 所属项目，不是 Claude/Codex Memory 目标。当前数据只有
+  `agent-workspace` 下 1 条 accepted project rule，原界面仍显示仅含「先选择项目」和
+  `agent-workspace` 的下拉，产生多余选择和概念歧义。
+- 当 accepted project rules 只属于一个项目时，现在自动选中并静态显示「项目名 · N 条已接受规则」；
+  多项目时才显示 Select，placeholder 只用于未选状态，Popover 只包含真实项目，不再把「先选择项目」
+  当成可选项。
+- 真实 Electron 验证页面直接显示 `agent-workspace · 1 条已接受规则`，下方规则与右侧项目 Memory 上下文
+  自动加载；未触发导出或发布。`simplify` 复核将规则分组改为稳定 memo，避免自动选择 effect 被无关
+  render 重复触发。
+- App 27 suites / 176 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
+  PURE 注释警告。
+- 提交信息：`fix: 简化单项目规则选择`

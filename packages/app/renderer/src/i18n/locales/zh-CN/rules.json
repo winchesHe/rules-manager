@@ -405,6 +405,8 @@
     "projectOutputDescriptionEmpty": "选择项目后，可将该项目全部已接受规则导出为独立文件；不会发布到 Agent 或 Memory。",
     "projectSelect": "选择项目",
     "projectSelectPlaceholder": "先选择项目",
+    "projectRuleCount_one": "{{count}} 条已接受规则",
+    "projectRuleCount_other": "{{count}} 条已接受规则",
     "projectMemoryTitle": "发布到 Claude Project Memory",
     "projectMemoryDescription": "只更新 Memory Manager 受管区块和 memory-manager-rules.md；不会覆盖 Claude 自己维护的内容。",
     "memoryTargetSelect": "选择 Claude Project Memory",
