@@ -562,6 +562,8 @@ describe('home workflow layout', () => {
       outputPage.indexOf("tr('publish.projectDescription')"),
       outputPage.indexOf('{selectedProjectSlug && ('),
     )
+    const targetSidebarStart = outputPage.indexOf('<aside className=')
+    const projectOutputFeedback = outputPage.indexOf("tr('publish.projectOutputComplete')")
 
     expect(ipcSource).toContain("ipcMain.handle('rules.output', (_event, projectSlug: unknown)")
     expect(ipcSource).toContain('runRulesOutput({ project: projectSlug })')
@@ -576,6 +578,8 @@ describe('home workflow layout', () => {
     expect(outputPage).toContain('minmax(24rem,26rem)')
     expect(outputPage).toContain('max-h-[calc(100dvh-2rem)]')
     expect(outputPage).toContain('overflow-x-hidden overflow-y-auto')
+    expect(projectOutputFeedback).toBeGreaterThan(outputPage.indexOf('<Card className="min-w-0'))
+    expect(projectOutputFeedback).toBeLessThan(targetSidebarStart)
   })
 
   it('已接受的项目规则可按显式 cwd 提交到 Codex ad-hoc Memory', () => {

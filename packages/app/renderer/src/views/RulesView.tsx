@@ -4141,110 +4141,122 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
         <ViewLoading label={tr('publish.loading')} />
       ) : (
         <div className="grid min-w-0 items-start grid-cols-[minmax(0,1fr)_minmax(24rem,26rem)] gap-5 max-xl:grid-cols-1">
-          <Card className="min-w-0 border border-border bg-surface shadow-none">
-            <Card.Header className="border-b border-border px-5 py-4">
-              <div>
-                <h2 className="font-medium text-foreground">{tr('publish.preview')}</h2>
-                <p className="mt-1 text-sm text-muted">
-                  {tr('publish.previewSummary', {
-                    global: globalRules.length,
-                    project: projectRules.length,
-                  })}
-                </p>
-              </div>
-            </Card.Header>
-            <Card.Content className="p-0">
-              <div className="border-b border-border px-5 py-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-medium text-foreground">{tr('publish.globalRules')}</h3>
-                  <Chip size="sm" variant="soft">{globalRules.length}</Chip>
+          <div className="grid min-w-0 content-start gap-4">
+            <Card className="min-w-0 border border-border bg-surface shadow-none">
+              <Card.Header className="border-b border-border px-5 py-4">
+                <div>
+                  <h2 className="font-medium text-foreground">{tr('publish.preview')}</h2>
+                  <p className="mt-1 text-sm text-muted">
+                    {tr('publish.previewSummary', {
+                      global: globalRules.length,
+                      project: projectRules.length,
+                    })}
+                  </p>
                 </div>
-                {globalRules.length > 0 ? (
-                  <ul className="grid gap-2">
-                    {globalRules.map((candidate) => (
-                      <li className="rounded-lg bg-background px-3 py-2.5 text-sm leading-6 text-foreground" key={candidate.id}>
-                        {candidate.rule_text}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted">{tr('publish.emptyGlobal')}</p>
-                )}
-              </div>
-              <div className="px-5 py-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-medium text-foreground">{tr('publish.projectRules')}</h3>
-                  <Chip size="sm" variant="soft">{projectRules.length}</Chip>
-                </div>
-                <p className="text-sm leading-6 text-muted">
-                  {tr('publish.projectDescription')}
-                </p>
-                {projectSlugs.length === 1 ? (
-                  <div className="mt-4 flex max-w-md items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
-                    <span className="min-w-0 truncate text-sm font-medium text-foreground">
-                      {projectSlugs[0]}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted">
-                      {tr('publish.projectRuleCount', { count: projectRules.length })}
-                    </span>
+              </Card.Header>
+              <Card.Content className="p-0">
+                <div className="border-b border-border px-5 py-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-medium text-foreground">{tr('publish.globalRules')}</h3>
+                    <Chip size="sm" variant="soft">{globalRules.length}</Chip>
                   </div>
-                ) : (
-                  <Select
-                    aria-label={tr('publish.projectSelect')}
-                    className="mt-4 max-w-md"
-                    onSelectionChange={(key) => selectProject(String(key))}
-                    placeholder={tr('publish.projectSelectPlaceholder')}
-                    selectedKey={selectedProjectSlug}
+                  {globalRules.length > 0 ? (
+                    <ul className="grid gap-2">
+                      {globalRules.map((candidate) => (
+                        <li className="rounded-lg bg-background px-3 py-2.5 text-sm leading-6 text-foreground" key={candidate.id}>
+                          {candidate.rule_text}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted">{tr('publish.emptyGlobal')}</p>
+                  )}
+                </div>
+                <div className="px-5 py-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-medium text-foreground">{tr('publish.projectRules')}</h3>
+                    <Chip size="sm" variant="soft">{projectRules.length}</Chip>
+                  </div>
+                  <p className="text-sm leading-6 text-muted">
+                    {tr('publish.projectDescription')}
+                  </p>
+                  {projectSlugs.length === 1 ? (
+                    <div className="mt-4 flex max-w-md items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
+                      <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                        {projectSlugs[0]}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted">
+                        {tr('publish.projectRuleCount', { count: projectRules.length })}
+                      </span>
+                    </div>
+                  ) : (
+                    <Select
+                      aria-label={tr('publish.projectSelect')}
+                      className="mt-4 max-w-md"
+                      onSelectionChange={(key) => selectProject(String(key))}
+                      placeholder={tr('publish.projectSelectPlaceholder')}
+                      selectedKey={selectedProjectSlug}
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {projectSlugs.map((slug) => (
+                            <ListBox.Item id={slug} key={slug} textValue={slug}>{slug}</ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  )}
+                  {selectedProjectSlug && (
+                    <div className="mt-3 overflow-hidden rounded-xl border border-border">
+                      {selectedProjectRules.map((candidate) => (
+                        <label
+                          className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 border-b border-border px-3 py-3 last:border-b-0 hover:bg-surface-hover"
+                          key={candidate.id}
+                        >
+                          <input
+                            checked={selectedProjectRuleIds.includes(candidate.id)}
+                            className="mt-1 size-4 accent-primary"
+                            onChange={() => toggleProjectRule(candidate.id)}
+                            type="checkbox"
+                          />
+                          <span className="text-sm leading-6 text-foreground">{candidate.rule_text}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    className="mt-3 gap-2"
+                    isDisabled={!selectedProjectSlug || outputting}
+                    onPress={() => void exportProjectRules()}
+                    size="sm"
+                    variant="ghost"
                   >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {projectSlugs.map((slug) => (
-                          <ListBox.Item id={slug} key={slug} textValue={slug}>{slug}</ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                )}
-                {selectedProjectSlug && (
-                  <div className="mt-3 overflow-hidden rounded-xl border border-border">
-                    {selectedProjectRules.map((candidate) => (
-                      <label
-                        className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 border-b border-border px-3 py-3 last:border-b-0 hover:bg-surface-hover"
-                        key={candidate.id}
-                      >
-                        <input
-                          checked={selectedProjectRuleIds.includes(candidate.id)}
-                          className="mt-1 size-4 accent-primary"
-                          onChange={() => toggleProjectRule(candidate.id)}
-                          type="checkbox"
-                        />
-                        <span className="text-sm leading-6 text-foreground">{candidate.rule_text}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                <Button
-                  className="mt-3 gap-2"
-                  isDisabled={!selectedProjectSlug || outputting}
-                  onPress={() => void exportProjectRules()}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {outputting ? <Spinner color="current" size="sm" /> : <FileOutput aria-hidden="true" size={16} />}
-                  {tr('actions.writeProjectOutput')}
-                </Button>
-                <p className="mt-2 max-w-2xl text-xs leading-5 text-muted">
-                  {selectedProjectSlug
-                    ? tr('publish.projectOutputDescription', { project: selectedProjectSlug })
-                    : tr('publish.projectOutputDescriptionEmpty')}
-                </p>
-              </div>
-            </Card.Content>
-          </Card>
+                    {outputting ? <Spinner color="current" size="sm" /> : <FileOutput aria-hidden="true" size={16} />}
+                    {tr('actions.writeProjectOutput')}
+                  </Button>
+                  <p className="mt-2 max-w-2xl text-xs leading-5 text-muted">
+                    {selectedProjectSlug
+                      ? tr('publish.projectOutputDescription', { project: selectedProjectSlug })
+                      : tr('publish.projectOutputDescriptionEmpty')}
+                  </p>
+                </div>
+              </Card.Content>
+            </Card>
+            {paths.length > 0 && (
+              <Alert status="success">
+                <Alert.Content>
+                  <Alert.Title>{tr('publish.projectOutputComplete')}</Alert.Title>
+                  <Alert.Description>
+                    {tr('publish.projectOutputPath', { path: paths[0] })}
+                  </Alert.Description>
+                </Alert.Content>
+              </Alert>
+            )}
+          </div>
 
           <aside className="sticky top-4 grid min-w-0 max-h-[calc(100dvh-2rem)] content-start gap-4 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 max-xl:static max-xl:max-h-none max-xl:overflow-visible max-xl:pr-0">
             <Card className="min-w-0 overflow-hidden border border-border bg-surface shadow-none">
@@ -4508,16 +4520,6 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
                   ))}
                 </Card.Content>
               </Card>
-            )}
-            {paths.length > 0 && (
-              <Alert status="success">
-                <Alert.Content>
-                  <Alert.Title>{tr('publish.projectOutputComplete')}</Alert.Title>
-                  <Alert.Description>
-                    {tr('publish.projectOutputPath', { path: paths[0] })}
-                  </Alert.Description>
-                </Alert.Content>
-              </Alert>
             )}
           </aside>
         </div>

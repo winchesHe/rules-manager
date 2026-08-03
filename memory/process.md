@@ -2439,3 +2439,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 27 suites / 176 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
   PURE 注释警告。
 - 提交信息：`fix: 简化单项目规则选择`
+
+## 项目规则导出反馈归位（2026-08-03）
+
+- 「项目规则文件已导出」属于左侧项目规则导出动作，现从右侧发布目标栏移到左侧预览卡下方；反馈宽度
+  跟随左列，文件路径继续完整展示。
+- 右侧仅保留 Agent、Claude Project Memory、Codex 项目 Memory 三类发布目标及各自结果，项目导出反馈
+  不再沉到右栏卡片末尾。
+- 布局契约测试新增反馈必须位于右侧 `aside` 之前的断言；真实 Electron 验证成功态仍保留，提示紧贴左侧
+  预览卡下方，左右层级与视觉归属正确。
+- App 27 suites / 176 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream PURE
+  注释警告。
+- 提交信息：`fix: 对齐项目规则导出反馈位置`
