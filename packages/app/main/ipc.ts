@@ -430,7 +430,10 @@ export function registerIpcHandlers(): void {
     })
   })
 
-  ipcMain.handle('rules.output', () => {
+  ipcMain.handle('rules.output', (_event, projectSlug: unknown) => {
+    if (typeof projectSlug !== 'string' || !projectSlug.trim()) {
+      throw new Error('project slug is required')
+    }
     const paths: string[] = []
     const originalLog = console.log
     console.log = (...args: unknown[]) => {
@@ -439,7 +442,7 @@ export function registerIpcHandlers(): void {
       if (match) paths.push(match[1])
     }
     try {
-      runRulesOutput({ all: true })
+      runRulesOutput({ project: projectSlug })
       return paths
     } finally {
       console.log = originalLog

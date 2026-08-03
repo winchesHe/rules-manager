@@ -4097,12 +4097,14 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
     }
   }
 
-  async function output(): Promise<void> {
+  async function exportProjectRules(): Promise<void> {
+    if (!selectedProjectSlug) return
     setOutputting(true)
     setPaths([])
     setError(null)
     try {
-      const outputPaths = await afterNextPaint(() => window.api.invoke<string[]>('rules.output'))
+      const outputPaths = await afterNextPaint(() =>
+        window.api.invoke<string[]>('rules.output', selectedProjectSlug))
       setPaths(outputPaths)
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -4121,8 +4123,8 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
       {loading ? (
         <ViewLoading label={tr('publish.loading')} />
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)_22rem] gap-4 max-lg:grid-cols-1">
-          <Card className="border border-border bg-surface shadow-none">
+        <div className="grid min-w-0 items-start grid-cols-[minmax(0,1fr)_minmax(18rem,20rem)] gap-5 max-xl:grid-cols-1">
+          <Card className="min-w-0 border border-border bg-surface shadow-none">
             <Card.Header className="border-b border-border px-5 py-4">
               <div>
                 <h2 className="font-medium text-foreground">{tr('publish.preview')}</h2>
@@ -4204,20 +4206,25 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
                 )}
                 <Button
                   className="mt-3 gap-2"
-                  isDisabled={projectRules.length === 0 || outputting}
-                  onPress={() => void output()}
+                  isDisabled={!selectedProjectSlug || outputting}
+                  onPress={() => void exportProjectRules()}
                   size="sm"
                   variant="ghost"
                 >
                   {outputting ? <Spinner color="current" size="sm" /> : <FileOutput aria-hidden="true" size={16} />}
                   {tr('actions.writeProjectOutput')}
                 </Button>
+                <p className="mt-2 max-w-2xl text-xs leading-5 text-muted">
+                  {selectedProjectSlug
+                    ? tr('publish.projectOutputDescription', { project: selectedProjectSlug })
+                    : tr('publish.projectOutputDescriptionEmpty')}
+                </p>
               </div>
             </Card.Content>
           </Card>
 
-          <div className="grid content-start gap-4">
-            <Card className="border border-border bg-surface shadow-none">
+          <aside className="sticky top-4 grid min-w-0 max-h-[calc(100dvh-2rem)] content-start gap-4 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 max-xl:static max-xl:max-h-none max-xl:overflow-visible max-xl:pr-0">
+            <Card className="min-w-0 overflow-hidden border border-border bg-surface shadow-none">
               <Card.Header className="border-b border-border px-5 py-4">
                 <div>
                   <h2 className="font-medium text-foreground">{tr('publish.targets')}</h2>
@@ -4270,7 +4277,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
               </Card.Footer>
             </Card>
 
-            <Card className="border border-border bg-surface shadow-none">
+            <Card className="min-w-0 overflow-hidden border border-border bg-surface shadow-none">
               <Card.Header className="border-b border-border px-5 py-4">
                 <div>
                   <h2 className="font-medium text-foreground">{tr('publish.projectMemoryTitle')}</h2>
@@ -4280,6 +4287,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
               <Card.Content className="grid gap-3 px-4 py-4">
                 <Select
                   aria-label={tr('publish.memoryTargetSelect')}
+                  className="min-w-0"
                   onSelectionChange={(key) => {
                     const value = String(key)
                     setSelectedMemoryId(value === NO_SELECTION_KEY ? null : value)
@@ -4287,7 +4295,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
                   }}
                   selectedKey={selectedMemoryId ?? NO_SELECTION_KEY}
                 >
-                  <Select.Trigger>
+                  <Select.Trigger className="min-w-0 overflow-hidden">
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
@@ -4330,7 +4338,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
               </Card.Footer>
             </Card>
 
-            <Card className="border border-border bg-surface shadow-none">
+            <Card className="min-w-0 overflow-hidden border border-border bg-surface shadow-none">
               <Card.Header className="border-b border-border px-5 py-4">
                 <div>
                   <h2 className="font-medium text-foreground">{tr('publish.codexProjectMemoryTitle')}</h2>
@@ -4340,6 +4348,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
               <Card.Content className="grid gap-3 px-4 py-4">
                 <Select
                   aria-label={tr('publish.codexWorkingDirectorySelect')}
+                  className="min-w-0"
                   isDisabled={!selectedProjectSlug || codexTargetsLoading}
                   onSelectionChange={(key) => {
                     const value = String(key)
@@ -4350,7 +4359,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
                   }}
                   selectedKey={selectedCodexWorkingDirectory ?? NO_SELECTION_KEY}
                 >
-                  <Select.Trigger>
+                  <Select.Trigger className="min-w-0 overflow-hidden">
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
@@ -4481,11 +4490,13 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
               <Alert status="success">
                 <Alert.Content>
                   <Alert.Title>{tr('publish.projectOutputComplete')}</Alert.Title>
-                  <Alert.Description>{tr('publish.filesUpdated', { count: paths.length })}</Alert.Description>
+                  <Alert.Description>
+                    {tr('publish.projectOutputPath', { path: paths[0] })}
+                  </Alert.Description>
                 </Alert.Content>
               </Alert>
             )}
-          </div>
+          </aside>
         </div>
       )}
     </>

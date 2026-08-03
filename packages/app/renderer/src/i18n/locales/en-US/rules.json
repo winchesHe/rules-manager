@@ -31,7 +31,7 @@
     "editCandidate": "Edit candidate",
     "reject": "Reject",
     "accept": "Accept",
-    "writeProjectOutput": "Write managed project output",
+    "writeProjectOutput": "Export this project's rule file",
     "publishProjectMemory": "Publish {{count}} rules to Project Memory",
     "publishCodexProjectMemory": "Submit {{count}} rules to Codex Memory",
     "publishing": "Publishing",
@@ -400,7 +400,9 @@
     "globalRules": "Global rules",
     "emptyGlobal": "No accepted global rules.",
     "projectRules": "Project rules",
-    "projectDescription": "Project rules are never written to Agent global files. You can keep the managed project output or explicitly publish selected rules to one Claude Project Memory.",
+    "projectDescription": "Checked rules are published to a project Memory below. You can also export every accepted rule for this project as a standalone Memory Manager file.",
+    "projectOutputDescription": "Exports every accepted rule for {{project}} to rules/projects/{{project}}.md for other workflows. This does not publish to an Agent or Memory.",
+    "projectOutputDescriptionEmpty": "Select a project to export all of its accepted rules as a standalone file. This does not publish to an Agent or Memory.",
     "projectSelect": "Select project",
     "projectSelectPlaceholder": "Select a project first",
     "projectMemoryTitle": "Publish to Claude Project Memory",
@@ -433,9 +435,8 @@
     "noDefault": "No Agent is selected by default.",
     "fileCreated": "File will be created",
     "results": "Publish results",
-    "projectOutputComplete": "Managed project output complete",
-    "filesUpdated_one": "{{count}} file updated or unchanged.",
-    "filesUpdated_other": "{{count}} files updated or unchanged."
+    "projectOutputComplete": "Project rule file exported",
+    "projectOutputPath": "File: {{path}}"
   },
   "scope": {
     "unavailable": "Generation scope unavailable",

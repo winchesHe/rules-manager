@@ -552,6 +552,24 @@ describe('home workflow layout', () => {
     expect(outputPage).toContain("tr('publish.projectMemoryDescription')")
   })
 
+  it('项目规则导出只写当前项目，并明确区别于 Agent 和 Memory 发布', () => {
+    const source = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const outputPage = source.slice(
+      source.indexOf('function OutputRulesPage'),
+      source.indexOf('type GenerationEventMetadata'),
+    )
+
+    expect(ipcSource).toContain("ipcMain.handle('rules.output', (_event, projectSlug: unknown)")
+    expect(ipcSource).toContain('runRulesOutput({ project: projectSlug })')
+    expect(ipcSource).not.toContain('runRulesOutput({ all: true })')
+    expect(outputPage).toContain("window.api.invoke<string[]>('rules.output', selectedProjectSlug)")
+    expect(outputPage).toContain("tr('publish.projectOutputDescription'")
+    expect(outputPage).toContain('items-start')
+    expect(outputPage).toContain('max-h-[calc(100dvh-2rem)]')
+    expect(outputPage).toContain('overflow-x-hidden overflow-y-auto')
+  })
+
   it('已接受的项目规则可按显式 cwd 提交到 Codex ad-hoc Memory', () => {
     const source = read('views/RulesView.tsx')
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')

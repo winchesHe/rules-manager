@@ -2398,3 +2398,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   typecheck 仍受既有跨 workspace `rootDir/files` 配置及既有 `RulesView` 的 `history` 类型错误阻断；
   build 仅保留既有 Core `tsdown define` 与 Markstream PURE 注释警告。
 - 提交信息：`feat: 支持发布项目规则到 Codex Memory`
+
+## 已接受规则发布页布局与项目导出语义（2026-08-03）
+
+- 原「写入托管项目输出」位于项目区域，却通过 `rules.output --all` 同时重写 global、style 和全部项目
+  文件，用户无法从名称判断结果。现改为「导出该项目规则文件」，要求先选项目，只把该项目全部 accepted
+  rules 写入 `~/.memory-manager/rules/projects/<slug>.md`，并明确说明它不会发布到 Agent 或 Memory。
+- 导出完成反馈展示实际文件路径，不再只显示模糊的文件数量。项目规则区同时说明：勾选项用于 Claude /
+  Codex 项目 Memory 发布，项目文件导出则包含该项目全部已接受规则，两种行为不再混淆。
+- 发布页双栏 Grid 增加 `items-start`，左侧预览卡不再被三张右栏卡片的总高度强制拉伸；右栏限制在视口
+  高度内并独立纵向滚动，在窄屏回退为单栏自然流。Card 与 Select 增加 `min-width: 0` 和横向溢出保护，
+  长 Agent 路径与 cwd 不再撑出窗口。
+- 真实 Electron 在发布页验证：左卡片随内容结束，右栏完整位于视口内；滚动后 Codex 说明、cwd 选择器
+  与提交按钮均可见，未触发导出或发布写操作。`simplify` 复核无需额外抽象。
+- App 27 suites / 176 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
+  PURE 注释警告。
+- 提交信息：`fix: 优化规则发布页布局与导出语义`

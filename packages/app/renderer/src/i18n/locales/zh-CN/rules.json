@@ -31,7 +31,7 @@
     "editCandidate": "编辑候选规则",
     "reject": "拒绝",
     "accept": "接受",
-    "writeProjectOutput": "写入托管项目输出",
+    "writeProjectOutput": "导出该项目规则文件",
     "publishProjectMemory": "发布 {{count}} 条规则到 Project Memory",
     "publishCodexProjectMemory": "提交 {{count}} 条规则到 Codex Memory",
     "publishing": "正在发布",
@@ -400,7 +400,9 @@
     "globalRules": "全局规则",
     "emptyGlobal": "没有已接受的全局规则。",
     "projectRules": "项目规则",
-    "projectDescription": "项目规则不会写入 Agent 全局文件。可继续生成托管项目输出，也可以显式选择规则发布到一个 Claude Project Memory。",
+    "projectDescription": "勾选的规则用于发布到下方项目 Memory；也可以把该项目全部已接受规则单独导出为 Memory Manager 文件。",
+    "projectOutputDescription": "导出 {{project}} 的全部已接受规则到 rules/projects/{{project}}.md，供其他流程读取；不会发布到 Agent 或 Memory。",
+    "projectOutputDescriptionEmpty": "选择项目后，可将该项目全部已接受规则导出为独立文件；不会发布到 Agent 或 Memory。",
     "projectSelect": "选择项目",
     "projectSelectPlaceholder": "先选择项目",
     "projectMemoryTitle": "发布到 Claude Project Memory",
@@ -433,9 +435,8 @@
     "noDefault": "默认不选择任何 Agent。",
     "fileCreated": "将创建文件",
     "results": "发布结果",
-    "projectOutputComplete": "托管项目输出完成",
-    "filesUpdated_one": "{{count}} 个文件已更新或保持不变。",
-    "filesUpdated_other": "{{count}} 个文件已更新或保持不变。"
+    "projectOutputComplete": "项目规则文件已导出",
+    "projectOutputPath": "文件：{{path}}"
   },
   "scope": {
     "unavailable": "生成范围不可用",
