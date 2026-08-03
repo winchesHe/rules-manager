@@ -1647,10 +1647,17 @@ function GeneratedRulesIndexPage({
                         <Table.Cell className="text-muted">{candidate.project_slug ?? candidate.scope}</Table.Cell>
                         <Table.Cell><ConfidenceChip level={candidate.confidence_level} /></Table.Cell>
                         <Table.Cell>
-                          <Button className="gap-2" onPress={() => onReview(candidate)} size="sm" variant="ghost">
-                            <SearchCheck aria-hidden="true" size={16} />
-                            {tr('actions.review')}
-                          </Button>
+                          {candidate.status === 'accepted' ? (
+                            <Button className="gap-2" onPress={onOpenOutput} size="sm" variant="ghost">
+                              <FileOutput aria-hidden="true" size={16} />
+                              {tr('actions.publish')}
+                            </Button>
+                          ) : (
+                            <Button className="gap-2" onPress={() => onReview(candidate)} size="sm" variant="ghost">
+                              <SearchCheck aria-hidden="true" size={16} />
+                              {tr(candidate.status === 'draft' ? 'actions.review' : 'actions.view')}
+                            </Button>
+                          )}
                         </Table.Cell>
                       </Table.Row>
                     ))}

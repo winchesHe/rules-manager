@@ -2348,3 +2348,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   App 27 suites / 171 tests、Core 26 suites / 279 tests 与 App production build 通过，build 仅保留既有
   Markstream PURE 注释警告。
 - 提交信息：`fix: 同步 Rules 上下文并异步加载项目会话`
+
+## 候选规则状态动作对齐（2026-08-03）
+
+- Generated Rules 行内动作改为按候选状态表达下一步：草稿显示「审核」，已接受显示「发布」，已拒绝
+  显示「查看」，终态候选不再继续提示审核。
+- 已接受行的「发布」复用现有已接受规则发布预览，仍由用户在下一页明确选择 Agent；不在列表点击时
+  直接写入规则文件。顶部「发布已接受规则」保留为同一批量入口。
+- 真实 Electron 验证已接受行显示「发布」且进入发布预览，草稿行保持「审核」；当前批次无已拒绝
+  候选，「查看」状态由契约测试覆盖。`simplify` 复核无需额外抽象。
+- App 27 suites / 173 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
+  PURE 注释警告。
+- 提交信息：`fix: 对齐候选规则状态动作`

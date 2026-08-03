@@ -437,6 +437,19 @@ describe('home workflow layout', () => {
     expect(generatedPage.match(/slot="selection"/g)).toHaveLength(2)
   })
 
+  it('候选规则行内动作遵循草稿审核、已接受发布、已拒绝查看', () => {
+    const source = read('views/RulesView.tsx')
+    const generatedPage = source.slice(
+      source.indexOf('function GeneratedRulesIndexPage'),
+      source.indexOf('function GenerationHistoryIndexPage'),
+    )
+
+    expect(generatedPage).toContain("candidate.status === 'accepted'")
+    expect(generatedPage).toContain('onPress={onOpenOutput}')
+    expect(generatedPage).toContain("tr('actions.publish')")
+    expect(generatedPage).toContain("candidate.status === 'draft' ? 'actions.review' : 'actions.view'")
+  })
+
   it('Recent activity 直接按 Session updated_at 收集，不依赖 Scan History', () => {
     const workerSource = fs.readFileSync(
       path.join(appRoot, 'main/generation-worker.ts'),
