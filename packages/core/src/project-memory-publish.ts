@@ -45,6 +45,29 @@ export interface ClaudeProjectMemoryPublishResult {
   topicRevision: string
 }
 
+export type ProjectMemoryPublicationState =
+  | 'synced'
+  | 'outdated'
+  | 'not_published'
+  | 'unavailable'
+  | 'no_rules'
+
+export interface ProjectMemoryPublicationTargetStatus {
+  id: string
+  label: string
+  path: string
+  status: Exclude<ProjectMemoryPublicationState, 'no_rules'>
+  reason?: string
+}
+
+export interface ClaudeProjectMemoryPublicationStatus {
+  agent: 'claude'
+  projectSlug: string
+  acceptedRuleCount: number
+  status: ProjectMemoryPublicationState
+  targets: ProjectMemoryPublicationTargetStatus[]
+}
+
 interface ProjectRuleRow {
   id: string
   project_slug: string | null
@@ -92,6 +115,74 @@ export function listClaudeProjectMemoryPublishTargets(
         writable: true,
       }
     })
+}
+
+export function inspectClaudeProjectMemoryPublication(
+  projectSlug: string,
+  homeDir?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): ClaudeProjectMemoryPublicationStatus {
+  const rules = loadAcceptedProjectRules(projectSlug, homeDir)
+  if (rules.length === 0) {
+    return {
+      agent: 'claude',
+      projectSlug,
+      acceptedRuleCount: 0,
+      status: 'no_rules',
+      targets: [],
+    }
+  }
+
+  const expectedBlock = renderManagedBlock(projectSlug, rules)
+  const expectedTopic = renderTopic(projectSlug, rules)
+  const targets = listClaudeProjectMemoryPublishTargets({ homeDir, env }).map((target) => {
+    if (!target.writable) {
+      return {
+        id: target.memoryId,
+        label: target.displayName,
+        path: target.path,
+        status: 'unavailable' as const,
+        ...(target.reason ? { reason: target.reason } : {}),
+      }
+    }
+    try {
+      const memory = readAutoMemorySource('claude', target.memoryId, { homeDir, env })
+      const managedBlock = extractManagedBlock(memory.content)
+      if (!managedBlock || !managedBlock.includes(`项目：\`${projectSlug}\``)) {
+        return {
+          id: target.memoryId,
+          label: target.displayName,
+          path: target.path,
+          status: 'not_published' as const,
+        }
+      }
+      const topicPath = path.join(path.dirname(target.path), TOPIC_NAME)
+      const synced = managedBlock === expectedBlock
+        && readOptionalFile(topicPath) === expectedTopic
+      return {
+        id: target.memoryId,
+        label: target.displayName,
+        path: target.path,
+        status: synced ? 'synced' as const : 'outdated' as const,
+      }
+    } catch (error) {
+      return {
+        id: target.memoryId,
+        label: target.displayName,
+        path: target.path,
+        status: 'unavailable' as const,
+        reason: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  return {
+    agent: 'claude',
+    projectSlug,
+    acceptedRuleCount: rules.length,
+    status: summarizeProjectMemoryPublication(targets),
+    targets,
+  }
 }
 
 function projectMemoryDisplayName(memoryPath: string, homeDir: string): string {
@@ -179,13 +270,33 @@ function loadSelectedProjectRules(ruleIds: string[], homeDir?: string): ProjectR
     if (rows.some((row) => row.status !== 'accepted' || row.scope !== 'project')) {
       throw new Error('只能发布已接受的项目规则')
     }
-    return rows.sort((left, right) => {
-      const confidence = confidenceRank(left.confidence_level) - confidenceRank(right.confidence_level)
-      return confidence || left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
-    })
+    return rows.sort(compareProjectRules)
   } finally {
     db.close()
   }
+}
+
+function loadAcceptedProjectRules(projectSlug: string, homeDir?: string): ProjectRuleRow[] {
+  if (!isSafeProjectSlug(projectSlug)) throw new Error('项目不能为空或包含非法字符')
+  const db = new Database(resolveWorkspace(homeDir).dbPath, {
+    readonly: true,
+    fileMustExist: true,
+  })
+  try {
+    const rows = db.prepare(`
+      SELECT id, project_slug, rule_text, status, scope, confidence_level, created_at
+      FROM rule_candidates
+      WHERE project_slug = ? AND status = 'accepted' AND scope = 'project'
+    `).all(projectSlug) as ProjectRuleRow[]
+    return rows.sort(compareProjectRules)
+  } finally {
+    db.close()
+  }
+}
+
+function compareProjectRules(left: ProjectRuleRow, right: ProjectRuleRow): number {
+  const confidence = confidenceRank(left.confidence_level) - confidenceRank(right.confidence_level)
+  return confidence || left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
 }
 
 function confidenceRank(value: string): number {
@@ -231,6 +342,25 @@ function mergeManagedBlock(content: string, managedBlock: string): string {
   }
   const suffix = content.trimStart()
   return `${managedBlock}${suffix ? `\n\n${suffix}` : '\n'}`
+}
+
+function extractManagedBlock(content: string): string | null {
+  const start = content.indexOf(MANAGED_START)
+  const end = content.indexOf(MANAGED_END)
+  if ((start === -1) !== (end === -1) || (start !== -1 && end < start)) {
+    throw new Error('Claude Memory 中的 Memory Manager managed markers 不完整')
+  }
+  if (start === -1) return null
+  return content.slice(start, end + MANAGED_END.length)
+}
+
+export function summarizeProjectMemoryPublication(
+  targets: ProjectMemoryPublicationTargetStatus[],
+): ProjectMemoryPublicationState {
+  if (targets.some((target) => target.status === 'synced')) return 'synced'
+  if (targets.some((target) => target.status === 'outdated')) return 'outdated'
+  if (targets.some((target) => target.status === 'not_published')) return 'not_published'
+  return 'unavailable'
 }
 
 function validateExistingTopic(topicPath: string): void {
@@ -281,4 +411,8 @@ function writeAtomic(targetPath: string, content: string): void {
     if (descriptor !== undefined) fs.closeSync(descriptor)
     if (fs.existsSync(temporaryPath)) fs.rmSync(temporaryPath)
   }
+}
+
+function isSafeProjectSlug(value: string): boolean {
+  return value.trim().length > 0 && !value.includes('\0') && !value.includes('\n')
 }

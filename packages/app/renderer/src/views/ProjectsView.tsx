@@ -9,6 +9,7 @@ import { currentLocale, i18n } from '../i18n'
 import { formatBytes, formatDateTime } from '../i18n/format'
 import type {
   Project,
+  ProjectMemoryPublicationStatusResult,
   ProjectRulesOutputReadResult,
   ProjectSession,
   RuleCandidate,
@@ -46,11 +47,13 @@ export function ProjectsView({
   initialProjectTab,
   onInitialProjectHandled,
   onGenerateRules,
+  onPublishRules,
 }: {
   initialProjectSlug?: string | null
   initialProjectTab?: DetailTab
   onInitialProjectHandled?: () => void
   onGenerateRules?: (slug: string) => void
+  onPublishRules?: (slug: string) => void
 }) {
   const { t } = useTranslation('projects')
   const [page, setPage] = useState<ProjectsPage>('list')
@@ -140,6 +143,7 @@ export function ProjectsView({
       <ProjectDetails
         initialTab={initialProjectTab}
         onGenerateRules={() => onGenerateRules?.(selectedProject.slug)}
+        onPublishRules={() => onPublishRules?.(selectedProject.slug)}
         onBack={() => setPage('list')}
         project={selectedProject}
       />
@@ -252,11 +256,13 @@ function ProjectDetails({
   initialTab = 'sessions',
   onBack,
   onGenerateRules,
+  onPublishRules,
 }: {
   project: Project
   initialTab?: DetailTab
   onBack: () => void
   onGenerateRules: () => void
+  onPublishRules: () => void
 }) {
   const { t } = useTranslation('projects')
   const [tab, setTab] = useState<DetailTab>(initialTab)
@@ -472,7 +478,10 @@ function ProjectDetails({
           ) : rulesView === 'candidates' ? (
             <ProjectRules rules={rules} />
           ) : (
-            <PublishedProjectRules projectSlug={project.slug} />
+            <PublishedProjectRules
+              onPublishRules={onPublishRules}
+              projectSlug={project.slug}
+            />
           )}
         </Card.Content>
       </Card>
@@ -772,9 +781,17 @@ function isMissingIpcHandler(reason: unknown): boolean {
   return message.includes("No handler registered for 'sessions.preview'")
 }
 
-function PublishedProjectRules({ projectSlug }: { projectSlug: string }) {
+function PublishedProjectRules({
+  projectSlug,
+  onPublishRules,
+}: {
+  projectSlug: string
+  onPublishRules: () => void
+}) {
   const { t } = useTranslation('projects')
   const [result, setResult] = useState<ProjectRulesOutputReadResult | null>(null)
+  const [memoryStatus, setMemoryStatus] =
+    useState<ProjectMemoryPublicationStatusResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
@@ -785,13 +802,21 @@ function PublishedProjectRules({ projectSlug }: { projectSlug: string }) {
     setError(null)
     setResult(null)
     void afterNextPaint(() =>
-      window.api.invoke<ProjectRulesOutputReadResult>(
-        'rules.projectOutput.read',
-        projectSlug,
-      ),
+      Promise.all([
+        window.api.invoke<ProjectRulesOutputReadResult>(
+          'rules.projectOutput.read',
+          projectSlug,
+        ),
+        window.api.invoke<ProjectMemoryPublicationStatusResult>(
+          'rules.projectMemory.status',
+          projectSlug,
+        ),
+      ]),
     )
-      .then((value) => {
-        if (current) setResult(value)
+      .then(([output, publication]) => {
+        if (!current) return
+        setResult(output)
+        setMemoryStatus(publication)
       })
       .catch((reason: unknown) => {
         if (current) setError(reason instanceof Error ? reason.message : String(reason))
@@ -818,7 +843,7 @@ function PublishedProjectRules({ projectSlug }: { projectSlug: string }) {
       </div>
     )
   }
-  if (!result) return null
+  if (!result || !memoryStatus) return null
   if (result.source.status === 'missing') {
     return (
       <div className="grid min-h-64 place-items-center px-6 py-10 text-center">
@@ -829,6 +854,10 @@ function PublishedProjectRules({ projectSlug }: { projectSlug: string }) {
           <Button className="mt-4" onPress={() => setRefresh((value) => value + 1)} variant="ghost">
             {t('rules.reloadPublished')}
           </Button>
+          <Button className="ml-2 mt-4" onPress={onPublishRules} variant="primary">
+            {t('rules.publishToMemory')}
+          </Button>
+          <MemoryPublicationStatus status={memoryStatus} />
         </div>
       </div>
     )
@@ -862,8 +891,68 @@ function PublishedProjectRules({ projectSlug }: { projectSlug: string }) {
       <p className="border-t border-border px-5 py-4 text-xs text-muted">
         {t('rules.exportedFileDescription')}
       </p>
+      <div className="border-t border-border px-5 py-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <strong className="text-sm font-medium text-foreground">
+            {t('rules.memoryPublicationTitle')}
+          </strong>
+          <Button onPress={onPublishRules} variant="primary">
+            {t('rules.publishToMemory')}
+          </Button>
+        </div>
+        <MemoryPublicationStatus status={memoryStatus} />
+      </div>
     </div>
   )
+}
+
+function MemoryPublicationStatus({
+  status,
+}: {
+  status: ProjectMemoryPublicationStatusResult
+}) {
+  const { t } = useTranslation('projects')
+  return (
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      {[status.claude, status.codex].map((agentStatus) => {
+        const relevantTargets = agentStatus.targets.filter((target) =>
+          target.status === 'synced' || target.status === 'outdated')
+        const targetLabels = relevantTargets.map((target) => target.label).join(' · ')
+        return (
+          <div className="min-w-0 rounded-xl border border-border bg-background/60 p-4" key={agentStatus.agent}>
+            <div className="flex items-center justify-between gap-3">
+              <strong className="text-sm font-medium text-foreground">
+                {t(`rules.memoryAgents.${agentStatus.agent}`)}
+              </strong>
+              <Chip
+                color={memoryStatusColor(agentStatus.status)}
+                size="sm"
+                variant="soft"
+              >
+                {t(`rules.memoryStatus.${agentStatus.status}`)}
+              </Chip>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted">
+              {t('rules.memoryRuleCount', { count: agentStatus.acceptedRuleCount })}
+            </p>
+            {relevantTargets.length > 0 && (
+              <p className="mt-1 truncate text-xs text-muted" title={targetLabels}>
+                {targetLabels}
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function memoryStatusColor(
+  status: ProjectMemoryPublicationStatusResult['claude']['status'],
+): 'success' | 'warning' | 'default' {
+  if (status === 'synced') return 'success'
+  if (status === 'outdated') return 'warning'
+  return 'default'
 }
 
 function ProjectRules({ rules }: { rules: RuleCandidate[] }) {

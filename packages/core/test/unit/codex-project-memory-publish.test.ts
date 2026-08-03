@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 import { initDatabase } from '../../src/db'
 import {
+  inspectCodexProjectMemoryPublication,
   listCodexProjectMemoryPublishTargets,
   publishProjectRulesToCodexMemory,
 } from '../../src/codex-project-memory-publish'
@@ -104,6 +105,44 @@ describe('publish project rules through Codex ad-hoc memories', () => {
     await expect(publish(refreshed, ['p1'])).rejects.toThrow('契约自预览后已发生变化')
   })
 
+  it('按全部 accepted project rules 判断未发布、已同步和有更新', async () => {
+    const cwd = createDirectory('work/alpha')
+    insertCodexSession('codex-1', 'alpha', cwd)
+    insertRule('p1', 'alpha')
+    await expect(inspectCodexProjectMemoryPublication('alpha', {
+      homeDir: home,
+      env: {},
+    })).resolves.toMatchObject({ status: 'not_published', acceptedRuleCount: 1 })
+
+    await publish((await targets('alpha'))[0], ['p1'])
+    await expect(inspectCodexProjectMemoryPublication('alpha', {
+      homeDir: home,
+      env: {},
+    })).resolves.toMatchObject({
+      status: 'synced',
+      targets: [expect.objectContaining({ status: 'synced', label: cwd })],
+    })
+
+    insertRule('p2', 'alpha')
+    await expect(inspectCodexProjectMemoryPublication('alpha', {
+      homeDir: home,
+      env: {},
+    })).resolves.toMatchObject({ status: 'outdated', acceptedRuleCount: 2 })
+  })
+
+  it('项目没有 accepted rules 时返回 no_rules 且不解析 Session', async () => {
+    await expect(inspectCodexProjectMemoryPublication('alpha', {
+      homeDir: home,
+      env: {},
+    })).resolves.toEqual({
+      agent: 'codex',
+      projectSlug: 'alpha',
+      acceptedRuleCount: 0,
+      status: 'no_rules',
+      targets: [],
+    })
+  })
+
   it('拒绝跨项目、非 accepted、非 project 和保留 marker', async () => {
     const cwd = createDirectory('work/alpha')
     insertCodexSession('codex-1', 'alpha', cwd)
@@ -126,6 +165,10 @@ describe('publish project rules through Codex ad-hoc memories', () => {
     insertRule('p1', 'alpha')
     fs.rmSync(path.join(notesDirectory, 'instructions.md'))
     expect((await targets('alpha'))[0]).toMatchObject({ writable: false })
+    await expect(inspectCodexProjectMemoryPublication('alpha', {
+      homeDir: home,
+      env: {},
+    })).resolves.toMatchObject({ status: 'unavailable' })
 
     fs.writeFileSync(path.join(notesDirectory, 'instructions.md'), '# Ad-hoc notes\nEvery note must be consolidated.\nNever delete a note file.\n')
     fs.rmSync(cwd, { recursive: true })

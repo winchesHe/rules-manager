@@ -43,6 +43,7 @@ export function App() {
   const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null)
   const [selectedProjectTab, setSelectedProjectTab] = useState<'sessions' | 'rules'>('sessions')
   const [selectedRulesProject, setSelectedRulesProject] = useState<string | null>(null)
+  const [selectedPublishProject, setSelectedPublishProject] = useState<string | null>(null)
   const [selectedRulesRunId, setSelectedRulesRunId] = useState<string | null>(null)
   const [selectedChatThreadId, setSelectedChatThreadId] = useState<string | null>(null)
   const [activeRulesSection, setActiveRulesSection] = useState<RulesSection>('overview')
@@ -189,6 +190,11 @@ export function App() {
                   setActiveRulesSection('overview')
                   setActiveView('rules')
                 }}
+                onPublishRules={(slug) => {
+                  setSelectedPublishProject(slug)
+                  setActiveRulesSection('generated')
+                  setActiveView('rules')
+                }}
               />
             )}
             {activeView === 'chat' && (
@@ -205,9 +211,11 @@ export function App() {
             {activeView === 'rules' && (
               <RulesView
                 initialProjectSlug={selectedRulesProject}
+                initialPublishProjectSlug={selectedPublishProject}
                 initialRunId={selectedRulesRunId}
                 key={rulesViewKey}
                 onInitialProjectHandled={() => setSelectedRulesProject(null)}
+                onInitialPublishProjectHandled={() => setSelectedPublishProject(null)}
                 onInitialRunHandled={() => setSelectedRulesRunId(null)}
                 onOpenProjectRules={(slug) => {
                   setSelectedProjectSlug(slug ?? null)

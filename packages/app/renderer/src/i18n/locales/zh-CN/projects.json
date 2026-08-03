@@ -81,7 +81,22 @@
     "exportedFile": "托管导出文件",
     "publishedContent": "{{project}} 已发布规则内容",
     "publishedMetadata": "{{size}} · 修改于 {{time}}",
-    "exportedFileDescription": "此文件是 Memory Manager 的项目规则导出，不代表已经发布到 Claude 或 Codex Memory。"
+    "exportedFileDescription": "此文件是 Memory Manager 的项目规则导出，不代表已经发布到 Claude 或 Codex Memory。",
+    "memoryPublicationTitle": "项目 Memory 发布状态",
+    "publishToMemory": "发布到 Memory",
+    "memoryAgents": {
+      "claude": "Claude Project Memory",
+      "codex": "Codex 项目 Memory"
+    },
+    "memoryStatus": {
+      "synced": "已同步",
+      "outdated": "有更新",
+      "not_published": "未发布",
+      "unavailable": "不可用",
+      "no_rules": "没有已接受规则"
+    },
+    "memoryRuleCount_one": "按 {{count}} 条已接受项目规则检查",
+    "memoryRuleCount_other": "按 {{count}} 条已接受项目规则检查"
   },
   "empty": {
     "projects": "还没有已分类的项目。",

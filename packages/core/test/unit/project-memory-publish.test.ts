@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { initDatabase } from '../../src/db'
 import {
+  inspectClaudeProjectMemoryPublication,
   listClaudeProjectMemoryPublishTargets,
   publishProjectRulesToClaudeMemory,
 } from '../../src/project-memory-publish'
@@ -105,6 +106,40 @@ describe('publish project rules to Claude auto memory', () => {
     expect(fs.readFileSync(memoryPath, 'utf8').match(/project-rules:start/g)).toHaveLength(1)
   })
 
+  it('按全部 accepted project rules 判断未发布、已同步和有更新', () => {
+    insertRule('p1', 'rules-manager')
+    expect(inspectClaudeProjectMemoryPublication('rules-manager', home, {}))
+      .toMatchObject({ status: 'not_published', acceptedRuleCount: 1 })
+
+    const opened = target()
+    publishProjectRulesToClaudeMemory({
+      memoryId: opened.memoryId,
+      ruleIds: ['p1'],
+      expectedRevision: opened.revision,
+      expectedTopicRevision: opened.topicRevision,
+    }, home, {})
+    expect(inspectClaudeProjectMemoryPublication('rules-manager', home, {}))
+      .toMatchObject({
+        status: 'synced',
+        targets: [expect.objectContaining({ status: 'synced', label: '~/opaque-project' })],
+      })
+
+    insertRule('p2', 'rules-manager')
+    expect(inspectClaudeProjectMemoryPublication('rules-manager', home, {}))
+      .toMatchObject({ status: 'outdated', acceptedRuleCount: 2 })
+  })
+
+  it('项目没有 accepted rules 时返回 no_rules 且不读取目标内容', () => {
+    expect(inspectClaudeProjectMemoryPublication('rules-manager', home, {}))
+      .toEqual({
+        agent: 'claude',
+        projectSlug: 'rules-manager',
+        acceptedRuleCount: 0,
+        status: 'no_rules',
+        targets: [],
+      })
+  })
+
   it('拒绝 Memory 或 topic 在预览后发生变化', () => {
     insertRule('p1', 'rules-manager')
     const beforeMemoryChange = target()
@@ -159,6 +194,8 @@ describe('publish project rules to Claude auto memory', () => {
     fs.renameSync(memoryPath, targetPath)
     fs.symlinkSync(targetPath, memoryPath)
     expect(target()).toMatchObject({ writable: false })
+    expect(inspectClaudeProjectMemoryPublication('rules-manager', home, {}))
+      .toMatchObject({ status: 'unavailable' })
 
     fs.rmSync(memoryPath)
     fs.copyFileSync(targetPath, memoryPath)

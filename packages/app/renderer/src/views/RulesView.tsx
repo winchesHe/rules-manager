@@ -154,6 +154,8 @@ function tr(
 export function RulesView({
   initialProjectSlug,
   onInitialProjectHandled,
+  initialPublishProjectSlug,
+  onInitialPublishProjectHandled,
   initialRunId,
   onInitialRunHandled,
   onOpenChat,
@@ -163,6 +165,8 @@ export function RulesView({
 }: {
   initialProjectSlug?: string | null
   onInitialProjectHandled?: () => void
+  initialPublishProjectSlug?: string | null
+  onInitialPublishProjectHandled?: () => void
   initialRunId?: string | null
   onInitialRunHandled?: () => void
   onOpenChat: (threadId: string) => void
@@ -180,6 +184,7 @@ export function RulesView({
   const [historyLoading, setHistoryLoading] = useState(true)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [selectedCandidate, setSelectedCandidate] = useState<RuleCandidate | null>(null)
+  const [outputProjectSlug, setOutputProjectSlug] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -301,6 +306,13 @@ export function RulesView({
     setPage('generate')
     onInitialProjectHandled?.()
   }, [initialProjectSlug, onInitialProjectHandled])
+
+  useEffect(() => {
+    if (!initialPublishProjectSlug) return
+    setOutputProjectSlug(initialPublishProjectSlug)
+    setPage('output')
+    onInitialPublishProjectHandled?.()
+  }, [initialPublishProjectSlug, onInitialPublishProjectHandled])
 
   useEffect(() => {
     if (!initialRunId) return
@@ -498,10 +510,16 @@ export function RulesView({
     )
   }
   if (page === 'output') {
-    return <OutputRulesPage onBack={() => {
-      onSectionChange('generated')
-      setPage('overview')
-    }} />
+    return (
+      <OutputRulesPage
+        initialProjectSlug={outputProjectSlug}
+        onBack={() => {
+          setOutputProjectSlug(null)
+          onSectionChange('generated')
+          setPage('overview')
+        }}
+      />
+    )
   }
   if (page === 'agent' && selectedInstructionAgent) {
     return (
@@ -3862,13 +3880,20 @@ function formatEvidenceTimestamp(value: string): string {
   return Number.isNaN(date.getTime()) ? value : formatDateTime(date, currentLocale())
 }
 
-function OutputRulesPage({ onBack }: { onBack: () => void }) {
+function OutputRulesPage({
+  initialProjectSlug,
+  onBack,
+}: {
+  initialProjectSlug?: string | null
+  onBack: () => void
+}) {
   const [accepted, setAccepted] = useState<RuleCandidate[]>([])
   const [targets, setTargets] = useState<GlobalInstructionReadResult[]>([])
   const [memoryTargets, setMemoryTargets] = useState<ClaudeProjectMemoryPublishTarget[]>([])
   const [codexMemoryTargets, setCodexMemoryTargets] = useState<CodexProjectMemoryPublishTarget[]>([])
   const [selectedAgents, setSelectedAgents] = useState<GlobalInstructionAgent[]>([])
-  const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null)
+  const [selectedProjectSlug, setSelectedProjectSlug] =
+    useState<string | null>(initialProjectSlug ?? null)
   const [selectedProjectRuleIds, setSelectedProjectRuleIds] = useState<string[]>([])
   const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null)
   const [selectedCodexWorkingDirectory, setSelectedCodexWorkingDirectory] = useState<string | null>(null)
@@ -3974,6 +3999,16 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
       selectProject(null)
     }
   }, [projectSlugs, selectedProjectSlug])
+
+  useEffect(() => {
+    if (!initialProjectSlug) return
+    const initialRules = projectRules.filter(
+      (candidate) => candidate.project_slug === initialProjectSlug,
+    )
+    if (initialRules.length === 0) return
+    setSelectedProjectSlug(initialProjectSlug)
+    setSelectedProjectRuleIds(initialRules.map((candidate) => candidate.id))
+  }, [initialProjectSlug, projectRules])
 
   const selectedProjectRules = projectRules.filter(
     (candidate) => candidate.project_slug === selectedProjectSlug,

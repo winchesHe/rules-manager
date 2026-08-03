@@ -2468,3 +2468,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   27 suites / 177 tests、Core/App production build 与 `git diff --check` 通过；build 仅保留既有 Core
   `tsdown define` 与 Markstream PURE 注释警告。
 - 提交信息：`feat: 支持查看已导出项目规则`
+
+## 项目 Memory 发布状态与快捷入口（2026-08-03）
+
+- 「项目 → 项目详情 → 规则 → 已发布版本」新增 Claude Project Memory 与 Codex 项目 Memory 两张状态卡，
+  分别显示 `已同步 / 有更新 / 未发布 / 不可用 / 没有已接受规则`。状态事实源是当前项目全部 accepted
+  project rules 与目标 canonical 受管内容的一致性，不再根据托管导出文件是否存在推断 Memory 发布状态。
+- Claude 检查受管 block 与 `memory-manager-rules.md` topic 是否同时匹配当前项目；只有 block 明确属于当前
+  project slug 时才形成该项目发布记录。Codex 按 Session metadata 解析出的 cwd 检查固定 ad-hoc note
+  revision；accepted rules 变化后两类目标都会从已同步变为有更新。
+- 状态读取通过独立 `project-memory-status-worker` 执行，Renderer 只传 project slug，不阻塞 Electron 主进程，
+  也不创建或修改 Memory、note、导出文件与 DB。
+- 「发布到 Memory」复用既有发布页：从 `agent-workspace` 进入后自动选择该项目及其 1 条 accepted project
+  rule；Claude Memory 目标与 Codex cwd 保持未选择，两个最终发布按钮均禁用，仍由用户明确选择目标。
+- 本机只读检查显示 `agent-workspace` 的 Claude 与 Codex 状态均为未发布。真实 Electron 验证状态卡布局、
+  发布页预选和目标空选状态，未点击最终发布。`simplify` 复核统一了两类状态优先级并移除嵌套条件。
+- Core 29 suites / 303 tests、App 27 suites / 178 tests、Core/App production build 与
+  `git diff --check` 通过；build 仅保留既有 Core `tsdown define` 与 Markstream PURE 注释警告。
+- 提交信息：`feat: 展示项目 Memory 发布状态`

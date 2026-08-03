@@ -46,9 +46,11 @@ import {
 import {
   listClaudeProjectMemoryPublishTargets,
   publishProjectRulesToClaudeMemory,
+  type ClaudeProjectMemoryPublicationStatus,
 } from '../../core/src/project-memory-publish.js'
 import {
   publishProjectRulesToCodexMemory,
+  type CodexProjectMemoryPublicationStatus,
   type CodexProjectMemoryPublishTarget,
 } from '../../core/src/codex-project-memory-publish.js'
 import { ScanController, type ScanControllerEvent } from './scan-controller.js'
@@ -457,6 +459,12 @@ export function registerIpcHandlers(): void {
     }
     return readProjectRulesOutput(projectSlug)
   })
+  ipcMain.handle('rules.projectMemory.status', (_event, projectSlug: unknown) => {
+    if (typeof projectSlug !== 'string' || !projectSlug.trim()) {
+      throw new Error('project slug is required')
+    }
+    return runProjectMemoryStatusWorker(projectSlug)
+  })
 
   ipcMain.handle('rules.candidates', (_event, status?: string) => {
     if (!isDatabaseReady()) return []
@@ -773,6 +781,53 @@ function runCodexMemoryTargetsWorker(
     worker.once('exit', (code) => {
       if (!settled) {
         reject(new Error(`Codex memory targets worker exited before completion (${code})`))
+      }
+    })
+  })
+}
+
+interface ProjectMemoryPublicationStatusResult {
+  projectSlug: string
+  claude: ClaudeProjectMemoryPublicationStatus
+  codex: CodexProjectMemoryPublicationStatus
+}
+
+function runProjectMemoryStatusWorker(
+  projectSlug: string,
+): Promise<ProjectMemoryPublicationStatusResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(join(import.meta.dirname, 'project-memory-status-worker.js'), {
+      workerData: { projectSlug },
+    })
+    let settled = false
+
+    worker.once('message', (message: unknown) => {
+      settled = true
+      if (
+        message
+        && typeof message === 'object'
+        && 'type' in message
+        && message.type === 'done'
+        && 'status' in message
+      ) {
+        resolve(message.status as ProjectMemoryPublicationStatusResult)
+        return
+      }
+      const errorMessage = message
+        && typeof message === 'object'
+        && 'message' in message
+        && typeof message.message === 'string'
+        ? message.message
+        : 'Project memory status worker returned an invalid response'
+      reject(new Error(errorMessage))
+    })
+    worker.once('error', (error) => {
+      settled = true
+      reject(error)
+    })
+    worker.once('exit', (code) => {
+      if (!settled) {
+        reject(new Error(`Project memory status worker exited before completion (${code})`))
       }
     })
   })

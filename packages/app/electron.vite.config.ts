@@ -32,6 +32,9 @@ export default defineConfig({
           'codex-memory-targets-worker': fileURLToPath(
             new URL('./main/codex-memory-targets-worker.ts', import.meta.url),
           ),
+          'project-memory-status-worker': fileURLToPath(
+            new URL('./main/project-memory-status-worker.ts', import.meta.url),
+          ),
         },
         external: ['better-sqlite3-electron'],
       },

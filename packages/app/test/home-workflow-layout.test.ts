@@ -348,12 +348,41 @@ describe('home workflow layout', () => {
     expect(source).toContain("'rules.projectOutput.read',")
     expect(source).toContain("t('rules.candidates')")
     expect(source).toContain("t('rules.published')")
-    expect(source).toContain('<PublishedProjectRules projectSlug={project.slug} />')
+    expect(source).toContain('<PublishedProjectRules')
+    expect(source).toContain('projectSlug={project.slug}')
     expect(source).toContain('<pre')
     expect(source).toContain("t('rules.exportedFileDescription')")
     expect(source).not.toContain("window.api.invoke<ProjectRulesOutputReadResult>(\n        'rules.projectOutput.read',\n        result.source.path")
     expect(ipcSource).toContain("ipcMain.handle('rules.projectOutput.read'")
     expect(ipcSource).toContain('return readProjectRulesOutput(projectSlug)')
+  })
+
+  it('项目已导出规则展示 Memory 同步状态并复用发布页预选当前项目', () => {
+    const appSource = read('App.tsx')
+    const projectSource = read('views/ProjectsView.tsx')
+    const rulesSource = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const workerSource = fs.readFileSync(
+      path.join(appRoot, 'main/project-memory-status-worker.ts'),
+      'utf8',
+    )
+    const viteSource = fs.readFileSync(path.join(appRoot, 'electron.vite.config.ts'), 'utf8')
+
+    expect(projectSource).toContain("'rules.projectMemory.status',")
+    expect(projectSource).toContain('MemoryPublicationStatus')
+    expect(projectSource).toContain("t('rules.publishToMemory')")
+    expect(appSource).toContain('selectedPublishProject')
+    expect(appSource).toContain('onPublishRules={(slug) =>')
+    expect(appSource).toContain('initialPublishProjectSlug={selectedPublishProject}')
+    expect(rulesSource).toContain("setPage('output')")
+    expect(rulesSource).toContain('setSelectedProjectRuleIds(initialRules.map')
+    expect(rulesSource).toContain('const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null)')
+    expect(rulesSource).toContain('const [selectedCodexWorkingDirectory, setSelectedCodexWorkingDirectory] = useState<string | null>(null)')
+    expect(ipcSource).toContain("ipcMain.handle('rules.projectMemory.status'")
+    expect(ipcSource).toContain('runProjectMemoryStatusWorker(projectSlug)')
+    expect(workerSource).toContain('inspectClaudeProjectMemoryPublication(projectSlug)')
+    expect(workerSource).toContain('inspectCodexProjectMemoryPublication(projectSlug)')
+    expect(viteSource).toContain("'project-memory-status-worker'")
   })
 
   it('Session 详情使用 Projects / project / session 面包屑并处理旧主进程', () => {

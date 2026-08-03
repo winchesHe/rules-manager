@@ -494,6 +494,35 @@ export interface ProjectRulesOutputReadResult {
   content: string
 }
 
+export type ProjectMemoryPublicationState =
+  | 'synced'
+  | 'outdated'
+  | 'not_published'
+  | 'unavailable'
+  | 'no_rules'
+
+export interface ProjectMemoryPublicationTargetStatus {
+  id: string
+  label: string
+  path: string
+  status: Exclude<ProjectMemoryPublicationState, 'no_rules'>
+  reason?: string
+}
+
+export interface ProjectMemoryPublicationAgentStatus {
+  agent: 'claude' | 'codex'
+  projectSlug: string
+  acceptedRuleCount: number
+  status: ProjectMemoryPublicationState
+  targets: ProjectMemoryPublicationTargetStatus[]
+}
+
+export interface ProjectMemoryPublicationStatusResult {
+  projectSlug: string
+  claude: ProjectMemoryPublicationAgentStatus
+  codex: ProjectMemoryPublicationAgentStatus
+}
+
 export type GlobalInstructionAgent =
   | 'claude'
   | 'codex'

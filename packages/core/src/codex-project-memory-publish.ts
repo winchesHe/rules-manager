@@ -6,6 +6,11 @@ import Database from 'better-sqlite3'
 import { getAdapters } from './adapters/index.js'
 import type { AutoMemoryListOptions } from './auto-memories.js'
 import { getDbPath } from './db.js'
+import {
+  summarizeProjectMemoryPublication,
+  type ProjectMemoryPublicationState,
+  type ProjectMemoryPublicationTargetStatus,
+} from './project-memory-publish.js'
 import type { AgentName, DiscoveredSession } from './types.js'
 
 const NOTE_MARKER = '<!-- memory-manager:codex-project-rules:v1 -->'
@@ -40,6 +45,14 @@ export interface CodexProjectMemoryPublishResult {
   status: 'published' | 'unchanged'
   revision: string
   contractRevision: string
+}
+
+export interface CodexProjectMemoryPublicationStatus {
+  agent: 'codex'
+  projectSlug: string
+  acceptedRuleCount: number
+  status: ProjectMemoryPublicationState
+  targets: ProjectMemoryPublicationTargetStatus[]
 }
 
 interface SessionRow {
@@ -103,6 +116,50 @@ export async function listCodexProjectMemoryPublishTargets(
     .sort((left, right) =>
       right.sessionCount - left.sessionCount
       || left.workingDirectory.localeCompare(right.workingDirectory, 'en'))
+}
+
+export async function inspectCodexProjectMemoryPublication(
+  projectSlug: string,
+  options: Omit<AutoMemoryListOptions, 'agent'> = {},
+): Promise<CodexProjectMemoryPublicationStatus> {
+  const homeDir = path.resolve(options.homeDir ?? os.homedir())
+  const rules = loadAcceptedProjectRules(projectSlug, homeDir)
+  if (rules.length === 0) {
+    return {
+      agent: 'codex',
+      projectSlug,
+      acceptedRuleCount: 0,
+      status: 'no_rules',
+      targets: [],
+    }
+  }
+
+  const publishTargets = await listCodexProjectMemoryPublishTargets(projectSlug, options)
+  const targets = publishTargets.map((target) => {
+    if (!target.writable) {
+      return {
+        id: target.workingDirectory,
+        label: target.workingDirectory,
+        path: target.notePath,
+        status: 'unavailable' as const,
+        ...(target.reason ? { reason: target.reason } : {}),
+      }
+    }
+    const expectedRevision = hashContent(renderNote(projectSlug, target.workingDirectory, rules))
+    return {
+      id: target.workingDirectory,
+      label: target.workingDirectory,
+      path: target.notePath,
+      status: publicationTargetState(target.revision, expectedRevision),
+    }
+  })
+  return {
+    agent: 'codex',
+    projectSlug,
+    acceptedRuleCount: rules.length,
+    status: summarizeProjectMemoryPublication(targets),
+    targets,
+  }
 }
 
 export async function publishProjectRulesToCodexMemory(
@@ -295,6 +352,35 @@ function loadSelectedProjectRules(ruleIds: string[], homeDir: string): ProjectRu
   } finally {
     db.close()
   }
+}
+
+function loadAcceptedProjectRules(projectSlug: string, homeDir: string): ProjectRuleRow[] {
+  if (!isSafeProjectSlug(projectSlug)) throw new Error('项目不能为空或包含非法字符')
+  const db = new Database(getDbPath(homeDir), { readonly: true, fileMustExist: true })
+  try {
+    const rows = db.prepare(`
+      SELECT id, project_slug, rule_text, status, scope, confidence_level, created_at
+      FROM rule_candidates
+      WHERE project_slug = ? AND status = 'accepted' AND scope = 'project'
+    `).all(projectSlug) as ProjectRuleRow[]
+    return rows.sort(compareProjectRules)
+  } finally {
+    db.close()
+  }
+}
+
+function compareProjectRules(left: ProjectRuleRow, right: ProjectRuleRow): number {
+  return confidenceRank(left.confidence_level) - confidenceRank(right.confidence_level)
+    || left.created_at.localeCompare(right.created_at)
+    || left.id.localeCompare(right.id)
+}
+
+function publicationTargetState(
+  revision: string | null,
+  expectedRevision: string,
+): ProjectMemoryPublicationTargetStatus['status'] {
+  if (revision === null) return 'not_published'
+  return revision === expectedRevision ? 'synced' : 'outdated'
 }
 
 function confidenceRank(value: string): number {
