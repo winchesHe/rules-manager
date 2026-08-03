@@ -4123,7 +4123,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
       {loading ? (
         <ViewLoading label={tr('publish.loading')} />
       ) : (
-        <div className="grid min-w-0 items-start grid-cols-[minmax(0,1fr)_minmax(18rem,20rem)] gap-5 max-xl:grid-cols-1">
+        <div className="grid min-w-0 items-start grid-cols-[minmax(0,1fr)_minmax(24rem,26rem)] gap-5 max-xl:grid-cols-1">
           <Card className="min-w-0 border border-border bg-surface shadow-none">
             <Card.Header className="border-b border-border px-5 py-4">
               <div>

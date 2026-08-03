@@ -566,6 +566,7 @@ describe('home workflow layout', () => {
     expect(outputPage).toContain("window.api.invoke<string[]>('rules.output', selectedProjectSlug)")
     expect(outputPage).toContain("tr('publish.projectOutputDescription'")
     expect(outputPage).toContain('items-start')
+    expect(outputPage).toContain('minmax(24rem,26rem)')
     expect(outputPage).toContain('max-h-[calc(100dvh-2rem)]')
     expect(outputPage).toContain('overflow-x-hidden overflow-y-auto')
   })

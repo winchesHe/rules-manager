@@ -2414,3 +2414,13 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 27 suites / 176 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
   PURE 注释警告。
 - 提交信息：`fix: 优化规则发布页布局与导出语义`
+
+## 已接受规则发布页列宽调整（2026-08-03）
+
+- 根据真实窗口反馈，将发布页右栏从 18–20rem 加宽到 24–26rem；主预览区继续使用 `minmax(0, 1fr)`，
+  在宽屏让出空间，在 `max-xl` 下仍回退为单栏。
+- 真实 Electron 验证右栏约 416px，Agent 路径、Project Memory 说明与 cwd 选择器可显示更多内容；主区无
+  横向溢出，右栏独立滚动保持正常。
+- App 定向布局 43 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream PURE
+  注释警告。
+- 提交信息：`fix: 加宽规则发布目标栏`
