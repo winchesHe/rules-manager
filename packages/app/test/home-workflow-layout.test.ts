@@ -586,6 +586,11 @@ describe('home workflow layout', () => {
       source.indexOf('function OutputRulesPage'),
       source.indexOf('type GenerationEventMetadata'),
     )
+    const memoryTargetsMarker = outputPage.indexOf('data-project-memory-targets')
+    const memoryTargetsCard = outputPage.slice(
+      outputPage.lastIndexOf('<Card', memoryTargetsMarker),
+      outputPage.indexOf('{error &&', memoryTargetsMarker),
+    )
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishTargets'")
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishProjectRules'")
     expect(ipcSource).toContain('publishProjectRulesToClaudeMemory')
@@ -594,6 +599,13 @@ describe('home workflow layout', () => {
     expect(outputPage).toContain('selectedProjectRuleIds')
     expect(outputPage).toContain('expectedTopicRevision')
     expect(outputPage).toContain("tr('publish.projectMemoryDescription')")
+    expect(memoryTargetsMarker).toBeGreaterThan(-1)
+    expect(memoryTargetsCard.match(/<Card(?:\s|>)/g)).toHaveLength(1)
+    expect(memoryTargetsCard).toContain("tr('publish.projectMemoryTargetsTitle')")
+    expect(memoryTargetsCard).toContain("tr('publish.projectMemoryTitle')")
+    expect(memoryTargetsCard).toContain("tr('publish.codexProjectMemoryTitle')")
+    expect(memoryTargetsCard).toContain('onPress={() => void publishProjectMemory()}')
+    expect(memoryTargetsCard).toContain('onPress={() => void publishCodexProjectMemory()}')
   })
 
   it('项目规则导出只写当前项目，并明确区别于 Agent 和 Memory 发布', () => {

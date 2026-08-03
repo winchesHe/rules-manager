@@ -407,6 +407,8 @@
     "projectSelectPlaceholder": "Select a project first",
     "projectRuleCount_one": "{{count}} accepted rule",
     "projectRuleCount_other": "{{count}} accepted rules",
+    "projectMemoryTargetsTitle": "Publish to project Memory",
+    "projectMemoryTargetsDescription": "Choose a Claude or Codex project Memory target separately. The two target types are never linked or selected automatically.",
     "projectMemoryTitle": "Publish to Claude Project Memory",
     "projectMemoryDescription": "Only the Memory Manager managed block and memory-manager-rules.md are updated. Claude-managed content is preserved.",
     "memoryTargetSelect": "Select Claude Project Memory",

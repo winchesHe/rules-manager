@@ -4347,156 +4347,157 @@ function OutputRulesPage({
               </Card.Footer>
             </Card>
 
-            <Card className="min-w-0 overflow-hidden border border-border bg-surface shadow-none">
+            <Card
+              className="min-w-0 overflow-hidden border border-border bg-surface shadow-none"
+              data-project-memory-targets
+            >
               <Card.Header className="border-b border-border px-5 py-4">
                 <div>
-                  <h2 className="font-medium text-foreground">{tr('publish.projectMemoryTitle')}</h2>
-                  <p className="mt-1 text-sm text-muted">{tr('publish.projectMemoryDescription')}</p>
+                  <h2 className="font-medium text-foreground">{tr('publish.projectMemoryTargetsTitle')}</h2>
+                  <p className="mt-1 text-sm text-muted">{tr('publish.projectMemoryTargetsDescription')}</p>
                 </div>
               </Card.Header>
-              <Card.Content className="grid gap-3 px-4 py-4">
-                <Select
-                  aria-label={tr('publish.memoryTargetSelect')}
-                  className="min-w-0"
-                  onSelectionChange={(key) => {
-                    const value = String(key)
-                    setSelectedMemoryId(value === NO_SELECTION_KEY ? null : value)
-                    setMemoryPublishResult(null)
-                  }}
-                  selectedKey={selectedMemoryId ?? NO_SELECTION_KEY}
-                >
-                  <Select.Trigger className="min-w-0 overflow-hidden">
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id={NO_SELECTION_KEY} textValue={tr('publish.memoryTargetPlaceholder')}>
-                        {tr('publish.memoryTargetPlaceholder')}
-                      </ListBox.Item>
-                      {memoryTargets.map((target) => (
-                        <ListBox.Item
-                          id={target.memoryId}
-                          isDisabled={!target.writable}
-                          key={target.memoryId}
-                          textValue={target.displayName}
-                        >
-                          <span className="block font-medium">{target.displayName}</span>
-                          <span className="mt-0.5 block max-w-72 truncate text-xs text-muted">
-                            {target.reason ?? target.path}
-                          </span>
+              <Card.Content className="p-0">
+                <section className="grid gap-3 px-4 py-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground">{tr('publish.projectMemoryTitle')}</h3>
+                    <p className="mt-1 text-xs leading-5 text-muted">{tr('publish.projectMemoryDescription')}</p>
+                  </div>
+                  <Select
+                    aria-label={tr('publish.memoryTargetSelect')}
+                    className="min-w-0"
+                    onSelectionChange={(key) => {
+                      const value = String(key)
+                      setSelectedMemoryId(value === NO_SELECTION_KEY ? null : value)
+                      setMemoryPublishResult(null)
+                    }}
+                    selectedKey={selectedMemoryId ?? NO_SELECTION_KEY}
+                  >
+                    <Select.Trigger className="min-w-0 overflow-hidden">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id={NO_SELECTION_KEY} textValue={tr('publish.memoryTargetPlaceholder')}>
+                          {tr('publish.memoryTargetPlaceholder')}
                         </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <p className="text-xs leading-5 text-muted">
-                  {tr('publish.projectMemorySelection', { count: selectedProjectRuleIds.length })}
-                </p>
-              </Card.Content>
-              <Card.Footer className="border-t border-border px-4 py-3">
-                <Button
-                  className="w-full gap-2 bg-primary text-primary-foreground"
-                  isDisabled={!selectedMemoryTarget?.writable || selectedProjectRuleIds.length === 0 || memoryPublishing}
-                  onPress={() => void publishProjectMemory()}
-                >
-                  {memoryPublishing ? <Spinner color="current" size="sm" /> : <Brain aria-hidden="true" size={16} />}
-                  {memoryPublishing
-                    ? tr('actions.publishing')
-                    : tr('actions.publishProjectMemory', { count: selectedProjectRuleIds.length })}
-                </Button>
-              </Card.Footer>
-            </Card>
-
-            <Card className="min-w-0 overflow-hidden border border-border bg-surface shadow-none">
-              <Card.Header className="border-b border-border px-5 py-4">
-                <div>
-                  <h2 className="font-medium text-foreground">{tr('publish.codexProjectMemoryTitle')}</h2>
-                  <p className="mt-1 text-sm text-muted">{tr('publish.codexProjectMemoryDescription')}</p>
-                </div>
-              </Card.Header>
-              <Card.Content className="grid gap-3 px-4 py-4">
-                <Select
-                  aria-label={tr('publish.codexWorkingDirectorySelect')}
-                  className="min-w-0"
-                  isDisabled={!selectedProjectSlug || codexTargetsLoading}
-                  onSelectionChange={(key) => {
-                    const value = String(key)
-                    setSelectedCodexWorkingDirectory(
-                      value === NO_SELECTION_KEY ? null : value,
-                    )
-                    setCodexMemoryPublishResult(null)
-                  }}
-                  selectedKey={selectedCodexWorkingDirectory ?? NO_SELECTION_KEY}
-                >
-                  <Select.Trigger className="min-w-0 overflow-hidden">
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item
-                        id={NO_SELECTION_KEY}
-                        textValue={tr('publish.codexWorkingDirectoryPlaceholder')}
-                      >
-                        {tr('publish.codexWorkingDirectoryPlaceholder')}
-                      </ListBox.Item>
-                      {codexMemoryTargets.map((target) => (
-                        <ListBox.Item
-                          id={target.workingDirectory}
-                          isDisabled={!target.writable}
-                          key={target.workingDirectory}
-                          textValue={target.workingDirectory}
-                        >
-                          <code className="block truncate text-sm">{target.workingDirectory}</code>
-                          <span className="mt-0.5 block max-w-72 truncate text-xs text-muted">
-                            {target.reason ?? tr('publish.codexWorkingDirectorySource', {
-                              agents: target.agents.join(' · '),
-                              count: target.sessionCount,
-                            })}
-                          </span>
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                {codexTargetsLoading && (
-                  <span className="flex items-center gap-2 text-xs text-muted">
-                    <Spinner size="sm" />
-                    {tr('publish.codexTargetsLoading')}
-                  </span>
-                )}
-                {!codexTargetsLoading && selectedProjectSlug && codexMemoryTargets.length === 0 && (
-                  <p className="text-xs leading-5 text-warning">{tr('publish.codexTargetsEmpty')}</p>
-                )}
-                {!codexTargetsLoading && (!selectedProjectSlug || codexMemoryTargets.length > 0) && (
+                        {memoryTargets.map((target) => (
+                          <ListBox.Item
+                            id={target.memoryId}
+                            isDisabled={!target.writable}
+                            key={target.memoryId}
+                            textValue={target.displayName}
+                          >
+                            <span className="block font-medium">{target.displayName}</span>
+                            <span className="mt-0.5 block max-w-72 truncate text-xs text-muted">
+                              {target.reason ?? target.path}
+                            </span>
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
                   <p className="text-xs leading-5 text-muted">
-                    {tr('publish.codexProjectMemorySelection', {
-                      count: selectedProjectRuleIds.length,
-                    })}
+                    {tr('publish.projectMemorySelection', { count: selectedProjectRuleIds.length })}
                   </p>
-                )}
-              </Card.Content>
-              <Card.Footer className="border-t border-border px-4 py-3">
-                <Button
-                  className="w-full gap-2 bg-primary text-primary-foreground"
-                  isDisabled={
-                    !selectedCodexMemoryTarget?.writable
-                    || selectedProjectRuleIds.length === 0
-                    || codexMemoryPublishing
-                  }
-                  onPress={() => void publishCodexProjectMemory()}
-                >
-                  {codexMemoryPublishing
-                    ? <Spinner color="current" size="sm" />
-                    : <Terminal aria-hidden="true" size={16} />}
-                  {codexMemoryPublishing
-                    ? tr('actions.publishing')
-                    : tr('actions.publishCodexProjectMemory', {
+                  <Button
+                    className="w-full gap-2 bg-primary text-primary-foreground"
+                    isDisabled={!selectedMemoryTarget?.writable || selectedProjectRuleIds.length === 0 || memoryPublishing}
+                    onPress={() => void publishProjectMemory()}
+                  >
+                    {memoryPublishing ? <Spinner color="current" size="sm" /> : <Brain aria-hidden="true" size={16} />}
+                    {memoryPublishing
+                      ? tr('actions.publishing')
+                      : tr('actions.publishProjectMemory', { count: selectedProjectRuleIds.length })}
+                  </Button>
+                </section>
+
+                <section className="grid gap-3 border-t border-border px-4 py-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground">{tr('publish.codexProjectMemoryTitle')}</h3>
+                    <p className="mt-1 text-xs leading-5 text-muted">{tr('publish.codexProjectMemoryDescription')}</p>
+                  </div>
+                  <Select
+                    aria-label={tr('publish.codexWorkingDirectorySelect')}
+                    className="min-w-0"
+                    isDisabled={!selectedProjectSlug || codexTargetsLoading}
+                    onSelectionChange={(key) => {
+                      const value = String(key)
+                      setSelectedCodexWorkingDirectory(
+                        value === NO_SELECTION_KEY ? null : value,
+                      )
+                      setCodexMemoryPublishResult(null)
+                    }}
+                    selectedKey={selectedCodexWorkingDirectory ?? NO_SELECTION_KEY}
+                  >
+                    <Select.Trigger className="min-w-0 overflow-hidden">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item
+                          id={NO_SELECTION_KEY}
+                          textValue={tr('publish.codexWorkingDirectoryPlaceholder')}
+                        >
+                          {tr('publish.codexWorkingDirectoryPlaceholder')}
+                        </ListBox.Item>
+                        {codexMemoryTargets.map((target) => (
+                          <ListBox.Item
+                            id={target.workingDirectory}
+                            isDisabled={!target.writable}
+                            key={target.workingDirectory}
+                            textValue={target.workingDirectory}
+                          >
+                            <code className="block truncate text-sm">{target.workingDirectory}</code>
+                            <span className="mt-0.5 block max-w-72 truncate text-xs text-muted">
+                              {target.reason ?? tr('publish.codexWorkingDirectorySource', {
+                                agents: target.agents.join(' · '),
+                                count: target.sessionCount,
+                              })}
+                            </span>
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                  {codexTargetsLoading && (
+                    <span className="flex items-center gap-2 text-xs text-muted">
+                      <Spinner size="sm" />
+                      {tr('publish.codexTargetsLoading')}
+                    </span>
+                  )}
+                  {!codexTargetsLoading && selectedProjectSlug && codexMemoryTargets.length === 0 && (
+                    <p className="text-xs leading-5 text-warning">{tr('publish.codexTargetsEmpty')}</p>
+                  )}
+                  {!codexTargetsLoading && (!selectedProjectSlug || codexMemoryTargets.length > 0) && (
+                    <p className="text-xs leading-5 text-muted">
+                      {tr('publish.codexProjectMemorySelection', {
                         count: selectedProjectRuleIds.length,
                       })}
-                </Button>
-              </Card.Footer>
+                    </p>
+                  )}
+                  <Button
+                    className="w-full gap-2 bg-primary text-primary-foreground"
+                    isDisabled={
+                      !selectedCodexMemoryTarget?.writable
+                      || selectedProjectRuleIds.length === 0
+                      || codexMemoryPublishing
+                    }
+                    onPress={() => void publishCodexProjectMemory()}
+                  >
+                    {codexMemoryPublishing
+                      ? <Spinner color="current" size="sm" />
+                      : <Terminal aria-hidden="true" size={16} />}
+                    {codexMemoryPublishing
+                      ? tr('actions.publishing')
+                      : tr('actions.publishCodexProjectMemory', {
+                          count: selectedProjectRuleIds.length,
+                        })}
+                  </Button>
+                </section>
+              </Card.Content>
             </Card>
 
             {error && <ErrorAlert message={error} title={tr('errors.publish')} />}

@@ -407,6 +407,8 @@
     "projectSelectPlaceholder": "先选择项目",
     "projectRuleCount_one": "{{count}} 条已接受规则",
     "projectRuleCount_other": "{{count}} 条已接受规则",
+    "projectMemoryTargetsTitle": "发布到项目 Memory",
+    "projectMemoryTargetsDescription": "分别选择 Claude 或 Codex 的项目 Memory 目标。两类目标互不关联，也不会自动选择。",
     "projectMemoryTitle": "发布到 Claude Project Memory",
     "projectMemoryDescription": "只更新 Memory Manager 受管区块和 memory-manager-rules.md；不会覆盖 Claude 自己维护的内容。",
     "memoryTargetSelect": "选择 Claude Project Memory",

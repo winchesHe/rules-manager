@@ -2486,3 +2486,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 29 suites / 303 tests、App 27 suites / 178 tests、Core/App production build 与
   `git diff --check` 通过；build 仅保留既有 Core `tsdown define` 与 Markstream PURE 注释警告。
 - 提交信息：`feat: 展示项目 Memory 发布状态`
+
+## 项目 Memory 发布入口合并展示（2026-08-03）
+
+- 已接受规则发布页右栏将 Claude Project Memory 与 Codex 项目 Memory 从两张独立 Card 合并为一张
+  「发布到项目 Memory」Card；卡片内仍以分隔线保留两类目标各自的说明、选择器和发布按钮。
+- 本次只调整展示层级与中英文文案。Claude/Codex 的目标发现、默认空选、加载/禁用状态、并发校验、
+  发布调用与成功反馈均保持原逻辑；布局契约测试确认合并区间只有一个外层 Card 且同时包含两个发布动作。
+- 真实 Electron 验证单卡片层级、两处分区边界、右栏滚动和底部按钮均正常，未选择目标或触发发布。
+  `simplify` 复核后保留两个显式 section，未增加会掩盖两类独立行为的额外抽象。
+- App 27 suites / 178 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream
+  PURE 注释警告。
+- 提交信息：`fix: 合并项目 Memory 发布入口`
