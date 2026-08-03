@@ -8,7 +8,7 @@
 
 ## 设计对齐
 
-- 页面采用 `task + wide + compact`，顶部为项目规则、全局规则、Memory 三段切换。
+- 页面采用 `task + wide + compact`，顶部为项目规则、Memory、全局规则三段切换；两个项目上下文相邻，全局范围置后。
 - 主体为单一满高工作台：项目标题与导出、规则选择区、当前目标配置区、底部摘要与唯一主操作。
 - Agent 目标只在规则发布上下文展示；Memory 内 Claude/Codex 互斥展示，避免并列双主操作。
 - 沿用 HeroUI、Tailwind v4 和项目主题 token，不引入依赖或新视觉系统。

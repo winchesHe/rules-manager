@@ -595,7 +595,7 @@ describe('home workflow layout', () => {
     expect(outputPage).toContain('expectedTopicRevision')
     expect(outputPage).toContain("tr('publish.projectMemoryDescription')")
     expect(outputPage).toContain('data-publish-tab={tab}')
-    expect(outputPage).toContain("(['project', 'global', 'memory'] as const)")
+    expect(outputPage).toContain("(['project', 'memory', 'global'] as const)")
     expect(outputPage).toContain("publishTab === 'memory'")
     expect(outputPage).toContain("(['claude', 'codex'] as const)")
     expect(outputPage).toContain('data-memory-provider={provider}')

@@ -4195,7 +4195,7 @@ function OutputRulesPage({
         className="grid w-full max-w-[28rem] grid-cols-3 gap-1 rounded-xl border border-border bg-background p-1"
         data-publish-tabs="true"
       >
-        {(['project', 'global', 'memory'] as const).map((tab) => {
+        {(['project', 'memory', 'global'] as const).map((tab) => {
           const count = tab === 'global' ? globalRules.length : projectRules.length
           const selected = publishTab === tab
           return (

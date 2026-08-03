@@ -2582,3 +2582,12 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   PURE 注释警告。App typecheck 仍被既有 workspace `rootDir` / `TS6307` 配置错误及 `RulesSection`
   的 `history` 类型错误阻断，本次 `OutputRulesPage` 改动区域没有新增 typecheck 报错。
 - 提交信息：`feat: 重构已接受规则发布台`
+
+## 发布台将 Memory 调整到项目规则旁（2026-08-03）
+
+- 顶部范围顺序从「项目规则 / 全局规则 / Memory」改为「项目规则 / Memory / 全局规则」；项目规则与
+  项目 Memory 两个项目上下文相邻，全局规则作为独立范围置后。
+- 同步更新真实 App、HTML 原型、实施计划和布局契约测试，未修改任何发布、导出或目标选择逻辑。
+- 真实 Electron 截图确认三个 tab 顺序和宽度正常；App 定向 2 suites / 52 tests、production build 与
+  `git diff --check` 通过，build 仅保留既有 Markstream PURE 注释警告。
+- 提交信息：`style: 调整发布范围顺序`
