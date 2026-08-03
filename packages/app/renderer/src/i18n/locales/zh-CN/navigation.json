@@ -10,6 +10,7 @@
   "rulesLabel": "规则导航",
   "rulesOverview": "概览",
   "agentInstructions": "Agent 指令",
+  "agentMemory": "Agent Memory",
   "generatedRules": "生成的规则",
   "generationHistory": "生成历史",
   "switchLight": "切换到浅色模式",

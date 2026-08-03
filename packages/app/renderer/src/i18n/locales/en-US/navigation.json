@@ -10,6 +10,7 @@
   "rulesLabel": "Rules navigation",
   "rulesOverview": "Overview",
   "agentInstructions": "Agent instructions",
+  "agentMemory": "Agent Memory",
   "generatedRules": "Generated rules",
   "generationHistory": "Generation history",
   "switchLight": "Switch to light theme",

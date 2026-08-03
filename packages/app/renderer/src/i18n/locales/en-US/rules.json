@@ -147,6 +147,38 @@
     "separateTitle": "Generated rules are separate",
     "separateDescription": "Candidates enter Review first and are written here only when this Agent is selected as a publish target."
   },
+  "memory": {
+    "title": "Agent Memory",
+    "sources": "Auto Memory entry points",
+    "sourcesDescription": "Read Claude project memories and the consolidated local Codex memory.",
+    "available_one": "{{count}} readable",
+    "available_other": "{{count}} readable",
+    "loading": "Discovering Agent Memory",
+    "loadingSource": "Loading {{source}}",
+    "listLabel": "Agent Memory sources",
+    "notGenerated": "Not generated yet",
+    "projectScope": "Project memory",
+    "localScope": "Consolidated local memory",
+    "codexTitle": "Codex local memory",
+    "claudeProjectTitle": "{{agent}} · {{project}}",
+    "projectDescription": "Claude isolates auto memory by Git repository; the encoded project name is shown as an opaque local identifier.",
+    "codexDescription": "Codex stores and consolidates memory from eligible chats on this computer.",
+    "breadcrumb": "Breadcrumb",
+    "rules": "Rules",
+    "back": "Back to Agent Memory",
+    "readOnly": "Read only",
+    "readOnlyHint": "Memory is read directly from the Agent source and is not copied into Memory Manager.",
+    "contentLabel": "{{source}} content",
+    "modified": "{{size}} · Modified {{time}}",
+    "boundaryTitle": "Auto Memory is separate from Agent instructions",
+    "boundaryDescription": "This view reads only the MEMORY.md entry point. It does not read CLAUDE.md, AGENTS.md, topic files, raw evidence, or private SQLite stores.",
+    "scopeNoteTitle": "Codex memory scope",
+    "codexScopeNote": "Codex does not expose a stable per-project file mapping; this is the consolidated local source.",
+    "errors": {
+      "list": "Unable to discover Agent Memory",
+      "read": "Unable to read Agent Memory"
+    }
+  },
   "generated": {
     "title": "Generated rules",
     "description": "Review, edit, accept, reject, and publish generated guidance.",

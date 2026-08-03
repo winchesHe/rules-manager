@@ -2316,6 +2316,23 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   Markstream PURE 注释与 Core `tsdown define` 警告。
 - 提交信息：`fix: 按原生顺序展示 Chat Assistant 时间线`
 
+## Agent Memory 只读入口（2026-08-03）
+
+- Rules 二级导航保留「Agent 指令」，新增独立「Agent Memory」入口；列表与详情只从 Agent 原始
+  `MEMORY.md` 读取，不复用候选规则或全局 instruction 模型，也不向 Memory Manager DB、日志、缓存
+  或副本写入正文。
+- Claude 扫描 `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/*/memory/MEMORY.md`，项目编码保持不透明；
+  Codex 展示 `${CODEX_HOME:-~/.codex}/memories/MEMORY.md` 固定本机合并来源，缺失时明确显示尚未生成，
+  不读取 `memories_1.sqlite` 或伪造按项目映射。
+- Core locator 不跟随 Claude project 目录 symlink，只允许最终 `MEMORY.md` 文件 symlink；详情 IPC 只接受
+  `agent + memoryId`，并执行 1 MiB 上限、fatal UTF-8 解码与读取前后 stat 一致性检查。
+- 真实 Electron 验证新增导航、3 个 Claude 项目列表、Codex missing 状态、Claude 内容详情、刷新和返回；
+  本机 smoke 再次读取 3 个 Claude 来源后文件 hash 全部不变，未发现 locator error。
+- 最终基线：Core 27 suites / 284 tests、App 27 suites / 172 tests 全绿；Core/App production build 与
+  `git diff --check` 通过。App 独立 typecheck 仍受既有跨 workspace `rootDir/files` 边界及既有 Rules
+  `history` 类型错误阻断；build 仅保留既有 Core `tsdown define` 与 Markstream PURE 注释警告。
+- 提交信息：`feat: 新增 Agent Memory 只读入口`
+
 ## Rules Chat 上下文同步与项目异步加载（2026-08-03）
 
 - Rules 生成原本已经在证据确定后持久化 Session Context 并广播 `chat.changed`，但 ChatView 只在

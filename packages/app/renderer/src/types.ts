@@ -522,6 +522,37 @@ export interface GlobalInstructionReadResult {
   sizeBytes: number
 }
 
+export type AutoMemoryAgent = 'claude' | 'codex'
+
+export interface AutoMemorySource {
+  id: string
+  agent: AutoMemoryAgent
+  scope: 'project' | 'global'
+  path: string
+  format: 'markdown'
+  status: 'present' | 'missing'
+  discoveredFrom: 'filesystem' | 'default' | 'environment'
+  note?: string
+  modifiedAt: string | null
+  sizeBytes: number
+}
+
+export interface AutoMemoryListResult {
+  agent: AutoMemoryAgent | null
+  count: number
+  sources: AutoMemorySource[]
+  errors: Array<{
+    agent: AutoMemoryAgent
+    path: string
+    message: string
+  }>
+}
+
+export interface AutoMemoryReadResult {
+  source: AutoMemorySource
+  content: string
+}
+
 export interface AgentInstructionPublishSummary {
   ruleCount: number
   results: Array<{

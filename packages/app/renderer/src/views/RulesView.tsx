@@ -18,6 +18,7 @@ import {
   ArrowDown,
   ArrowLeft,
   Bot,
+  Brain,
   Check,
   ChevronRight,
   Circle,
@@ -47,6 +48,9 @@ import {
 import type {
   GenerateProgress,
   AgentInstructionPublishSummary,
+  AutoMemoryListResult,
+  AutoMemoryReadResult,
+  AutoMemorySource,
   GenerationEventEnvelope,
   GenerationHistoryEntry,
   GenerationMode,
@@ -78,11 +82,12 @@ import {
 type RulesPage =
   | 'overview'
   | 'agent'
+  | 'memory'
   | 'generate'
   | 'run'
   | 'review'
   | 'output'
-export type RulesSection = 'overview' | 'agents' | 'generated'
+export type RulesSection = 'overview' | 'agents' | 'memories' | 'generated'
 type GenerateMode = GenerationMode
 type GenerationPhaseKey = 'evidence' | 'generate' | 'validate' | 'save'
 
@@ -180,6 +185,8 @@ export function RulesView({
   const [generation, setGeneration] = useState<GenerationStatus | null>(null)
   const [selectedInstructionAgent, setSelectedInstructionAgent] =
     useState<GlobalInstructionAgent | null>(null)
+  const [selectedMemory, setSelectedMemory] =
+    useState<AutoMemorySource | null>(null)
   const [queueRefresh, setQueueRefresh] = useState(0)
   const mounted = useRef(true)
   const previousSection = useRef(section)
@@ -190,6 +197,7 @@ export function RulesView({
     setPage('overview')
     setSelectedCandidate(null)
     setSelectedInstructionAgent(null)
+    setSelectedMemory(null)
     setActionError(null)
     if (section === 'overview') setStatus('draft')
     if (section === 'generated' && !initialRunId) setSelectedRunId(null)
@@ -501,6 +509,17 @@ export function RulesView({
       />
     )
   }
+  if (page === 'memory' && selectedMemory) {
+    return (
+      <AgentMemoryDetailPage
+        source={selectedMemory}
+        onBack={() => {
+          setSelectedMemory(null)
+          setPage('overview')
+        }}
+      />
+    )
+  }
 
   return (
     <RulesOverviewPage
@@ -523,6 +542,10 @@ export function RulesView({
       onOpenAgent={(agent) => {
         setSelectedInstructionAgent(agent)
         setPage('agent')
+      }}
+      onOpenMemory={(source) => {
+        setSelectedMemory(source)
+        setPage('memory')
       }}
       onOpenOutput={() => setPage('output')}
       onOpenProjectRules={onOpenProjectRules}
@@ -557,6 +580,7 @@ function RulesOverviewPage({
   onGenerate,
   onBatchUpdate,
   onOpenAgent,
+  onOpenMemory,
   onOpenOutput,
   onOpenHistory,
   onOpenProjectRules,
@@ -584,6 +608,7 @@ function RulesOverviewPage({
     status: 'accepted' | 'rejected',
   ) => Promise<boolean>
   onOpenAgent: (agent: GlobalInstructionAgent) => void
+  onOpenMemory: (source: AutoMemorySource) => void
   onOpenOutput: () => void
   onOpenHistory: (entry: GenerationHistoryEntry) => void
   onOpenProjectRules?: (slug?: string) => void
@@ -645,6 +670,10 @@ function RulesOverviewPage({
         sources={sources}
       />
     )
+  }
+
+  if (section === 'memories') {
+    return <AgentMemoryIndexPage onOpenMemory={onOpenMemory} />
   }
 
   if (section === 'generated') {
@@ -1225,6 +1254,110 @@ function AgentInstructionsIndexPage({
   )
 }
 
+function AgentMemoryIndexPage({
+  onOpenMemory,
+}: {
+  onOpenMemory: (source: AutoMemorySource) => void
+}) {
+  const [result, setResult] = useState<AutoMemoryListResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refresh, setRefresh] = useState(0)
+
+  useEffect(() => {
+    let current = true
+    setLoading(true)
+    setError(null)
+    void afterNextPaint(() =>
+      window.api.invoke<AutoMemoryListResult>('rules.memories.list'),
+    )
+      .then((value) => {
+        if (current) setResult(value)
+      })
+      .catch((reason: unknown) => {
+        if (current) setError(reason instanceof Error ? reason.message : String(reason))
+      })
+      .finally(() => {
+        if (current) setLoading(false)
+      })
+    return () => {
+      current = false
+    }
+  }, [refresh])
+
+  const presentCount = result?.sources.filter((source) => source.status === 'present').length ?? 0
+  const sourceErrors = result?.errors
+    .map((item) => `${item.path}: ${item.message}`)
+    .join('\n')
+  return (
+    <>
+      {(error || sourceErrors) && (
+        <div className="mb-4">
+          <ErrorAlert message={error ?? sourceErrors ?? ''} title={tr('memory.errors.list')} />
+        </div>
+      )}
+      <div className="mb-3 flex items-end justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <h2 className="text-lg font-medium text-foreground">{tr('memory.sources')}</h2>
+          <p className="mt-1 text-sm text-muted">{tr('memory.sourcesDescription')}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Chip color={presentCount > 0 ? 'success' : 'warning'} size="sm" variant="soft">
+            {tr('memory.available', { count: presentCount })}
+          </Chip>
+          <Button onPress={() => setRefresh((value) => value + 1)} size="sm" variant="ghost">
+            {tr('actions.reload')}
+          </Button>
+        </div>
+      </div>
+      {loading ? (
+        <ViewLoading label={tr('memory.loading')} />
+      ) : (
+        <div aria-label={tr('memory.listLabel')} className="overflow-hidden border-y border-border">
+          {(result?.sources ?? []).map((source) => (
+            <button
+              className="grid w-full cursor-pointer grid-cols-[2.5rem_minmax(0,1fr)_auto_auto] items-center gap-4 border-b border-border px-4 py-5 text-left transition-colors last:border-b-0 hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent max-sm:grid-cols-[2.5rem_minmax(0,1fr)_auto]"
+              disabled={source.status === 'missing'}
+              key={`${source.agent}:${source.id}`}
+              onClick={() => onOpenMemory(source)}
+              type="button"
+            >
+              <AgentMark agent={source.agent} />
+              <span className="min-w-0">
+                <strong className="block truncate text-sm font-semibold text-foreground">
+                  {autoMemorySourceTitle(source)}
+                </strong>
+                <code className="mt-1 block truncate text-xs text-muted">{source.path}</code>
+              </span>
+              <span className="text-right max-sm:hidden">
+                <strong className="block text-sm font-normal text-foreground">
+                  {source.status === 'present'
+                    ? `${formatInstructionSize(source.sizeBytes)} · ${formatInstructionModified(source.modifiedAt)}`
+                    : tr('memory.notGenerated')}
+                </strong>
+                <span className="mt-1 block text-xs text-muted">
+                  {source.scope === 'project' ? tr('memory.projectScope') : tr('memory.localScope')}
+                </span>
+              </span>
+              <span className="flex items-center gap-1 text-sm text-foreground">
+                {source.status === 'present' ? tr('actions.view') : tr('status.none')}
+                {source.status === 'present' && <ChevronRight aria-hidden="true" size={16} />}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-border bg-surface px-5 py-4">
+        <Brain aria-hidden="true" className="mt-0.5 text-muted" size={18} />
+        <div>
+          <strong className="text-sm font-medium text-foreground">{tr('memory.boundaryTitle')}</strong>
+          <p className="mt-1 text-sm text-muted">{tr('memory.boundaryDescription')}</p>
+        </div>
+      </div>
+    </>
+  )
+}
+
 function GeneratedRulesIndexPage({
   actionError,
   candidates,
@@ -1733,6 +1866,117 @@ function AgentInstructionDetailPage({
           </p>
         </div>
       </div>
+    </>
+  )
+}
+
+function AgentMemoryDetailPage({
+  source,
+  onBack,
+}: {
+  source: AutoMemorySource
+  onBack: () => void
+}) {
+  const [record, setRecord] = useState<AutoMemoryReadResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refresh, setRefresh] = useState(0)
+
+  useEffect(() => {
+    let current = true
+    setLoading(true)
+    setError(null)
+    setRecord(null)
+    void afterNextPaint(() =>
+      window.api.invoke<AutoMemoryReadResult>(
+        'rules.memories.read',
+        source.agent,
+        source.id,
+      ),
+    )
+      .then((value) => {
+        if (current) setRecord(value)
+      })
+      .catch((reason: unknown) => {
+        if (current) setError(reason instanceof Error ? reason.message : String(reason))
+      })
+      .finally(() => {
+        if (current) setLoading(false)
+      })
+    return () => {
+      current = false
+    }
+  }, [refresh, source.agent, source.id])
+
+  return (
+    <>
+      <nav aria-label={tr('memory.breadcrumb')} className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted">
+        <button className="cursor-pointer hover:text-foreground" onClick={onBack} type="button">
+          {tr('memory.rules')}
+        </button>
+        <span>/</span>
+        <button className="cursor-pointer hover:text-foreground" onClick={onBack} type="button">
+          {tr('memory.title')}
+        </button>
+        <span>/</span>
+        <span className="text-foreground">{autoMemorySourceTitle(source)}</span>
+      </nav>
+      <PageHeader
+        description={source.scope === 'project'
+          ? tr('memory.projectDescription')
+          : tr('memory.codexDescription')}
+        title={autoMemorySourceTitle(source)}
+      />
+      {error && (
+        <div className="mb-4">
+          <ErrorAlert message={error} title={tr('memory.errors.read')} />
+        </div>
+      )}
+      <Card className="border border-border bg-surface shadow-none">
+        <Card.Header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+          <code className="min-w-0 truncate text-sm text-foreground">
+            {record?.source.path ?? source.path}
+          </code>
+          <Chip color="success" size="sm" variant="soft">{tr('memory.readOnly')}</Chip>
+        </Card.Header>
+        <Card.Content className="p-0">
+          {loading ? (
+            <ViewLoading label={tr('memory.loadingSource', { source: autoMemorySourceTitle(source) })} />
+          ) : record ? (
+            <pre
+              aria-label={tr('memory.contentLabel', { source: autoMemorySourceTitle(source) })}
+              className="min-h-[25rem] whitespace-pre-wrap break-words bg-background/60 p-5 font-mono text-sm leading-7 text-foreground"
+            >
+              {record.content}
+            </pre>
+          ) : null}
+        </Card.Content>
+        <Card.Footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3.5">
+          <span className="text-xs text-muted">
+            {record?.source.modifiedAt
+              ? tr('memory.modified', {
+                  size: formatInstructionSize(record.source.sizeBytes),
+                  time: formatDateTime(record.source.modifiedAt, currentLocale()),
+                })
+              : tr('memory.readOnlyHint')}
+          </span>
+          <div className="flex gap-2">
+            <Button onPress={() => setRefresh((value) => value + 1)} variant="ghost">
+              {tr('actions.reload')}
+            </Button>
+            <Button onPress={onBack} variant="ghost">{tr('memory.back')}</Button>
+          </div>
+        </Card.Footer>
+      </Card>
+      {source.note && (
+        <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-border bg-surface px-5 py-4">
+          <Brain aria-hidden="true" className="mt-0.5 text-muted" size={18} />
+          <div>
+            <strong className="text-sm font-medium text-foreground">{tr('memory.scopeNoteTitle')}</strong>
+            <p className="mt-1 text-sm text-muted">{tr('memory.codexScopeNote')}</p>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -4213,6 +4457,17 @@ function instructionAgentLabel(agent: GlobalInstructionAgent): string {
     opencode: 'OpenCode',
     pi: 'Pi',
   }[agent]
+}
+
+function autoMemorySourceTitle(source: AutoMemorySource): string {
+  if (source.agent === 'codex') return tr('memory.codexTitle')
+  const projectId = source.id.startsWith('project:')
+    ? source.id.slice('project:'.length)
+    : source.id
+  return tr('memory.claudeProjectTitle', {
+    agent: instructionAgentLabel(source.agent),
+    project: projectId,
+  })
 }
 
 function instructionAgentInitial(agent: GlobalInstructionAgent): string {

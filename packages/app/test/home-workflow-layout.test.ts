@@ -498,6 +498,29 @@ describe('home workflow layout', () => {
     expect(source).not.toContain('Cursor global instructions')
   })
 
+  it('Rules 保留 Agent 指令并新增只读 Agent Memory 入口', () => {
+    const appSource = read('App.tsx')
+    const source = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+
+    expect(appSource).toContain("{ id: 'agents', labelKey: 'agentInstructions' }")
+    expect(appSource).toContain("{ id: 'memories', labelKey: 'agentMemory' }")
+    expect(ipcSource).toContain("ipcMain.handle('rules.memories.list'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.memories.read'")
+    expect(ipcSource).toContain('isAutoMemoryAgent(agent)')
+    expect(ipcSource).toContain('readAutoMemorySource(agent, memoryId)')
+    expect(source).toContain('AgentMemoryIndexPage')
+    expect(source).toContain('AgentMemoryDetailPage')
+    expect(source).toContain("'rules.memories.list'")
+    expect(source).toContain("'rules.memories.read'")
+    const memoryPage = source.slice(
+      source.indexOf('function AgentMemoryIndexPage'),
+      source.indexOf('function GeneratedRulesIndexPage'),
+    )
+    expect(memoryPage).not.toContain('rules.memories.save')
+    expect(memoryPage).not.toContain('<textarea')
+  })
+
   it('Rules Generate 在后台 Worker 运行并提供可恢复、可取消的流式详情页', () => {
     const source = read('views/RulesView.tsx')
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')

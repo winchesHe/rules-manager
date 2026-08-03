@@ -35,6 +35,11 @@ import {
   readGlobalInstructionSource,
   saveGlobalInstructionSource,
 } from '../../core/src/global-instructions.js'
+import {
+  isAutoMemoryAgent,
+  listAutoMemorySources,
+  readAutoMemorySource,
+} from '../../core/src/auto-memories.js'
 import { ScanController, type ScanControllerEvent } from './scan-controller.js'
 import { listCompletedScans, loadLatestCompletedScan } from './scan-history.js'
 import {
@@ -315,6 +320,16 @@ export function registerIpcHandlers(): void {
       content,
       expectedRevision: expectedRevision as string | null,
     })
+  })
+  ipcMain.handle('rules.memories.list', () => listAutoMemorySources())
+  ipcMain.handle('rules.memories.read', (_event, agent: unknown, memoryId: unknown) => {
+    if (typeof agent !== 'string' || !isAutoMemoryAgent(agent)) {
+      throw new Error('unsupported auto memory agent')
+    }
+    if (typeof memoryId !== 'string' || !memoryId.trim()) {
+      throw new Error('memory id is required')
+    }
+    return readAutoMemorySource(agent, memoryId)
   })
 
   ipcMain.handle('rules.output', () => {

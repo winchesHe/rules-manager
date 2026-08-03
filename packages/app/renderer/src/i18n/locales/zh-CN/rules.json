@@ -147,6 +147,38 @@
     "separateTitle": "生成的规则保持独立",
     "separateDescription": "候选规则会先进入审核，只有选中此 Agent 作为发布目标后才会写入这里。"
   },
+  "memory": {
+    "title": "Agent Memory",
+    "sources": "自动 Memory 主入口",
+    "sourcesDescription": "只读查看 Claude 项目 Memory 与 Codex 本机合并 Memory。",
+    "available_one": "{{count}} 个可读取",
+    "available_other": "{{count}} 个可读取",
+    "loading": "正在发现 Agent Memory",
+    "loadingSource": "正在读取 {{source}}",
+    "listLabel": "Agent Memory 来源",
+    "notGenerated": "尚未生成",
+    "projectScope": "项目 Memory",
+    "localScope": "本机合并 Memory",
+    "codexTitle": "Codex 本地 Memory",
+    "claudeProjectTitle": "{{agent}} · {{project}}",
+    "projectDescription": "Claude 按 Git 仓库隔离自动 Memory；项目编码作为本地不透明标识展示。",
+    "codexDescription": "Codex 在本机统一存储并合并来自符合条件对话的 Memory。",
+    "breadcrumb": "面包屑",
+    "rules": "规则",
+    "back": "返回 Agent Memory",
+    "readOnly": "只读",
+    "readOnlyHint": "Memory 内容只从 Agent 原始文件读取，不会复制到 Memory Manager。",
+    "contentLabel": "{{source}} 内容",
+    "modified": "{{size}} · 修改于 {{time}}",
+    "boundaryTitle": "自动 Memory 与 Agent 指令相互独立",
+    "boundaryDescription": "这里只读取 MEMORY.md 主入口；不会读取 CLAUDE.md、AGENTS.md、topic 文件、原始 Evidence 或私有 SQLite。",
+    "scopeNoteTitle": "Codex Memory 范围",
+    "codexScopeNote": "Codex 当前不提供稳定的按项目文件映射，这里展示的是本机统一合并来源。",
+    "errors": {
+      "list": "无法发现 Agent Memory",
+      "read": "无法读取 Agent Memory"
+    }
+  },
   "generated": {
     "title": "生成的规则",
     "description": "审核、编辑、接受、拒绝并发布生成的指引。",

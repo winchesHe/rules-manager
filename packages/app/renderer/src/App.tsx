@@ -32,6 +32,7 @@ const navigation = [
 const rulesNavigation: Array<{ id: RulesSection; labelKey: string }> = [
   { id: 'overview', labelKey: 'rulesOverview' },
   { id: 'agents', labelKey: 'agentInstructions' },
+  { id: 'memories', labelKey: 'agentMemory' },
   { id: 'generated', labelKey: 'generatedRules' },
 ]
 
