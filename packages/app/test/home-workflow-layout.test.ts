@@ -340,6 +340,22 @@ describe('home workflow layout', () => {
     expect(source).toContain("t('sessions.openLocation')")
   })
 
+  it('项目规则可只读查看固定路径的已导出版本', () => {
+    const source = read('views/ProjectsView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+
+    expect(source).toContain("type ProjectRulesView = 'candidates' | 'published'")
+    expect(source).toContain("'rules.projectOutput.read',")
+    expect(source).toContain("t('rules.candidates')")
+    expect(source).toContain("t('rules.published')")
+    expect(source).toContain('<PublishedProjectRules projectSlug={project.slug} />')
+    expect(source).toContain('<pre')
+    expect(source).toContain("t('rules.exportedFileDescription')")
+    expect(source).not.toContain("window.api.invoke<ProjectRulesOutputReadResult>(\n        'rules.projectOutput.read',\n        result.source.path")
+    expect(ipcSource).toContain("ipcMain.handle('rules.projectOutput.read'")
+    expect(ipcSource).toContain('return readProjectRulesOutput(projectSlug)')
+  })
+
   it('Session 详情使用 Projects / project / session 面包屑并处理旧主进程', () => {
     const source = read('views/ProjectsView.tsx')
     expect(source).toContain("aria-label={t('breadcrumbs.label')}")

@@ -24,7 +24,10 @@ import {
   type LlmEffort,
   type LlmProvider,
 } from '../../core/src/config.js'
-import { runRulesOutput } from '../../core/src/commands/rules-output.js'
+import {
+  readProjectRulesOutput,
+  runRulesOutput,
+} from '../../core/src/commands/rules-output.js'
 import type {
   SessionEvidenceContext,
   SessionPreview,
@@ -447,6 +450,12 @@ export function registerIpcHandlers(): void {
     } finally {
       console.log = originalLog
     }
+  })
+  ipcMain.handle('rules.projectOutput.read', (_event, projectSlug: unknown) => {
+    if (typeof projectSlug !== 'string' || !projectSlug.trim()) {
+      throw new Error('project slug is required')
+    }
+    return readProjectRulesOutput(projectSlug)
   })
 
   ipcMain.handle('rules.candidates', (_event, status?: string) => {

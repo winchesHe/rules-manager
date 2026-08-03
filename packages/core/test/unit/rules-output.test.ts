@@ -3,7 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { runRulesOutput } from '../../src/commands/rules-output'
+import { jest } from '@jest/globals'
+import {
+  readProjectRulesOutput,
+  runRulesOutput,
+} from '../../src/commands/rules-output'
 import { initDatabase } from '../../src/db'
 import { resolveWorkspace } from '../../src/workspace'
 
@@ -25,6 +29,7 @@ describe('rules output', () => {
   })
 
   afterEach(() => {
+    jest.restoreAllMocks()
     console.log = originalLog
     fs.rmSync(home, { recursive: true, force: true })
   })
@@ -92,6 +97,75 @@ describe('rules output', () => {
     expect(fs.readFileSync(target, 'utf8')).not.toContain('Use other command')
     expect(fs.existsSync(path.join(rulesDir, 'projects', 'other.md'))).toBe(false)
     expect(fs.existsSync(path.join(rulesDir, 'global.md'))).toBe(false)
+  })
+
+  it('只读返回已导出的项目规则文件 metadata 与正文且不修改源文件', () => {
+    insertAccepted('demo', 'project', 'Use demo command', 'demo')
+    runRulesOutput({ project: 'demo', homeDir: home })
+    const target = path.join(resolveWorkspace(home).rulesDir, 'projects', 'demo.md')
+    const before = fs.readFileSync(target)
+
+    const result = readProjectRulesOutput('demo', home)
+
+    expect(result.source).toMatchObject({
+      projectSlug: 'demo',
+      path: target,
+      status: 'present',
+      sizeBytes: before.byteLength,
+    })
+    expect(result.source.modifiedAt).not.toBeNull()
+    expect(result.content).toContain('Use demo command')
+    expect(fs.readFileSync(target)).toEqual(before)
+  })
+
+  it('项目规则尚未导出时返回固定 missing 来源且不创建文件', () => {
+    const result = readProjectRulesOutput('demo', home)
+
+    expect(result).toEqual({
+      source: {
+        projectSlug: 'demo',
+        path: path.join(resolveWorkspace(home).rulesDir, 'projects', 'demo.md'),
+        status: 'missing',
+        modifiedAt: null,
+        sizeBytes: 0,
+      },
+      content: '',
+    })
+    expect(fs.existsSync(result.source.path)).toBe(false)
+  })
+
+  it('拒绝非法 slug、symlink、超限、非法 UTF-8 与读取期间变化', () => {
+    expect(() => readProjectRulesOutput('../escape', home)).toThrow('无效的 project slug')
+    const target = path.join(resolveWorkspace(home).rulesDir, 'projects', 'demo.md')
+    const linkedTarget = path.join(home, 'outside.md')
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(linkedTarget, '# Outside\n')
+    fs.symlinkSync(linkedTarget, target)
+    expect(() => readProjectRulesOutput('demo', home)).toThrow(
+      '项目规则输出不能是 symlink',
+    )
+
+    fs.unlinkSync(target)
+    fs.writeFileSync(target, 'x'.repeat(1024 * 1024 + 1))
+    expect(() => readProjectRulesOutput('demo', home)).toThrow(
+      '项目规则输出超过 1 MiB',
+    )
+
+    fs.writeFileSync(target, Buffer.from([0xc3, 0x28]))
+    expect(() => readProjectRulesOutput('demo', home)).toThrow(
+      '项目规则输出不是有效 UTF-8',
+    )
+
+    fs.writeFileSync(target, '# Before\n')
+    const originalRead = fs.readFileSync.bind(fs)
+    jest.spyOn(fs, 'readFileSync').mockImplementationOnce(((filePath: fs.PathOrFileDescriptor) => {
+      const content = originalRead(filePath)
+      fs.writeFileSync(target, '# Changed while reading\n')
+      return content
+    }) as typeof fs.readFileSync)
+    expect(() => readProjectRulesOutput('demo', home)).toThrow(
+      '项目规则输出在读取期间发生变化',
+    )
   })
 
   it('--all 端到端输出三种 scope 且第二次全部未变化', () => {

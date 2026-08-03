@@ -10,6 +10,7 @@
     "loadProjects": "Unable to load projects",
     "loadDetails": "Unable to load project details",
     "openSession": "Unable to open session",
+    "loadPublishedRules": "Unable to read the published version",
     "revealProject": "Unable to open the project location.",
     "revealSession": "Unable to reveal the Session source.",
     "previewVersion": "Session preview is available in the new app version. Restart the app to finish updating."
@@ -69,7 +70,18 @@
   },
   "rules": {
     "empty": "No project rules.",
-    "confidence": "{{level}} confidence"
+    "confidence": "{{level}} confidence",
+    "viewsLabel": "Project rule views",
+    "candidates": "Rule candidates",
+    "published": "Published version",
+    "loadingPublished": "Loading published version",
+    "notPublished": "No project rules file has been exported",
+    "notPublishedDescription": "Use “Export this project rules file” from the accepted-rules publish page first.",
+    "reloadPublished": "Reload from disk",
+    "exportedFile": "Managed export",
+    "publishedContent": "Published rules for {{project}}",
+    "publishedMetadata": "{{size}} · Modified {{time}}",
+    "exportedFileDescription": "This is a Memory Manager project rules export; it does not mean the rules were published to Claude or Codex Memory."
   },
   "empty": {
     "projects": "No classified projects yet.",

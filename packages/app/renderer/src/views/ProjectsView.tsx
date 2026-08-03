@@ -5,9 +5,11 @@ import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
 import { EmptyProjects, ViewError, ViewLoading } from '../components/ViewStates'
-import { i18n } from '../i18n'
+import { currentLocale, i18n } from '../i18n'
+import { formatBytes, formatDateTime } from '../i18n/format'
 import type {
   Project,
+  ProjectRulesOutputReadResult,
   ProjectSession,
   RuleCandidate,
   RuleStatus,
@@ -24,6 +26,7 @@ import {
 
 type ProjectsPage = 'list' | 'detail'
 type DetailTab = 'sessions' | 'rules'
+type ProjectRulesView = 'candidates' | 'published'
 
 interface ProjectRow extends Project {
   changedCount: number
@@ -257,6 +260,7 @@ function ProjectDetails({
 }) {
   const { t } = useTranslation('projects')
   const [tab, setTab] = useState<DetailTab>(initialTab)
+  const [rulesView, setRulesView] = useState<ProjectRulesView>('candidates')
   const [sessions, setSessions] = useState<ProjectSession[]>([])
   const [rules, setRules] = useState<RuleCandidate[]>([])
   const [loading, setLoading] = useState(true)
@@ -369,74 +373,88 @@ function ProjectDetails({
             </Chip>
           </Button>
         ))}
-          {tab === 'rules' && (
-          <Button className="ml-auto" onPress={onGenerateRules} variant="ghost">
+      </div>
+      {tab === 'rules' && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div aria-label={t('rules.viewsLabel')} className="flex gap-2">
+            {(['candidates', 'published'] as ProjectRulesView[]).map((view) => (
+              <Button
+                aria-pressed={rulesView === view}
+                key={view}
+                onPress={() => setRulesView(view)}
+                variant={rulesView === view ? 'primary' : 'ghost'}
+              >
+                {view === 'candidates' ? t('rules.candidates') : t('rules.published')}
+              </Button>
+            ))}
+          </div>
+          <Button onPress={onGenerateRules} variant="ghost">
             {t('details.generate')}
-            </Button>
-          )}
+          </Button>
         </div>
-        {tab === 'sessions' && (
-          <div className="mb-4 flex flex-wrap items-end gap-3">
-            <TextField
-              className="min-w-64 flex-1"
-              onChange={(value) => {
-                setSessionQuery(value)
+      )}
+      {tab === 'sessions' && (
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <TextField
+            className="min-w-64 flex-1"
+            onChange={(value) => {
+              setSessionQuery(value)
+              setSessionScrollTop(0)
+            }}
+            value={sessionQuery}
+          >
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted"
+                size={17}
+              />
+              <Input className="pl-10" fullWidth placeholder={t('details.searchSessions')} />
+            </div>
+          </TextField>
+          <label className="grid gap-1 text-xs text-muted">
+            {t('details.agent')}
+            <select
+              className="h-10 min-w-32 rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-primary"
+              onChange={(event) => {
+                setSessionAgent(event.currentTarget.value)
                 setSessionScrollTop(0)
               }}
-              value={sessionQuery}
+              value={sessionAgent}
             >
-              <div className="relative">
-                <Search
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted"
-                  size={17}
-                />
-                <Input className="pl-10" fullWidth placeholder={t('details.searchSessions')} />
-              </div>
-            </TextField>
-            <label className="grid gap-1 text-xs text-muted">
-              {t('details.agent')}
-              <select
-                className="h-10 min-w-32 rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-primary"
-                onChange={(event) => {
-                  setSessionAgent(event.currentTarget.value)
-                  setSessionScrollTop(0)
-                }}
-                value={sessionAgent}
-              >
-                <option value="all">{t('details.allAgents')}</option>
-                {sessionAgents.map((agent) => (
-                  <option key={agent} value={agent}>{agent}</option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-xs text-muted">
-              {t('details.status')}
-              <select
-                className="h-10 min-w-36 rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-primary"
-                onChange={(event) => {
-                  setSessionStatus(event.currentTarget.value)
-                  setSessionScrollTop(0)
-                }}
-                value={sessionStatus}
-              >
-                <option value="all">{t('details.allStatuses')}</option>
-                {sessionStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {t(`common:status.${status}`, { defaultValue: status })}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="pb-2 text-sm text-muted">
-              {t('details.filteredCount', {
-                visible: filteredSessions.length,
-                total: sessions.length,
-              })}
-            </span>
-          </div>
-        )}
-        <Card className="min-h-80 border border-border bg-surface shadow-none">
+              <option value="all">{t('details.allAgents')}</option>
+              {sessionAgents.map((agent) => (
+                <option key={agent} value={agent}>{agent}</option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs text-muted">
+            {t('details.status')}
+            <select
+              className="h-10 min-w-36 rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-primary"
+              onChange={(event) => {
+                setSessionStatus(event.currentTarget.value)
+                setSessionScrollTop(0)
+              }}
+              value={sessionStatus}
+            >
+              <option value="all">{t('details.allStatuses')}</option>
+              {sessionStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {t(`common:status.${status}`, { defaultValue: status })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="pb-2 text-sm text-muted">
+            {t('details.filteredCount', {
+              visible: filteredSessions.length,
+              total: sessions.length,
+            })}
+          </span>
+        </div>
+      )}
+      <Card className="min-h-80 border border-border bg-surface shadow-none">
         <Card.Content className="p-0">
           {loading ? (
             <ViewLoading label={t('loading.project', { project: project.slug })} />
@@ -444,15 +462,17 @@ function ProjectDetails({
             <div className="p-6">
               <ViewError message={error} title={t('errors.loadDetails')} />
             </div>
-            ) : tab === 'sessions' ? (
-              <VirtualSessionList
-                onOpen={setSelectedSession}
-                onScrollTopChange={setSessionScrollTop}
-                scrollTop={sessionScrollTop}
-                sessions={filteredSessions}
-              />
-            ) : (
+          ) : tab === 'sessions' ? (
+            <VirtualSessionList
+              onOpen={setSelectedSession}
+              onScrollTopChange={setSessionScrollTop}
+              scrollTop={sessionScrollTop}
+              sessions={filteredSessions}
+            />
+          ) : rulesView === 'candidates' ? (
             <ProjectRules rules={rules} />
+          ) : (
+            <PublishedProjectRules projectSlug={project.slug} />
           )}
         </Card.Content>
       </Card>
@@ -750,6 +770,100 @@ function ProjectBreadcrumbs({
 function isMissingIpcHandler(reason: unknown): boolean {
   const message = reason instanceof Error ? reason.message : String(reason)
   return message.includes("No handler registered for 'sessions.preview'")
+}
+
+function PublishedProjectRules({ projectSlug }: { projectSlug: string }) {
+  const { t } = useTranslation('projects')
+  const [result, setResult] = useState<ProjectRulesOutputReadResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refresh, setRefresh] = useState(0)
+
+  useEffect(() => {
+    let current = true
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    void afterNextPaint(() =>
+      window.api.invoke<ProjectRulesOutputReadResult>(
+        'rules.projectOutput.read',
+        projectSlug,
+      ),
+    )
+      .then((value) => {
+        if (current) setResult(value)
+      })
+      .catch((reason: unknown) => {
+        if (current) setError(reason instanceof Error ? reason.message : String(reason))
+      })
+      .finally(() => {
+        if (current) setLoading(false)
+      })
+    return () => {
+      current = false
+    }
+  }, [projectSlug, refresh])
+
+  if (loading) {
+    return (
+      <div className="grid min-h-64 place-items-center">
+        <Spinner aria-label={t('rules.loadingPublished')} color="accent" size="lg" />
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="p-6">
+        <ViewError message={error} title={t('errors.loadPublishedRules')} />
+      </div>
+    )
+  }
+  if (!result) return null
+  if (result.source.status === 'missing') {
+    return (
+      <div className="grid min-h-64 place-items-center px-6 py-10 text-center">
+        <div className="max-w-2xl">
+          <strong className="text-sm font-medium text-foreground">{t('rules.notPublished')}</strong>
+          <p className="mt-2 text-sm text-muted">{t('rules.notPublishedDescription')}</p>
+          <code className="mt-3 block break-all text-xs text-muted">{result.source.path}</code>
+          <Button className="mt-4" onPress={() => setRefresh((value) => value + 1)} variant="ghost">
+            {t('rules.reloadPublished')}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <code className="min-w-0 flex-1 truncate text-xs text-foreground">{result.source.path}</code>
+        <Chip color="success" size="sm" variant="soft">{t('rules.exportedFile')}</Chip>
+      </div>
+      <pre
+        aria-label={t('rules.publishedContent', { project: projectSlug })}
+        className="min-h-64 whitespace-pre-wrap break-words bg-background/60 p-5 font-mono text-sm leading-7 text-foreground"
+      >
+        {result.content}
+      </pre>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3.5">
+        <span className="text-xs text-muted">
+          {t('rules.publishedMetadata', {
+            size: formatBytes(result.source.sizeBytes, currentLocale()),
+            time: result.source.modifiedAt
+              ? formatDateTime(result.source.modifiedAt, currentLocale())
+              : '—',
+          })}
+        </span>
+        <Button onPress={() => setRefresh((value) => value + 1)} variant="ghost">
+          {t('rules.reloadPublished')}
+        </Button>
+      </div>
+      <p className="border-t border-border px-5 py-4 text-xs text-muted">
+        {t('rules.exportedFileDescription')}
+      </p>
+    </div>
+  )
 }
 
 function ProjectRules({ rules }: { rules: RuleCandidate[] }) {

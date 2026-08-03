@@ -10,6 +10,7 @@
     "loadProjects": "无法加载项目",
     "loadDetails": "无法加载项目详情",
     "openSession": "无法打开会话",
+    "loadPublishedRules": "无法读取已发布版本",
     "revealProject": "无法打开项目位置。",
     "revealSession": "无法定位 Session 来源。",
     "previewVersion": "新版本已支持会话预览。请重启应用以完成更新。"
@@ -69,7 +70,18 @@
   },
   "rules": {
     "empty": "没有项目规则。",
-    "confidence": "{{level}} 置信度"
+    "confidence": "{{level}} 置信度",
+    "viewsLabel": "项目规则视图",
+    "candidates": "候选规则",
+    "published": "已发布版本",
+    "loadingPublished": "正在读取已发布版本",
+    "notPublished": "尚未导出项目规则文件",
+    "notPublishedDescription": "请先在已接受规则发布页执行“导出该项目规则文件”。",
+    "reloadPublished": "从磁盘重新加载",
+    "exportedFile": "托管导出文件",
+    "publishedContent": "{{project}} 已发布规则内容",
+    "publishedMetadata": "{{size}} · 修改于 {{time}}",
+    "exportedFileDescription": "此文件是 Memory Manager 的项目规则导出，不代表已经发布到 Claude 或 Codex Memory。"
   },
   "empty": {
     "projects": "还没有已分类的项目。",

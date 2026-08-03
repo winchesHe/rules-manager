@@ -483,6 +483,17 @@ export interface RuleCandidate {
   updated_at: string
 }
 
+export interface ProjectRulesOutputReadResult {
+  source: {
+    projectSlug: string
+    path: string
+    status: 'present' | 'missing'
+    modifiedAt: string | null
+    sizeBytes: number
+  }
+  content: string
+}
+
 export type GlobalInstructionAgent =
   | 'claude'
   | 'codex'

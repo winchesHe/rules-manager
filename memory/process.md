@@ -2451,3 +2451,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 27 suites / 176 tests、production build 与 `git diff --check` 通过；build 仅保留既有 Markstream PURE
   注释警告。
 - 提交信息：`fix: 对齐项目规则导出反馈位置`
+
+## 项目已导出规则只读查看入口（2026-08-03）
+
+- 「项目 → 项目详情 → 规则」新增「候选规则 / 已发布版本」切换；已发布版本只读展示固定路径
+  `~/.memory-manager/rules/projects/<project-slug>.md` 的正文、文件路径、大小、修改时间和磁盘刷新入口。
+- Renderer 只向主进程提交 project slug。Core 使用既有 slug 规范校验并固定解析到 workspace rules 目录；
+  文件缺失返回正常空态，不创建或重新导出文件。读取拒绝 symlink、非普通文件、超过 1 MiB、非法 UTF-8
+  和读取期间 stat 变化。
+- 页面明确标注该文件是 Memory Manager 托管的项目规则导出，不代表已经发布到 Claude/Codex Memory；
+  页面不提供编辑、删除或任意路径读取能力。
+- 本机 `agent-workspace.md` 读取前后 SHA-256 均为
+  `30835a5ed7fc60c1a28aff63f7a84a6dee87c7624f1035331ec9081013b7d74c`。真实 Electron 验证
+  `agent-workspace` 显示文件正文和 metadata，`moego-agent` 显示尚未导出空态，验收未触发导出或发布。
+- `simplify` 复核后仅保留显式、局部的读取状态，不增加额外抽象。Core 29 suites / 299 tests、App
+  27 suites / 177 tests、Core/App production build 与 `git diff --check` 通过；build 仅保留既有 Core
+  `tsdown define` 与 Markstream PURE 注释警告。
+- 提交信息：`feat: 支持查看已导出项目规则`
