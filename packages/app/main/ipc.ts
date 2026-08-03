@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import Database from 'better-sqlite3'
-import { listProjects, listProjectSessions } from '@memory-manager/core'
+import { listProjects, type ProjectSessionMetadata } from '@memory-manager/core'
 import {
   querySessionContext,
   resolveSessionContextItems,
@@ -106,7 +106,7 @@ export function registerIpcHandlers(): void {
       throw new Error('project slug is required')
     }
     if (!isDatabaseReady()) return []
-    return listProjectSessions({ slug })
+    return runProjectSessionsWorker(slug)
   })
   ipcMain.handle('projects.reveal', async (_event, slug: unknown) => {
     if (typeof slug !== 'string') throw new Error('project slug is required')
@@ -568,6 +568,45 @@ function runSessionPreviewWorker(sessionId: string): Promise<SessionPreview> {
     worker.once('exit', (code) => {
       if (!settled) {
         reject(new Error(`Session preview worker exited before completion (${code})`))
+      }
+    })
+  })
+}
+
+function runProjectSessionsWorker(slug: string): Promise<ProjectSessionMetadata[]> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(join(import.meta.dirname, 'project-sessions-worker.js'), {
+      workerData: { slug },
+    })
+    let settled = false
+
+    worker.once('message', (message: unknown) => {
+      settled = true
+      if (
+        message
+        && typeof message === 'object'
+        && 'type' in message
+        && message.type === 'done'
+        && 'sessions' in message
+      ) {
+        resolve(message.sessions as ProjectSessionMetadata[])
+        return
+      }
+      const errorMessage = message
+        && typeof message === 'object'
+        && 'message' in message
+        && typeof message.message === 'string'
+        ? message.message
+        : 'Project sessions worker returned an invalid response'
+      reject(new Error(errorMessage))
+    })
+    worker.once('error', (error) => {
+      settled = true
+      reject(error)
+    })
+    worker.once('exit', (code) => {
+      if (!settled) {
+        reject(new Error(`Project sessions worker exited before completion (${code})`))
       }
     })
   })

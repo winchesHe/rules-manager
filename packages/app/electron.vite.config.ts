@@ -26,6 +26,9 @@ export default defineConfig({
           'session-preview-worker': fileURLToPath(
             new URL('./main/session-preview-worker.ts', import.meta.url),
           ),
+          'project-sessions-worker': fileURLToPath(
+            new URL('./main/project-sessions-worker.ts', import.meta.url),
+          ),
         },
         external: ['better-sqlite3-electron'],
       },

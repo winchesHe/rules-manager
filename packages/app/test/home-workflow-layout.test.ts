@@ -78,6 +78,8 @@ describe('home workflow layout', () => {
     expect(source).toContain('deleteConfirmThread')
     expect(source).toContain('historyPaneOpen')
     expect(source).toContain('contextPaneOpen')
+    expect(source).toContain('thread.sessionContext.revision')
+    expect(source).toContain('[thread?.id, sessionContextRevision]')
     expect(source).toContain('continueAsNewChat')
     expect(source).toContain('compactContextOpen')
     expect(source).toContain('max-[1279px]:fixed')
@@ -354,6 +356,21 @@ describe('home workflow layout', () => {
     expect(ipcSource).toContain("ipcMain.handle('sessions.evidenceContext'")
     expect(ipcSource).toContain('runSessionPreviewWorker(sessionId)')
     expect(viteSource).toContain("'session-preview-worker'")
+  })
+
+  it('项目 Session 列表在独立 Worker 中解析，避免阻塞主进程', () => {
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const viteSource = fs.readFileSync(path.join(appRoot, 'electron.vite.config.ts'), 'utf8')
+    const workerSource = fs.readFileSync(
+      path.join(appRoot, 'main/project-sessions-worker.ts'),
+      'utf8',
+    )
+
+    expect(ipcSource).toContain("ipcMain.handle('projects.sessions'")
+    expect(ipcSource).toContain('runProjectSessionsWorker(slug)')
+    expect(ipcSource).not.toContain('return listProjectSessions({ slug })')
+    expect(viteSource).toContain("'project-sessions-worker'")
+    expect(workerSource).toContain('listProjectSessions({ slug })')
   })
 
   it('Rules 拆分 Overview、Agent instruction、生成、审核与输出页面', () => {

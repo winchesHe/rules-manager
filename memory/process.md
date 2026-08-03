@@ -2315,3 +2315,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   typecheck 仍仅受既有 `rootDir/files` 配置边界和既有 RulesView 类型错误阻断；build 保留既有
   Markstream PURE 注释与 Core `tsdown define` 警告。
 - 提交信息：`fix: 按原生顺序展示 Chat Assistant 时间线`
+
+## Rules Chat 上下文同步与项目异步加载（2026-08-03）
+
+- Rules 生成原本已经在证据确定后持久化 Session Context 并广播 `chat.changed`，但 ChatView 只在
+  thread id 变化时同步右栏，导致同一 Chat 后续增加的上下文停留在 0。现在单独监听
+  `sessionContext.revision`，只更新所选 Session，不覆盖用户正在编辑的 Provider、模型和 Effort。
+- `projects.sessions` 原本虽在 Renderer 延迟到下一帧调用，完整的 FS/SQLite 查询与原始 Session 名称
+  解析仍同步运行在 Electron 主进程。新增 `project-sessions-worker` 承担这段查询，IPC 契约、返回结构和
+  Renderer 加载/错误状态保持不变。
+- 真实 Electron 验证已有 `生成规则：changed7d` Chat 自动显示并选中 80 个 Session Context；打开含
+  118 个 Session 的 `agent-slack` 项目时 41ms 进入加载态，加载期间切换 Tab 39ms 响应，随后正常展示
+  118 / 118 条带可读名称的 Session。
+- `simplify` 复核确认 Context 配置同步与动态选择同步保持独立，Worker 边界只承载既有同步 Core 查询。
+  App 27 suites / 171 tests、Core 26 suites / 279 tests 与 App production build 通过，build 仅保留既有
+  Markstream PURE 注释警告。
+- 提交信息：`fix: 同步 Rules 上下文并异步加载项目会话`

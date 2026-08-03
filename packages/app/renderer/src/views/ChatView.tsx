@@ -226,9 +226,17 @@ export function ChatView({
     setModel(thread.defaultTurnConfig.model ?? '')
     setEffort(thread.defaultTurnConfig.effort)
     setFastMode(thread.defaultTurnConfig.fastMode)
-    setSelectedContext(thread.sessionContext.selected)
     setRenameValue(thread.title)
   }, [thread?.id])
+
+  const sessionContextRevision = thread?.kind === 'native-chat'
+    ? thread.sessionContext.revision
+    : null
+
+  useEffect(() => {
+    if (thread?.kind !== 'native-chat') return
+    setSelectedContext(thread.sessionContext.selected)
+  }, [thread?.id, sessionContextRevision])
 
   useEffect(() => {
     if (thread || legacy) return
