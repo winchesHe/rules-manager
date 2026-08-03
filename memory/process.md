@@ -2524,3 +2524,13 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 静态契约与浏览器交互通过：Agent 多选后主按钮显示目标数量，切换 Memory 后恢复 Claude/Codex 目标
   校验；390×844 无横向溢出，页面始终只有一个 Primary Action，浏览器控制台无 warning/error。
 - 提交信息：`fix: 补回原型 Agent 全局规则发布目标`
+
+## 发布台原型新增顶部 Memory 入口（2026-08-03）
+
+- 顶部任务切换从「项目规则 / 全局规则」扩展为「项目规则 / 全局规则 / Memory」三个同级 tab；Memory
+  沿用当前项目 1 条 accepted rule，并在进入后选择 Claude 或 Codex 项目 Memory。
+- 移除右侧重复的「Agent 全局规则 / 项目 Memory」发布方式切换：项目规则页直接展示 Agent 全局指令
+  文件目标，Memory 页直接展示 Claude/Codex 目标，仍共用同一规则选择区和单一 Primary Action。
+- 静态契约与浏览器交互通过：顶部三 tab 可达，Memory 切换后只展示 Memory 配置，390px 窄屏无横向
+  溢出，页面只有一个 Primary Action，浏览器控制台无 warning/error。
+- 提交信息：`fix: 增加原型顶部 Memory 入口`

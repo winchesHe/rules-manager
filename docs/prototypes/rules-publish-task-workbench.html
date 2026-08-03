@@ -203,7 +203,7 @@
 
     .scope-tabs {
       display: inline-grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 3px;
       margin-top: 24px;
       border: 1px solid var(--border);
@@ -604,6 +604,9 @@
           <button class="scope-tab" id="global-tab" type="button" role="tab" aria-selected="false" aria-controls="global-view" data-scope="global">
             全局规则 <span class="count">0</span>
           </button>
+          <button class="scope-tab" id="memory-tab" type="button" role="tab" aria-selected="false" aria-controls="project-view" data-scope="memory">
+            Memory <span class="count">1</span>
+          </button>
         </div>
 
         <section class="task-surface" id="project-view" role="tabpanel" aria-labelledby="project-tab">
@@ -644,12 +647,7 @@
                 </div>
               </div>
 
-              <div class="destination-tabs" role="tablist" aria-label="发布方式">
-                <button class="destination-tab active" id="agent-destination-tab" type="button" role="tab" aria-selected="true" aria-controls="agent-config" data-destination="agent">Agent 全局规则</button>
-                <button class="destination-tab" id="memory-destination-tab" type="button" role="tab" aria-selected="false" aria-controls="memory-config" data-destination="memory">项目 Memory</button>
-              </div>
-
-              <div class="target-config" id="agent-config" role="tabpanel" aria-labelledby="agent-destination-tab">
+              <div class="target-config" id="agent-config">
                 <div class="target-name">
                   <h4>Agent 全局指令文件</h4>
                   <p>将勾选规则写入明确选择的 Agent 全局规则文件，可同时发布到多个 Agent。</p>
@@ -665,7 +663,7 @@
                 <div class="inline-status" id="agent-status" role="status">原型模拟完成：规则已发布到所选 Agent 全局指令文件。</div>
               </div>
 
-              <div id="memory-config" role="tabpanel" aria-labelledby="memory-destination-tab" hidden>
+              <div id="memory-config" hidden>
                 <div class="target-tabs" role="tablist" aria-label="项目 Memory 类型">
                   <button class="target-tab active" id="claude-target-tab" type="button" role="tab" aria-selected="true" aria-controls="claude-config" data-target="claude">Claude</button>
                   <button class="target-tab" id="codex-target-tab" type="button" role="tab" aria-selected="false" aria-controls="codex-config" data-target="codex">Codex</button>
@@ -752,7 +750,6 @@
   <script>
     const html = document.documentElement;
     const scopeTabs = [...document.querySelectorAll('.scope-tab')];
-    const destinationTabs = [...document.querySelectorAll('.destination-tab')];
     const targetTabs = [...document.querySelectorAll('.target-tab')];
     const projectView = document.getElementById('project-view');
     const globalView = document.getElementById('global-view');
@@ -833,31 +830,27 @@
       }
     }
 
+    function setDestination(destination) {
+      activeDestination = destination;
+      agentConfig.hidden = destination !== 'agent';
+      memoryConfig.hidden = destination !== 'memory';
+      document.getElementById('target-heading').textContent = destination === 'agent' ? '发布到 Agent 全局规则' : '发布到项目 Memory';
+      clearPublishStatuses();
+      updateActionBar();
+    }
+
     scopeTabs.forEach((tab) => {
       tab.addEventListener('click', () => {
-        const projectActive = tab.dataset.scope === 'project';
+        const scope = tab.dataset.scope;
+        const globalActive = scope === 'global';
         scopeTabs.forEach((item) => {
           const active = item === tab;
           item.classList.toggle('active', active);
           item.setAttribute('aria-selected', String(active));
         });
-        projectView.hidden = !projectActive;
-        globalView.hidden = projectActive;
-      });
-    });
-
-    destinationTabs.forEach((tab) => {
-      tab.addEventListener('click', () => {
-        activeDestination = tab.dataset.destination;
-        destinationTabs.forEach((item) => {
-          const active = item === tab;
-          item.classList.toggle('active', active);
-          item.setAttribute('aria-selected', String(active));
-        });
-        agentConfig.hidden = activeDestination !== 'agent';
-        memoryConfig.hidden = activeDestination !== 'memory';
-        clearPublishStatuses();
-        updateActionBar();
+        projectView.hidden = globalActive;
+        globalView.hidden = !globalActive;
+        if (!globalActive) setDestination(scope === 'memory' ? 'memory' : 'agent');
       });
     });
 
@@ -931,7 +924,7 @@
       themeLabel.textContent = nextTheme === 'light' ? '深色' : '浅色';
     });
 
-    updateActionBar();
+    setDestination('agent');
   </script>
 </body>
 </html>

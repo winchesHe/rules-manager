@@ -11,7 +11,7 @@
 ## 验收标准
 
 - 默认进入第一个非空范围，当前样例直接打开「项目规则 1」。
-- “Agent 全局规则 / 项目 Memory”同一时间只展示一种发布方式；Memory 内 Claude 与 Codex 同一时间只展示
+- 顶部以“项目规则 / 全局规则 / Memory”三个同级入口切换任务；Memory 内 Claude 与 Codex 同一时间只展示
   一套目标配置，页面始终只有一个 Primary Action。
 - Agent 全局规则模式支持显式多选 Claude、Codex、Copilot、OpenCode、Pi，并展示各自的全局指令文件路径。
 - 勾选规则、切换目标类型和选择目标会同步更新底部摘要、按钮文案与禁用状态。
@@ -39,7 +39,7 @@
   `prefers-reduced-motion` 均符合预期。
 - 浏览器交互通过：Claude/Codex 目标切换、规则勾选、按钮禁用状态、动态路径、全局规则空状态、模拟发布
   与独立导出反馈均正常。
-- 用户反馈后补回 Agent 全局规则发布目标：项目规则既可发布到多选 Agent 指令文件，也可发布到项目
-  Memory；两类目标互斥展示且继续共用单一 Primary Action。
+- 用户反馈后将 Memory 提升为顶部第三个同级入口：项目规则进入 Agent 全局指令文件发布，Memory 进入
+  Claude/Codex 项目 Memory 发布；移除右栏重复的发布方式切换。
 - 1440×900 与 390×844 视口均无页面级横向溢出；Light/Dark 主题可读，浏览器控制台无 warning/error。
 - 本轮为独立文档原型，未修改 Renderer/Core/IPC，使用静态契约和浏览器视觉验收替代 App 自动化测试。
