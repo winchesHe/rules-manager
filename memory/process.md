@@ -2591,3 +2591,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 真实 Electron 截图确认三个 tab 顺序和宽度正常；App 定向 2 suites / 52 tests、production build 与
   `git diff --check` 通过，build 仅保留既有 Markstream PURE 注释警告。
 - 提交信息：`style: 调整发布范围顺序`
+
+## 发布台固定桌面工作区高度（2026-08-03）
+
+- 桌面端工作台从最小高度改为固定剩余视口高度，并显式拆成 `内容区 + 底部操作栏` 两行；项目规则、
+  Memory、全局规则切换时外框上下边界和底部操作位置不再随内容变化。
+- 左右内容栏共享同一内容行高度，内容超过可用空间时各自纵向滚动；1280px 以下恢复自然高度和页面流，
+  避免窄屏被固定高度裁切。HTML 原型同步相同的桌面固定高度与响应式回退。
+- 真实 Electron 截图逐项对比项目规则、Memory、全局空状态，三者工作台底边一致，左右栏高度一致；未触发
+  任何发布或导出操作。
+- App 27 suites / 178 tests、production build 与 `git diff --check` 通过，build 仅保留既有 Markstream
+  PURE 注释警告。
+- 提交信息：`style: 固定发布工作区高度`

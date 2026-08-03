@@ -4224,10 +4224,10 @@ function OutputRulesPage({
         <ViewLoading label={tr('publish.loading')} />
       ) : (
         <div
-          className={`grid min-h-[calc(100dvh-13rem)] min-w-0 items-stretch overflow-hidden rounded-xl border border-border bg-surface ${hasNoGlobalRules ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_22rem] max-xl:grid-cols-1'}`}
+          className={`grid h-[calc(100dvh-13rem)] min-h-[30rem] min-w-0 grid-rows-[minmax(0,1fr)_auto] items-stretch overflow-hidden rounded-xl border border-border bg-surface max-xl:h-auto max-xl:grid-rows-none ${hasNoGlobalRules ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_22rem] max-xl:grid-cols-1'}`}
           data-publish-workbench="true"
         >
-          <div className="min-w-0" data-publish-rules-pane="true">
+          <div className="min-h-0 min-w-0 overflow-y-auto max-xl:overflow-visible" data-publish-rules-pane="true">
             <Card className="h-full min-w-0 rounded-none border-0 bg-surface shadow-none">
               <Card.Header className="block border-b border-border px-4 py-3">
                 <div className="flex w-full items-center justify-between gap-4">
@@ -4358,7 +4358,7 @@ function OutputRulesPage({
           </div>
 
           {!hasNoGlobalRules && (
-          <aside className="min-w-0 border-l border-border max-xl:border-l-0 max-xl:border-t" data-publish-target-pane="true">
+          <aside className="min-h-0 min-w-0 overflow-y-auto border-l border-border max-xl:overflow-visible max-xl:border-l-0 max-xl:border-t" data-publish-target-pane="true">
             {publishTab !== 'memory' && (
             <Card className="min-w-0 overflow-hidden rounded-none border-0 bg-surface shadow-none">
               <Card.Header className="border-b border-border px-4 py-3">
