@@ -53,6 +53,8 @@ import type {
   AutoMemorySource,
   ClaudeProjectMemoryPublishResult,
   ClaudeProjectMemoryPublishTarget,
+  CodexProjectMemoryPublishResult,
+  CodexProjectMemoryPublishTarget,
   GenerationEventEnvelope,
   GenerationHistoryEntry,
   GenerationMode,
@@ -3864,17 +3866,22 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
   const [accepted, setAccepted] = useState<RuleCandidate[]>([])
   const [targets, setTargets] = useState<GlobalInstructionReadResult[]>([])
   const [memoryTargets, setMemoryTargets] = useState<ClaudeProjectMemoryPublishTarget[]>([])
+  const [codexMemoryTargets, setCodexMemoryTargets] = useState<CodexProjectMemoryPublishTarget[]>([])
   const [selectedAgents, setSelectedAgents] = useState<GlobalInstructionAgent[]>([])
   const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null)
   const [selectedProjectRuleIds, setSelectedProjectRuleIds] = useState<string[]>([])
   const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null)
+  const [selectedCodexWorkingDirectory, setSelectedCodexWorkingDirectory] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [memoryPublishing, setMemoryPublishing] = useState(false)
+  const [codexMemoryPublishing, setCodexMemoryPublishing] = useState(false)
+  const [codexTargetsLoading, setCodexTargetsLoading] = useState(false)
   const [outputting, setOutputting] = useState(false)
   const [paths, setPaths] = useState<string[]>([])
   const [publishResult, setPublishResult] = useState<AgentInstructionPublishSummary | null>(null)
   const [memoryPublishResult, setMemoryPublishResult] = useState<ClaudeProjectMemoryPublishResult | null>(null)
+  const [codexMemoryPublishResult, setCodexMemoryPublishResult] = useState<CodexProjectMemoryPublishResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -3912,6 +3919,37 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
     }
   }, [])
 
+  useEffect(() => {
+    let current = true
+    setSelectedCodexWorkingDirectory(null)
+    setCodexMemoryPublishResult(null)
+    if (!selectedProjectSlug) {
+      setCodexMemoryTargets([])
+      setCodexTargetsLoading(false)
+      return
+    }
+    setCodexMemoryTargets([])
+    setCodexTargetsLoading(true)
+    setError(null)
+    void afterNextPaint(() =>
+      window.api.invoke<CodexProjectMemoryPublishTarget[]>(
+        'rules.memories.codexProjectTargets',
+        selectedProjectSlug,
+      ))
+      .then((result) => {
+        if (current) setCodexMemoryTargets(result)
+      })
+      .catch((reason: unknown) => {
+        if (current) setError(reason instanceof Error ? reason.message : String(reason))
+      })
+      .finally(() => {
+        if (current) setCodexTargetsLoading(false)
+      })
+    return () => {
+      current = false
+    }
+  }, [selectedProjectSlug])
+
   const globalRules = accepted.filter((candidate) => candidate.scope === 'global')
   const projectRules = accepted.filter((candidate) => candidate.scope === 'project')
   const projectSlugs = useMemo(
@@ -3925,6 +3963,9 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
   )
   const selectedMemoryTarget = memoryTargets.find(
     (target) => target.memoryId === selectedMemoryId,
+  )
+  const selectedCodexMemoryTarget = codexMemoryTargets.find(
+    (target) => target.workingDirectory === selectedCodexWorkingDirectory,
   )
 
   function toggleAgent(agent: GlobalInstructionAgent): void {
@@ -3940,6 +3981,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
     setSelectedProjectSlug(projectSlug)
     setSelectedProjectRuleIds([])
     setMemoryPublishResult(null)
+    setCodexMemoryPublishResult(null)
   }
 
   function toggleProjectRule(ruleId: string): void {
@@ -3947,6 +3989,7 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
       ? current.filter((id) => id !== ruleId)
       : [...current, ruleId])
     setMemoryPublishResult(null)
+    setCodexMemoryPublishResult(null)
   }
 
   async function publishProjectMemory(): Promise<void> {
@@ -3979,6 +4022,40 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setMemoryPublishing(false)
+    }
+  }
+
+  async function publishCodexProjectMemory(): Promise<void> {
+    if (!selectedCodexMemoryTarget || selectedProjectRuleIds.length === 0) return
+    setCodexMemoryPublishing(true)
+    setCodexMemoryPublishResult(null)
+    setError(null)
+    try {
+      const result = await afterNextPaint(() =>
+        window.api.invoke<CodexProjectMemoryPublishResult>(
+          'rules.memories.publishCodexProjectRules',
+          {
+            projectSlug: selectedCodexMemoryTarget.projectSlug,
+            workingDirectory: selectedCodexMemoryTarget.workingDirectory,
+            ruleIds: selectedProjectRuleIds,
+            expectedRevision: selectedCodexMemoryTarget.revision,
+            expectedContractRevision: selectedCodexMemoryTarget.contractRevision,
+          },
+        ),
+      )
+      setCodexMemoryPublishResult(result)
+      setCodexMemoryTargets((current) => current.map((target) =>
+        target.workingDirectory === result.workingDirectory
+          ? {
+              ...target,
+              revision: result.revision,
+              contractRevision: result.contractRevision,
+            }
+          : target))
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setCodexMemoryPublishing(false)
     }
   }
 
@@ -4253,6 +4330,96 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
               </Card.Footer>
             </Card>
 
+            <Card className="border border-border bg-surface shadow-none">
+              <Card.Header className="border-b border-border px-5 py-4">
+                <div>
+                  <h2 className="font-medium text-foreground">{tr('publish.codexProjectMemoryTitle')}</h2>
+                  <p className="mt-1 text-sm text-muted">{tr('publish.codexProjectMemoryDescription')}</p>
+                </div>
+              </Card.Header>
+              <Card.Content className="grid gap-3 px-4 py-4">
+                <Select
+                  aria-label={tr('publish.codexWorkingDirectorySelect')}
+                  isDisabled={!selectedProjectSlug || codexTargetsLoading}
+                  onSelectionChange={(key) => {
+                    const value = String(key)
+                    setSelectedCodexWorkingDirectory(
+                      value === NO_SELECTION_KEY ? null : value,
+                    )
+                    setCodexMemoryPublishResult(null)
+                  }}
+                  selectedKey={selectedCodexWorkingDirectory ?? NO_SELECTION_KEY}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item
+                        id={NO_SELECTION_KEY}
+                        textValue={tr('publish.codexWorkingDirectoryPlaceholder')}
+                      >
+                        {tr('publish.codexWorkingDirectoryPlaceholder')}
+                      </ListBox.Item>
+                      {codexMemoryTargets.map((target) => (
+                        <ListBox.Item
+                          id={target.workingDirectory}
+                          isDisabled={!target.writable}
+                          key={target.workingDirectory}
+                          textValue={target.workingDirectory}
+                        >
+                          <code className="block truncate text-sm">{target.workingDirectory}</code>
+                          <span className="mt-0.5 block max-w-72 truncate text-xs text-muted">
+                            {target.reason ?? tr('publish.codexWorkingDirectorySource', {
+                              agents: target.agents.join(' · '),
+                              count: target.sessionCount,
+                            })}
+                          </span>
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                {codexTargetsLoading && (
+                  <span className="flex items-center gap-2 text-xs text-muted">
+                    <Spinner size="sm" />
+                    {tr('publish.codexTargetsLoading')}
+                  </span>
+                )}
+                {!codexTargetsLoading && selectedProjectSlug && codexMemoryTargets.length === 0 && (
+                  <p className="text-xs leading-5 text-warning">{tr('publish.codexTargetsEmpty')}</p>
+                )}
+                {!codexTargetsLoading && (!selectedProjectSlug || codexMemoryTargets.length > 0) && (
+                  <p className="text-xs leading-5 text-muted">
+                    {tr('publish.codexProjectMemorySelection', {
+                      count: selectedProjectRuleIds.length,
+                    })}
+                  </p>
+                )}
+              </Card.Content>
+              <Card.Footer className="border-t border-border px-4 py-3">
+                <Button
+                  className="w-full gap-2 bg-primary text-primary-foreground"
+                  isDisabled={
+                    !selectedCodexMemoryTarget?.writable
+                    || selectedProjectRuleIds.length === 0
+                    || codexMemoryPublishing
+                  }
+                  onPress={() => void publishCodexProjectMemory()}
+                >
+                  {codexMemoryPublishing
+                    ? <Spinner color="current" size="sm" />
+                    : <Terminal aria-hidden="true" size={16} />}
+                  {codexMemoryPublishing
+                    ? tr('actions.publishing')
+                    : tr('actions.publishCodexProjectMemory', {
+                        count: selectedProjectRuleIds.length,
+                      })}
+                </Button>
+              </Card.Footer>
+            </Card>
+
             {error && <ErrorAlert message={error} title={tr('errors.publish')} />}
             {memoryPublishResult && (
               <Alert status="success">
@@ -4262,6 +4429,21 @@ function OutputRulesPage({ onBack }: { onBack: () => void }) {
                     {tr('publish.projectMemoryComplete', {
                       project: memoryPublishResult.projectSlug,
                       count: memoryPublishResult.ruleCount,
+                    })}
+                  </Alert.Description>
+                </Alert.Content>
+              </Alert>
+            )}
+            {codexMemoryPublishResult && (
+              <Alert status="success">
+                <Alert.Content>
+                  <Alert.Title>
+                    {tr(`publish.codexProjectMemoryStatus.${codexMemoryPublishResult.status}`)}
+                  </Alert.Title>
+                  <Alert.Description>
+                    {tr('publish.codexProjectMemoryComplete', {
+                      project: codexMemoryPublishResult.projectSlug,
+                      count: codexMemoryPublishResult.ruleCount,
                     })}
                   </Alert.Description>
                 </Alert.Content>

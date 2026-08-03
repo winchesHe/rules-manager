@@ -29,6 +29,9 @@ export default defineConfig({
           'project-sessions-worker': fileURLToPath(
             new URL('./main/project-sessions-worker.ts', import.meta.url),
           ),
+          'codex-memory-targets-worker': fileURLToPath(
+            new URL('./main/codex-memory-targets-worker.ts', import.meta.url),
+          ),
         },
         external: ['better-sqlite3-electron'],
       },

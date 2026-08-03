@@ -33,6 +33,7 @@
     "accept": "接受",
     "writeProjectOutput": "写入托管项目输出",
     "publishProjectMemory": "发布 {{count}} 条规则到 Project Memory",
+    "publishCodexProjectMemory": "提交 {{count}} 条规则到 Codex Memory",
     "publishing": "正在发布",
     "publishAgents_one": "发布到 {{count}} 个 Agent",
     "publishAgents_other": "发布到 {{count}} 个 Agent"
@@ -412,6 +413,21 @@
     "projectMemoryStatus": {
       "published": "Project Memory 已更新",
       "unchanged": "Project Memory 无需更新"
+    },
+    "codexProjectMemoryTitle": "提交到 Codex 项目 Memory",
+    "codexProjectMemoryDescription": "为所选 cwd 维护 Codex ad-hoc note；不直接编辑生成态 MEMORY.md，Codex 将在后台合并。",
+    "codexWorkingDirectorySelect": "选择 Codex 项目工作目录",
+    "codexWorkingDirectoryPlaceholder": "选择 applies_to 工作目录",
+    "codexWorkingDirectorySource_one": "来自 {{agents}} 的 {{count}} 个 Session",
+    "codexWorkingDirectorySource_other": "来自 {{agents}} 的 {{count}} 个 Session",
+    "codexTargetsLoading": "正在从 Session metadata 解析项目工作目录…",
+    "codexTargetsEmpty": "该项目没有可用的 cwd 或 git root，暂时不能提交到 Codex Memory。",
+    "codexProjectMemorySelection_one": "已选择 {{count}} 条项目规则；工作目录不会根据项目名称自动推断。",
+    "codexProjectMemorySelection_other": "已选择 {{count}} 条项目规则；工作目录不会根据项目名称自动推断。",
+    "codexProjectMemoryComplete": "{{project}} 的 {{count}} 条规则已提交给 Codex Memory。",
+    "codexProjectMemoryStatus": {
+      "published": "Codex Memory note 已提交",
+      "unchanged": "Codex Memory note 无需更新"
     },
     "targets": "将全局规则发布到",
     "noDefault": "默认不选择任何 Agent。",

@@ -574,6 +574,28 @@ export interface ClaudeProjectMemoryPublishResult {
   topicRevision: string
 }
 
+export interface CodexProjectMemoryPublishTarget {
+  projectSlug: string
+  workingDirectory: string
+  notePath: string
+  revision: string | null
+  contractRevision: string
+  sessionCount: number
+  agents: string[]
+  writable: boolean
+  reason?: string
+}
+
+export interface CodexProjectMemoryPublishResult {
+  projectSlug: string
+  workingDirectory: string
+  notePath: string
+  ruleCount: number
+  status: 'published' | 'unchanged'
+  revision: string
+  contractRevision: string
+}
+
 export interface AgentInstructionPublishSummary {
   ruleCount: number
   results: Array<{

@@ -33,6 +33,7 @@
     "accept": "Accept",
     "writeProjectOutput": "Write managed project output",
     "publishProjectMemory": "Publish {{count}} rules to Project Memory",
+    "publishCodexProjectMemory": "Submit {{count}} rules to Codex Memory",
     "publishing": "Publishing",
     "publishAgents_one": "Publish to {{count}} Agent",
     "publishAgents_other": "Publish to {{count}} Agents"
@@ -412,6 +413,21 @@
     "projectMemoryStatus": {
       "published": "Project Memory updated",
       "unchanged": "Project Memory already up to date"
+    },
+    "codexProjectMemoryTitle": "Submit to Codex project memory",
+    "codexProjectMemoryDescription": "Maintains a Codex ad-hoc note for the selected cwd. The generated MEMORY.md is not edited directly; Codex consolidates it in the background.",
+    "codexWorkingDirectorySelect": "Select Codex project working directory",
+    "codexWorkingDirectoryPlaceholder": "Select the applies_to working directory",
+    "codexWorkingDirectorySource_one": "From {{count}} {{agents}} session",
+    "codexWorkingDirectorySource_other": "From {{count}} {{agents}} sessions",
+    "codexTargetsLoading": "Resolving project working directories from Session metadata…",
+    "codexTargetsEmpty": "This project has no available cwd or git root and cannot be submitted to Codex Memory yet.",
+    "codexProjectMemorySelection_one": "{{count}} project rule selected. The working directory is never inferred from the project name.",
+    "codexProjectMemorySelection_other": "{{count}} project rules selected. The working directory is never inferred from the project name.",
+    "codexProjectMemoryComplete": "Submitted {{count}} rules for {{project}} to Codex Memory.",
+    "codexProjectMemoryStatus": {
+      "published": "Codex Memory note submitted",
+      "unchanged": "Codex Memory note already up to date"
     },
     "targets": "Publish global rules to",
     "noDefault": "No Agent is selected by default.",

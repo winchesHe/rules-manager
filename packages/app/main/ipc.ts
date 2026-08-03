@@ -44,6 +44,10 @@ import {
   listClaudeProjectMemoryPublishTargets,
   publishProjectRulesToClaudeMemory,
 } from '../../core/src/project-memory-publish.js'
+import {
+  publishProjectRulesToCodexMemory,
+  type CodexProjectMemoryPublishTarget,
+} from '../../core/src/codex-project-memory-publish.js'
 import { ScanController, type ScanControllerEvent } from './scan-controller.js'
 import { listCompletedScans, loadLatestCompletedScan } from './scan-history.js'
 import {
@@ -375,6 +379,56 @@ export function registerIpcHandlers(): void {
       expectedTopicRevision: expectedTopicRevision as string | null,
     })
   })
+  ipcMain.handle('rules.memories.codexProjectTargets', (_event, projectSlug: unknown) => {
+    if (typeof projectSlug !== 'string' || !projectSlug.trim()) {
+      throw new Error('project slug is required')
+    }
+    return runCodexMemoryTargetsWorker(projectSlug)
+  })
+  ipcMain.handle('rules.memories.publishCodexProjectRules', (_event, value: unknown) => {
+    if (!value || typeof value !== 'object') {
+      throw new Error('invalid Codex project memory publish request')
+    }
+    const {
+      projectSlug,
+      workingDirectory,
+      ruleIds,
+      expectedRevision,
+      expectedContractRevision,
+    } = value as {
+      projectSlug?: unknown
+      workingDirectory?: unknown
+      ruleIds?: unknown
+      expectedRevision?: unknown
+      expectedContractRevision?: unknown
+    }
+    if (typeof projectSlug !== 'string' || !projectSlug.trim()) {
+      throw new Error('project slug is required')
+    }
+    if (typeof workingDirectory !== 'string' || !workingDirectory.trim()) {
+      throw new Error('Codex project working directory is required')
+    }
+    if (
+      !Array.isArray(ruleIds)
+      || ruleIds.length === 0
+      || ruleIds.some((id) => typeof id !== 'string' || !id.trim())
+    ) {
+      throw new Error('project rule ids are required')
+    }
+    if (expectedRevision !== null && typeof expectedRevision !== 'string') {
+      throw new Error('invalid Codex project memory revision')
+    }
+    if (typeof expectedContractRevision !== 'string') {
+      throw new Error('Codex project memory contract revision is required')
+    }
+    return publishProjectRulesToCodexMemory({
+      projectSlug,
+      workingDirectory,
+      ruleIds: ruleIds as string[],
+      expectedRevision: expectedRevision as string | null,
+      expectedContractRevision,
+    })
+  })
 
   ipcMain.handle('rules.output', () => {
     const paths: string[] = []
@@ -666,6 +720,47 @@ function runProjectSessionsWorker(slug: string): Promise<ProjectSessionMetadata[
     worker.once('exit', (code) => {
       if (!settled) {
         reject(new Error(`Project sessions worker exited before completion (${code})`))
+      }
+    })
+  })
+}
+
+function runCodexMemoryTargetsWorker(
+  projectSlug: string,
+): Promise<CodexProjectMemoryPublishTarget[]> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(join(import.meta.dirname, 'codex-memory-targets-worker.js'), {
+      workerData: { projectSlug },
+    })
+    let settled = false
+
+    worker.once('message', (message: unknown) => {
+      settled = true
+      if (
+        message
+        && typeof message === 'object'
+        && 'type' in message
+        && message.type === 'done'
+        && 'targets' in message
+      ) {
+        resolve(message.targets as CodexProjectMemoryPublishTarget[])
+        return
+      }
+      const errorMessage = message
+        && typeof message === 'object'
+        && 'message' in message
+        && typeof message.message === 'string'
+        ? message.message
+        : 'Codex memory targets worker returned an invalid response'
+      reject(new Error(errorMessage))
+    })
+    worker.once('error', (error) => {
+      settled = true
+      reject(error)
+    })
+    worker.once('exit', (code) => {
+      if (!settled) {
+        reject(new Error(`Codex memory targets worker exited before completion (${code})`))
       }
     })
   })

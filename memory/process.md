@@ -2377,3 +2377,24 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `RulesView` 的 `history` 类型错误阻断；build 仅保留既有 Core `tsdown define` 与 Markstream PURE
   注释警告。
 - 提交信息：`feat: 支持发布项目规则到 Claude Memory`
+
+## Codex 项目 Memory 发布（2026-08-03）
+
+- 已接受规则发布页新增 Codex 项目级入口。用户必须显式选择项目规则与工作目录；cwd 从该项目原始
+  Session metadata 的 `git_root`（优先）或 `cwd` 解析，不根据项目 slug、Memory Manager 工作区或
+  Chat 工作目录推断。同一项目出现多个 cwd 时逐项列出，由用户选择。
+- 不直接编辑 Codex 生成态 `~/.codex/memories/MEMORY.md`。仅在当前 Codex 暴露可识别的
+  `memories/extensions/ad_hoc/instructions.md` 契约时，为 `project_slug + cwd` 维护固定的 Memory Manager
+  ad-hoc note；note 标注 `applies_to: cwd=...`，后续由 Codex 在后台合并。
+- 发布使用 note revision 与契约 revision 双重 compare-and-swap，并执行同目录原子替换；拒绝失效 cwd、
+  symlink、非受管同名 note、跨项目或非 accepted project rule、保留 marker、非法项目标识和超限内容。
+- cwd 候选解析需要读取异构 Session 来源，已放入独立 `codex-memory-targets-worker`，不会阻塞 Electron
+  主线程。Renderer 在项目变化时展示加载态，并在成功重试时清除旧错误。
+- 真实 Electron 以 `agent-workspace` 验证：从 codex / copilot / opencode / pi 共 313 个 Session 解析到
+  `/Users/moego-winches/Desktop/Company/person/agent-workspace`；显式选择 cwd 和 1 条规则后按钮正确启用。
+  验收未点击最终提交，因此没有改动本机 Codex Memory。
+- `simplify` 复核移除了嵌套三元状态渲染，并补充项目标识换行防护与测试返回类型。Core 29 suites /
+  296 tests、App 27 suites / 175 tests、Core/App production build 与 `git diff --check` 通过。App 独立
+  typecheck 仍受既有跨 workspace `rootDir/files` 配置及既有 `RulesView` 的 `history` 类型错误阻断；
+  build 仅保留既有 Core `tsdown define` 与 Markstream PURE 注释警告。
+- 提交信息：`feat: 支持发布项目规则到 Codex Memory`

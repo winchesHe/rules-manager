@@ -552,6 +552,32 @@ describe('home workflow layout', () => {
     expect(outputPage).toContain("tr('publish.projectMemoryDescription')")
   })
 
+  it('已接受的项目规则可按显式 cwd 提交到 Codex ad-hoc Memory', () => {
+    const source = read('views/RulesView.tsx')
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const workerSource = fs.readFileSync(
+      path.join(appRoot, 'main/codex-memory-targets-worker.ts'),
+      'utf8',
+    )
+    const viteSource = fs.readFileSync(path.join(appRoot, 'electron.vite.config.ts'), 'utf8')
+    const outputPage = source.slice(
+      source.indexOf('function OutputRulesPage'),
+      source.indexOf('type GenerationEventMetadata'),
+    )
+
+    expect(ipcSource).toContain("ipcMain.handle('rules.memories.codexProjectTargets'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.memories.publishCodexProjectRules'")
+    expect(ipcSource).toContain('publishProjectRulesToCodexMemory')
+    expect(ipcSource).toContain('runCodexMemoryTargetsWorker(projectSlug)')
+    expect(workerSource).toContain('listCodexProjectMemoryPublishTargets(projectSlug)')
+    expect(viteSource).toContain("'codex-memory-targets-worker'")
+    expect(outputPage).toContain("'rules.memories.codexProjectTargets'")
+    expect(outputPage).toContain("'rules.memories.publishCodexProjectRules'")
+    expect(outputPage).toContain('selectedCodexWorkingDirectory')
+    expect(outputPage).toContain('expectedContractRevision')
+    expect(outputPage).toContain("tr('publish.codexProjectMemoryDescription')")
+  })
+
   it('Rules Generate 在后台 Worker 运行并提供可恢复、可取消的流式详情页', () => {
     const source = read('views/RulesView.tsx')
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
