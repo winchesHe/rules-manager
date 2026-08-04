@@ -15,6 +15,8 @@ describe('Chat Markdown rendering', () => {
     expect(source).toContain("import MarkdownRender from 'markstream-react'")
     expect(source).toContain('<MarkdownMessage content={message.content} final />')
     expect(source).toContain('<MarkdownMessage content={item.content} final={final}')
+    expect(source).toContain('variant="thinking"')
+    expect(source).toContain("final={item.status !== 'running'}")
     expect(source).toContain('<MarkdownMessage content={assistantContent} final />')
     expect(source).toContain('batchRendering={false}')
     expect(source).toContain('deferNodesUntilVisible={false}')
@@ -30,6 +32,8 @@ describe('Chat Markdown rendering', () => {
     expect(styles).toContain('.chat-markdown .markstream-react')
     expect(styles).toContain('--foreground: var(--theme-foreground)')
     expect(styles).toContain(':where(pre, .table-node-wrapper)')
+    expect(styles).toContain('.chat-markdown-thinking .markstream-react')
+    expect(styles).toContain('--foreground: var(--theme-muted)')
   })
 
   it('旧消息无法恢复原始 Timeline 时先展示 Tool、最后展示结论', () => {

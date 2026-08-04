@@ -1475,9 +1475,13 @@ function NativeThinkingRow({ item }: {
         <span />
         {item.status === 'running' && <Spinner color="accent" size="sm" />}
       </div>
-      <p className="ml-[1.6rem] mt-1 whitespace-pre-wrap border-l border-border py-1 pl-3 text-xs leading-5 text-muted">
-        {item.content}
-      </p>
+      <div className="ml-[1.6rem] mt-1 min-w-0 border-l border-border py-1 pl-3">
+        <MarkdownMessage
+          content={item.content}
+          final={item.status !== 'running'}
+          variant="thinking"
+        />
+      </div>
     </div>
   )
 }
@@ -1728,12 +1732,15 @@ function PersistedConversation({ thread }: { thread: GenerationChatThread }) {
 interface MarkdownMessageProps {
   content: string
   final: boolean
+  variant?: 'default' | 'thinking'
 }
 
-function MarkdownMessage({ content, final }: MarkdownMessageProps) {
+function MarkdownMessage({ content, final, variant = 'default' }: MarkdownMessageProps) {
   const isDark = document.documentElement.classList.contains('dark')
   return (
-    <div className="chat-markdown text-sm leading-7 text-foreground">
+    <div className={variant === 'thinking'
+      ? 'chat-markdown chat-markdown-thinking text-xs leading-5 text-muted'
+      : 'chat-markdown text-sm leading-7 text-foreground'}>
       <MarkdownRender
         batchRendering={false}
         content={content}

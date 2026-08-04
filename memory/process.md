@@ -2821,3 +2821,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 定向 3 suites / 73 tests、App 全量 32 suites / 206 tests、Core 全量 30 suites / 309 tests、production
   build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
 - 提交信息：`fix: 显示 Chat 思考摘要并直出单条工具`
+
+## Chat 思考正文 Markdown 渲染（2026-08-04）
+
+- Native Thinking 正文不再用纯文本 `<p>` 展示，改为复用 Assistant 已有的 Markstream 渲染链；加粗、列表、
+  行内代码等 Markdown 能力与 Chat 正文一致，运行中 Thinking 继续使用流式 `final=false`。
+- 为 Thinking 增加专用视觉变体，保留原有较小字号、紧凑行高、弱化文字色和左侧阶段线，不改变 Assistant
+  Markdown 样式、空 Thinking 过滤或 Tool 分组边界。
+- 隔离生产 Electron 中复制并打开用户截图对应的真实历史 Chat，`**Planning task-specific ID verification**`
+  已显示为无星号的加粗文本；同频道其他 Thinking Markdown 同样正常，未修改主应用 Chat 数据。
+- 定向 3 suites / 66 tests、App 全量 32 suites / 206 tests、Core 全量 30 suites / 309 tests、production
+  build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
+- 提交信息：`fix: 使用 Markdown 渲染 Chat 思考正文`

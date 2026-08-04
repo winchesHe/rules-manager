@@ -208,6 +208,15 @@ body {
   max-width: 100%;
 }
 
+.chat-markdown-thinking .markstream-react {
+  --foreground: var(--theme-muted);
+  color: hsl(var(--theme-muted));
+}
+
+.chat-markdown-thinking .markstream-react .paragraph-node {
+  margin-block: 0.35em;
+}
+
 .window-drag-region {
   position: fixed;
   inset: 0 0 auto 5rem;
