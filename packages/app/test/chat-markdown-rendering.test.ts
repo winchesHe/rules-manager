@@ -17,6 +17,8 @@ describe('Chat Markdown rendering', () => {
     expect(source).toContain('<MarkdownMessage content={item.content} final={final}')
     expect(source).toContain('variant="thinking"')
     expect(source).toContain("final={item.status !== 'running'}")
+    expect(source).toContain('content={content}')
+    expect(source).toContain('normalizeThinkingMarkdown(item.content)')
     expect(source).toContain('<MarkdownMessage content={assistantContent} final />')
     expect(source).toContain('batchRendering={false}')
     expect(source).toContain('deferNodesUntilVisible={false}')

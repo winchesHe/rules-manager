@@ -2848,3 +2848,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   PURE 注释警告。App typecheck 仍被仓库既有 workspace `rootDir` / `TS6307` 配置问题及 `RulesView` 两处
   既有类型错误阻断，输出中没有本轮新增文件的类型错误。
 - 提交信息：`feat: 增加 Chat 完成应用角标`
+
+## Chat 多段思考摘要分隔修复（2026-08-04）
+
+- 根因确认：Codex App Server 的同一 Reasoning item 可返回多个 `summary[]` 条目；流式
+  `summaryTextDelta` 被 Adapter 无分隔拼接成 `**A****B**`，完成事件又因 `streamed || completedContent`
+  保留了错误流式内容，导致 Markdown 中间四个星号按正文显示。
+- Reasoning 完成时改为优先使用 App Server 完整 item 的权威摘要，并按空行连接多段内容；只有完成 item
+  没有摘要时才回退流式文本。运行中增量、空 Reasoning 和 Assistant 消息链路不变。
+- Thinking 渲染前增加窄范围历史兼容，仅将非空文字之间的四星号边界还原成两个加粗段；不修改 ChatStore
+  原文件，也不对 Assistant Markdown 做通用替换。
+- 隔离生产 Electron 中回放用户截图对应的真实历史 Chat，原先一行的
+  `Planning command execution strategy****Evaluating streaming command output options` 已显示为两行加粗摘要，
+  四个星号消失；主应用数据未修改。
+- 定向 4 suites / 77 tests、App 全量 34 suites / 214 tests、Core 全量 30 suites / 309 tests、production
+  build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
+- 提交信息：`fix: 修复 Chat 多段思考摘要拼接`

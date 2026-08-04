@@ -3,6 +3,7 @@ import { mergeNativeTimelineEvent } from '../main/native-chat-timeline.js'
 import {
   groupNativeTurnTimeline,
   mergeLiveTimeline,
+  normalizeThinkingMarkdown,
   shouldShowNativeChatStop,
   toolActivityCounts,
 } from '../renderer/src/views/chat-timeline-model.js'
@@ -194,6 +195,15 @@ describe('Native Chat Tool activity 分组', () => {
       { itemId: 'shell-1', kind: 'shell', name: 'Command', status: 'running' },
       { itemId: 'tool-1', kind: 'tool', name: 'Browser', status: 'failed' },
     ])).toEqual({ read: 2, search: 1, shell: 1, tool: 1 })
+  })
+})
+
+describe('Native Chat Thinking Markdown', () => {
+  it('为历史相邻加粗摘要补充分段，不改动正常 Markdown', () => {
+    expect(normalizeThinkingMarkdown('**Planning****Evaluating**'))
+      .toBe('**Planning**\n\n**Evaluating**')
+    expect(normalizeThinkingMarkdown('**Planning**\n\n**Evaluating**'))
+      .toBe('**Planning**\n\n**Evaluating**')
   })
 })
 

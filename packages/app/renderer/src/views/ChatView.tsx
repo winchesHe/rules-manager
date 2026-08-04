@@ -81,6 +81,7 @@ import {
 import {
   groupNativeTurnTimeline,
   mergeLiveTimeline,
+  normalizeThinkingMarkdown,
   shouldShowNativeChatStop,
   toolActivityCounts,
 } from './chat-timeline-model'
@@ -1466,7 +1467,8 @@ function NativeThinkingRow({ item }: {
   item: Extract<NativeTurnTimelineItem, { type: 'thinking' }>
 }) {
   const { t } = useTranslation('chat')
-  if (!item.content.trim()) return null
+  const content = normalizeThinkingMarkdown(item.content)
+  if (!content.trim()) return null
   return (
     <div className="min-w-0 text-sm text-muted">
       <div className="grid min-h-8 w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 px-1">
@@ -1477,7 +1479,7 @@ function NativeThinkingRow({ item }: {
       </div>
       <div className="ml-[1.6rem] mt-1 min-w-0 border-l border-border py-1 pl-3">
         <MarkdownMessage
-          content={item.content}
+          content={content}
           final={item.status !== 'running'}
           variant="thinking"
         />

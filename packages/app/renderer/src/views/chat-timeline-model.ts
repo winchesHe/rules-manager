@@ -22,6 +22,10 @@ export function shouldShowNativeChatStop(
   return isSending || (thread?.kind === 'native-chat' && thread.status === 'running')
 }
 
+export function normalizeThinkingMarkdown(content: string): string {
+  return content.replace(/(\S)\*{4}(?=\S)/g, '$1**\n\n**')
+}
+
 export function groupNativeTurnTimeline(
   timeline: NativeTurnTimelineItem[],
 ): NativeTurnTimelineDisplayItem[] {

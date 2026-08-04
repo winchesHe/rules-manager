@@ -328,7 +328,7 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         const itemId = asString(item.id) ?? `reasoning-${active.reasoningMessages.size}`
         const streamed = active.reasoningMessages.get(itemId) ?? ''
         const completedContent = reasoningText(item)
-        const content = streamed || completedContent
+        const content = completedContent || streamed
         if (content) active.reasoningMessages.set(itemId, content)
         active.onEvent?.({
           type: 'thinking_delta',
@@ -430,7 +430,7 @@ function reasoningText(item: Record<string, unknown>): string {
       const record = asRecord(value)
       return [record.text, record.content].filter((text): text is string => typeof text === 'string')
     })
-  return fragments.join('\n').trim()
+  return fragments.join('\n\n').trim()
 }
 
 function rpcError(value: unknown): string {

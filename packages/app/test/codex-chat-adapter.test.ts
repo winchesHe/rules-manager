@@ -8,6 +8,7 @@ import {
   CodexChatAdapter,
   type CodexAppServerProcess,
 } from '../main/codex-chat-adapter.js'
+import type { NativeChatEvent } from '../main/chat-runtime.js'
 
 function fakeServer(autoComplete = true) {
   const stdin = new PassThrough()
@@ -176,7 +177,7 @@ describe('CodexChatAdapter', () => {
   it('为多段 Assistant 与明确 Reasoning 保留稳定 Item ID 和源事件顺序', async () => {
     const server = fakeServer(false)
     const adapter = new CodexChatAdapter(() => server.child)
-    const events: Array<{ type: string; itemId?: string }> = []
+    const events: NativeChatEvent[] = []
     const pending = adapter.start({
       chatId: 'chat-order', provider: 'codex', message: 'inspect',
       workingDirectory: '/fixed-workspace', config: { effort: 'high', fastMode: false },
@@ -193,10 +194,19 @@ describe('CodexChatAdapter', () => {
       threadId: 'codex-thread-1', item: { id: 'cmd-order', type: 'commandExecution', command: 'pwd' },
     })
     server.notify('item/reasoning/summaryTextDelta', {
-      threadId: 'codex-thread-1', itemId: 'reasoning-1', delta: '继续确认。',
+      threadId: 'codex-thread-1', itemId: 'reasoning-1', delta: '**继续确认。**',
+    })
+    server.notify('item/reasoning/summaryTextDelta', {
+      threadId: 'codex-thread-1', itemId: 'reasoning-1', delta: '**核对结果。**',
     })
     server.notify('item/completed', {
-      threadId: 'codex-thread-1', item: { id: 'reasoning-1', type: 'reasoning' },
+      threadId: 'codex-thread-1', item: {
+        id: 'reasoning-1', type: 'reasoning',
+        summary: [
+          { type: 'summary_text', text: '**继续确认。**' },
+          { type: 'summary_text', text: '**核对结果。**' },
+        ],
+      },
     })
     server.notify('item/agentMessage/delta', {
       threadId: 'codex-thread-1', itemId: 'final', delta: '最终结论。',
@@ -206,13 +216,22 @@ describe('CodexChatAdapter', () => {
     })
 
     await expect(pending).resolves.toMatchObject({ content: '先检查。最终结论。' })
-    expect(events.map((event) => `${event.type}:${event.itemId ?? ''}`)).toEqual([
+    expect(events.map((event) =>
+      `${event.type}:${'itemId' in event ? event.itemId : ''}`,
+    )).toEqual([
       'assistant_delta:commentary',
       'tool_activity:',
       'thinking_delta:reasoning-1',
       'thinking_delta:reasoning-1',
+      'thinking_delta:reasoning-1',
       'assistant_delta:final',
     ])
+    expect([...events].reverse().find((event) =>
+      event.type === 'thinking_delta' && event.status === 'completed',
+    )).toMatchObject({
+      content: '**继续确认。**\n\n**核对结果。**',
+      status: 'completed',
+    })
   })
 
   it('Rules turn 从多个 Agent message 中选择最后一个合法结构化结果', async () => {
