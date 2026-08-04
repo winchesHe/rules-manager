@@ -454,6 +454,48 @@ describe('NativeChatController', () => {
     })
   })
 
+  it('Codex 支持纯粘贴文本附件，并且只持久化附件元数据', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-pasted-text-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    let attachmentPath = ''
+    const pastedText = 'p'.repeat(5_000)
+    const adapter: ChatProviderAdapter = {
+      start: async (request) => {
+        attachmentPath = request.mentions?.[0]?.path ?? ''
+        expect(fs.readFileSync(attachmentPath, 'utf8')).toBe(pastedText)
+        expect(request.message).not.toContain(pastedText)
+        return { nativeSessionId: 'native-pasted-text', content: 'done' }
+      },
+      resume: async () => { throw new Error('unexpected resume') },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }
+    const controller = new NativeChatController({
+      store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
+      createId: () => 'chat-pasted-text', now: () => '2026-08-01T04:40:00.000Z',
+    })
+
+    await controller.send({
+      provider: 'codex', message: '', config: { effort: 'high', fastMode: false },
+      pastedTextAttachments: [{
+        name: 'Pasted text.txt', text: pastedText, characterCount: pastedText.length,
+      }],
+    })
+
+    expect(fs.existsSync(attachmentPath)).toBe(false)
+    const persisted = store.readThread('chat-pasted-text')
+    expect(persisted?.messages[0]).toMatchObject({
+      role: 'user', content: '',
+      attachments: [{ kind: 'pasted-text', name: 'Pasted text.txt', characterCount: 5_000 }],
+    })
+    expect(JSON.stringify(persisted)).not.toContain(pastedText)
+  })
+
   it('生命周期先同步 Native，再改本地；删除失败保留 Archived 记录重试', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-lifecycle-'))
     roots.push(root)

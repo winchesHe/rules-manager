@@ -21,8 +21,15 @@ export interface ChatMessage {
   createdAt: string
   completedAt?: string
   turnConfig?: NativeTurnConfig
+  attachments?: ChatMessageAttachment[]
   toolActivities?: NativeToolActivity[]
   timeline?: NativeTurnTimelineItem[]
+}
+
+export interface ChatMessageAttachment {
+  kind: 'pasted-text'
+  name: string
+  characterCount: number
 }
 
 export interface GenerationChatThreadSummary {

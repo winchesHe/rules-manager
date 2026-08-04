@@ -2762,3 +2762,37 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App typecheck 仍被仓库既有 workspace `rootDir` / `TS6307` 配置问题，以及 `RulesView` 两处既有类型错误
   阻断；输出中没有本轮新增文件的类型错误。
 - 提交信息：`feat: 附件化 Codex 大型 Session Context`
+
+## Chat 运行中对话恢复终止按钮（2026-08-04）
+
+- 修复 Native Chat Composer 只依赖本地 `isSending` 展示「停止本轮」的问题；统一判定同时识别
+  `thread.kind === 'native-chat' && thread.status === 'running'`，覆盖从 Rules 发起后跳转、切换回来和刷新恢复。
+- 中断动作继续复用现有 `chat.interrupt`；本地发送队列、发送按钮语义、Rules Generation 顶部停止操作和
+  Provider 中断协议均未修改。
+- 新增状态逻辑测试，覆盖本地发送、恢复运行中 Native Chat、ready / failed / interrupted 终态以及非 Native
+  Thread；Composer 布局契约同步确认按钮使用统一判定。
+- 隔离生产 Electron 实例中启动 Codex `sleep 30` 只读任务，离开 Chat 再重新进入后仍显示「停止本轮」；
+  任务自然完成，未点击终止。主窗口已有未发送草稿未被修改。
+- 本轮实现完成时 App 定向 2 suites / 59 tests、App 全量 30 suites / 197 tests、Core 全量 30 suites /
+  309 tests、production build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
+- 验收期间出现并发的 Codex 长文本附件改动；基于最终工作树复跑时本轮两个定向套件继续通过、production
+  build 通过，但 App 全量被该并发改动尚未同步的 `chat-markdown-rendering.test.ts` 旧源码断言阻断。本轮未
+  修改或回滚该无关改动。
+- 提交信息：`fix: 恢复运行中 Chat 终止按钮`
+
+## Chat 可见长文本附件与 Composer 右侧布局修复（2026-08-04）
+
+- 补齐 Codex Desktop 一致的可见交互：在 Codex Composer 粘贴不少于 5,000 个 JavaScript 字符时，正文会从
+  输入框转成紧凑的“粘贴的文本”附件卡，展示字符数并支持移除；不超过 25,000 字符时还可放回输入框。
+- 附件允许单独发送。Renderer 只把本轮附件正文交给 Main；Main 重新校验数量、字符数与单件 10 MiB 上限，
+  写入权限为 `0600` 的临时文本文件，并通过 Codex App Server `mention` 输入项提交，Turn 结束后清理。
+- ChatStore 只持久化附件名称与字符数，明确不保存粘贴正文或临时路径；Claude 仍不启用文本附件化，切换离开
+  Codex 时会把尚未发送的附件正文恢复到输入框，避免草稿丢失。
+- Composer 外层裁剪原生滚动条；底部工具栏改为固定动作区与可横向收缩的运行配置区，避免窗口较窄、左右侧栏
+  同时展开时，“完全允许”、上下文占用和发送按钮被挤出。该布局选择来自 redesign 评审后的紧凑分区方案。
+- 真实 Electron 暗色界面粘贴 5,005 字验收通过：附件卡、字符数、放回/移除操作均可见，输入框正文为空，右侧
+  动作完整显示；验收后已移除测试附件，未发送消息。
+- 新增 Renderer 阈值模型、Main 输入校验、附件协议、隐私持久化和布局契约测试；定向 6 suites / 74 tests、
+  App 全量 32 suites / 203 tests、production build 与 `git diff --check` 通过；build 只保留既有 Markstream
+  PURE 注释警告。
+- 提交信息：`feat: 显示 Codex 长文本附件并修复 Composer 布局`

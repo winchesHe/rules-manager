@@ -80,6 +80,7 @@ import { NativeChatController } from './native-chat-controller.js'
 import { listChatSkills } from './chat-skills.js'
 import { resolveProjectLocation, resolveSessionLocation } from './source-location.js'
 import { validateSessionReferences } from './session-context-validation.js'
+import { validatePastedTextAttachments } from './pasted-text-validation.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
@@ -548,7 +549,14 @@ function validateNativeChatSendRequest(value: unknown) {
   if (request.provider !== 'claude' && request.provider !== 'codex') {
     throw new Error('chat provider must be claude or codex')
   }
-  if (typeof request.message !== 'string' || !request.message.trim()) {
+  const pastedTextAttachments = validatePastedTextAttachments(request.pastedTextAttachments)
+  if (pastedTextAttachments.length > 0 && request.provider !== 'codex') {
+    throw new Error('pasted text attachments require Codex')
+  }
+  if (
+    typeof request.message !== 'string'
+    || (!request.message.trim() && pastedTextAttachments.length === 0)
+  ) {
     throw new Error('chat message is required')
   }
   if (request.chatId !== undefined && (
@@ -579,6 +587,7 @@ function validateNativeChatSendRequest(value: unknown) {
     ...(request.sessionContext !== undefined
       ? { sessionContext: validateSessionReferences(request.sessionContext) }
       : {}),
+    ...(pastedTextAttachments.length > 0 ? { pastedTextAttachments } : {}),
   }
 }
 

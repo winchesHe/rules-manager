@@ -19,7 +19,8 @@ describe('Chat Markdown rendering', () => {
     expect(source).toContain('batchRendering={false}')
     expect(source).toContain('deferNodesUntilVisible={false}')
     expect(source).toContain('renderCodeBlocksAsPre')
-    expect(source).toContain('<p className="break-words whitespace-pre-wrap">{message.content}</p>')
+    expect(source).toContain("break-words whitespace-pre-wrap`}>{message.content}</p>")
+    expect(source).toContain('data-chat-message-attachments')
   })
 
   it('载入 Markstream 样式并用应用主题 token 约束正文和宽内容', () => {

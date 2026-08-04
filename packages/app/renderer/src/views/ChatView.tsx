@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import type {
+  ClipboardEvent as ReactClipboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react'
 import { Alert, Button, Card, Chip, ListBox, Modal, Select, Spinner, Switch, Tooltip } from '@heroui/react'
 import MarkdownRender from 'markstream-react'
 import { useTranslation } from 'react-i18next'
@@ -13,6 +16,7 @@ import {
   Copy,
   Eye,
   FilePenLine,
+  FileText,
   History,
   MoreHorizontal,
   PanelRight,
@@ -80,6 +84,11 @@ import {
   shouldShowNativeChatStop,
   toolActivityCounts,
 } from './chat-timeline-model'
+import {
+  createComposerTextAttachment,
+  PASTED_TEXT_RESTORE_LIMIT,
+  type ComposerTextAttachment,
+} from './chat-pasted-text-model'
 
 interface QueuedChatTurn {
   message: string
@@ -90,6 +99,7 @@ interface QueuedChatTurn {
     fastMode: boolean
   }
   sessionContext?: NativeSessionReference[]
+  pastedTextAttachments?: ComposerTextAttachment[]
 }
 
 interface ChatHistoryItem {
@@ -118,6 +128,7 @@ export function ChatView({
   const [errorTitle, setErrorTitle] = useState<'loadError' | 'actionError'>('loadError')
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [composer, setComposer] = useState('')
+  const [pastedTextAttachments, setPastedTextAttachments] = useState<ComposerTextAttachment[]>([])
   const [isSending, setIsSending] = useState(false)
   const [provider, setProvider] = useState<ProviderId>('claude')
   const [model, setModel] = useState('')
@@ -563,6 +574,7 @@ export function ChatView({
     setThread(null)
     setLegacy(null)
     setComposer('')
+    setPastedTextAttachments([])
     setSelectedSkills([])
     setLiveTimeline([])
     setLiveStartedAt(null)
@@ -585,13 +597,14 @@ export function ChatView({
     setFastMode(source.defaultTurnConfig.fastMode)
     setSelectedContext(source.sessionContext.selected.map((reference) => ({ ...reference })))
     setComposer('')
+    setPastedTextAttachments([])
     setSelectedSkills([])
     setError(null)
   }
 
   function sendChatMessage(): void {
     const rawMessage = composer.trim()
-    if (!rawMessage) return
+    if (!rawMessage && pastedTextAttachments.length === 0) return
     if (thread && thread.kind !== 'native-chat') return
     const usedSkills = [...selectedSkills]
     const message = composeMessageWithSkills(rawMessage, usedSkills)
@@ -600,8 +613,12 @@ export function ChatView({
       provider: thread?.provider ?? provider,
       config: { ...(model ? { model } : {}), effort, fastMode },
       ...(!thread ? { sessionContext: selectedContext.map((reference) => ({ ...reference })) } : {}),
+      ...(pastedTextAttachments.length > 0
+        ? { pastedTextAttachments: pastedTextAttachments.map((attachment) => ({ ...attachment })) }
+        : {}),
     }
     setComposer('')
+    setPastedTextAttachments([])
     setSelectedSkills([])
     if (usedSkills.length > 0) {
       setRecentSkills((current) => {
@@ -636,6 +653,9 @@ export function ChatView({
             message: next.message,
             config: next.config,
             ...(next.sessionContext ? { sessionContext: next.sessionContext } : {}),
+            ...(next.pastedTextAttachments
+              ? { pastedTextAttachments: next.pastedTextAttachments }
+              : {}),
           },
         )
         currentChatId = result.chatId
@@ -654,6 +674,38 @@ export function ChatView({
       sendingRef.current = false
       setIsSending(false)
     }
+  }
+
+  function handleComposerPaste(event: ReactClipboardEvent<HTMLTextAreaElement>): void {
+    const activeProvider = thread?.kind === 'native-chat' ? thread.provider : provider
+    if (activeProvider !== 'codex') return
+    const text = event.clipboardData.getData('text/plain')
+    const attachment = createComposerTextAttachment(text, window.crypto.randomUUID())
+    if (!attachment) return
+    event.preventDefault()
+    setPastedTextAttachments((current) => [...current, attachment])
+  }
+
+  function removePastedTextAttachment(id: string): void {
+    setPastedTextAttachments((current) => current.filter((attachment) => attachment.id !== id))
+  }
+
+  function restorePastedTextAttachment(id: string): void {
+    const attachment = pastedTextAttachments.find((current) => current.id === id)
+    if (!attachment || attachment.characterCount > PASTED_TEXT_RESTORE_LIMIT) return
+    setComposer((current) => current
+      ? `${current}\n${attachment.text}`
+      : attachment.text)
+    removePastedTextAttachment(id)
+  }
+
+  function changeProvider(nextProvider: ProviderId): void {
+    if (nextProvider !== 'codex' && pastedTextAttachments.length > 0) {
+      const restored = pastedTextAttachments.map((attachment) => attachment.text).join('\n\n')
+      setComposer((current) => [current, restored].filter(Boolean).join('\n\n'))
+      setPastedTextAttachments([])
+    }
+    setProvider(nextProvider)
   }
 
   async function stopChatTurn(): Promise<void> {
@@ -981,10 +1033,33 @@ export function ChatView({
 
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
               <div className="bg-gradient-to-t from-background via-background to-transparent px-5 pb-4 pt-3" data-chat-composer>
-                <div className="mx-auto w-full max-w-[51.25rem] rounded-2xl border border-border bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_14px_36px_rgba(0,0,0,0.22)] motion-reduce:transition-none" data-chat-composer-surface>
+                <div className="mx-auto w-full max-w-[51.25rem] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_14px_36px_rgba(0,0,0,0.22)] motion-reduce:transition-none" data-chat-composer-surface>
+                  {pastedTextAttachments.length > 0 && (
+                    <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto px-3 pt-3" data-composer-pasted-text-attachments>
+                      {pastedTextAttachments.map((attachment) => (
+                        <div className="flex min-w-0 max-w-full items-center gap-2 rounded-xl bg-background/70 px-2.5 py-2 text-left" key={attachment.id}>
+                          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-success">
+                            <FileText aria-hidden="true" size={15} />
+                          </span>
+                          <span className="min-w-0">
+                            <strong className="block truncate text-xs font-medium text-foreground">{t('pastedTextAttachment')}</strong>
+                            <span className="block text-[10px] tabular-nums text-muted">{t('pastedTextCharacterCount', { count: formatNumber(attachment.characterCount, currentLocale()) })}</span>
+                          </span>
+                          {attachment.characterCount <= PASTED_TEXT_RESTORE_LIMIT && (
+                            <Button aria-label={t('restorePastedText')} className="h-7 min-h-7 w-7 min-w-7" isIconOnly onPress={() => restorePastedTextAttachment(attachment.id)} size="sm" variant="ghost">
+                              <RotateCcw aria-hidden="true" size={13} />
+                            </Button>
+                          )}
+                          <Button aria-label={t('removePastedText')} className="h-7 min-h-7 w-7 min-w-7" isIconOnly onPress={() => removePastedTextAttachment(attachment.id)} size="sm" variant="ghost">
+                            <X aria-hidden="true" size={13} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <textarea
                     aria-label={t('message')}
-                    className="block max-h-44 min-h-16 w-full resize-none bg-transparent px-4 pb-1 pt-4 text-sm leading-6 text-foreground outline-none placeholder:text-muted"
+                    className="block max-h-44 min-h-16 w-full resize-none bg-transparent px-4 pb-1 pt-4 text-sm leading-6 text-foreground outline-none [scrollbar-gutter:stable] placeholder:text-muted"
                     onChange={(event) => {
                       const trigger = consumeSkillPickerTrigger(event.target.value)
                       setComposer(trigger.composer)
@@ -998,6 +1073,7 @@ export function ChatView({
                         sendChatMessage()
                       }
                     }}
+                    onPaste={handleComposerPaste}
                     placeholder={t('messagePlaceholder')}
                     value={composer}
                   />
@@ -1016,7 +1092,7 @@ export function ChatView({
                       ))}
                     </div>
                   )}
-                  <div className="flex min-h-11 min-w-0 items-center gap-2 px-2 pb-2 pt-1 text-xs text-muted">
+                  <div className="grid min-h-11 min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 overflow-hidden px-2 pb-2 pt-1 text-xs text-muted">
                     <div className="relative h-8" data-composer-options ref={composerOptionsRef}>
                       <Button aria-label={t('openSkillPicker')} className={`h-8 min-h-8 min-w-8 ${selectedSkills.length > 0 ? 'gap-1 px-2' : 'w-8'}`} isIconOnly={selectedSkills.length === 0} onPress={() => setComposerOptionsOpen((open) => !open)} size="sm" variant="ghost">
                         <Plus aria-label={t('moreOptions')} size={16} />
@@ -1037,16 +1113,16 @@ export function ChatView({
                     <Button className="h-8 min-h-8 gap-1 border-0 bg-transparent px-2 shadow-none hover:bg-background/60" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
                       <PanelRight aria-hidden="true" size={14} />{t('contextShort')} <span className="font-semibold text-success">{selectedContext.length}</span>
                     </Button>
-                    <div className="flex h-8 min-w-0 items-center gap-2" data-composer-runtime>
-                      <Select aria-label={t('agent')} className="w-24" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => setProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
+                    <div className="flex h-8 min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-composer-runtime>
+                      <Select aria-label={t('agent')} className="w-24 shrink-0" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => changeProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item><ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item></ListBox></Select.Popover>
                       </Select>
-                      <Select aria-label={t('model')} className="w-36" onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))} selectedKey={model || '__default'}>
+                      <Select aria-label={t('model')} className="w-36 shrink-0" onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))} selectedKey={model || '__default'}>
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>{(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
-                      <Select aria-label={t('effort')} className="w-24" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
+                      <Select aria-label={t('effort')} className="w-24 shrink-0" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{CHAT_EFFORTS.map((value) => <ListBox.Item id={value} key={value}>{value}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
@@ -1058,7 +1134,7 @@ export function ChatView({
                         </Switch>
                       </label>
                     </div>
-                    <div className="ml-auto flex h-8 shrink-0 items-center gap-2.5 border-l border-border pl-3 pr-0.5" data-composer-actions>
+                    <div className="relative z-10 flex h-8 shrink-0 items-center gap-2.5 border-l border-border bg-surface pl-3 pr-0.5" data-composer-actions>
                       <span className="flex items-center gap-1 whitespace-nowrap text-[11px]"><ShieldCheck className="text-success" size={14} />{t('fullAccess')}</span>
                       <Tooltip delay={0}>
                         <Tooltip.Trigger
@@ -1079,7 +1155,7 @@ export function ChatView({
                       {showStopChatTurn && (
                         <Button className="h-8 min-h-8 w-8 min-w-8" isIconOnly onPress={() => void stopChatTurn()} size="sm" variant="ghost"><Square aria-label={t('stopChat')} size={14} /></Button>
                       )}
-                      <Button aria-label={isSending ? t('queue', { count: queuedCount }) : t('send')} className="h-8 min-h-8 w-8 min-w-8 rounded-full bg-primary text-primary-foreground" isDisabled={!composer.trim()} isIconOnly onPress={sendChatMessage} size="sm">
+                      <Button aria-label={isSending ? t('queue', { count: queuedCount }) : t('send')} className="h-8 min-h-8 w-8 min-w-8 rounded-full bg-primary text-primary-foreground" isDisabled={!composer.trim() && pastedTextAttachments.length === 0} isIconOnly onPress={sendChatMessage} size="sm">
                         <Send aria-hidden="true" size={15} />
                       </Button>
                     </div>
@@ -1292,12 +1368,26 @@ function NativeConversation({
   liveStartedAt: string | null
   liveTimeline: NativeTurnTimelineItem[]
 }) {
+  const { t } = useTranslation('chat')
   return (
     <div className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-7 py-4">
       {thread.messages.map((message, index) => message.role === 'user' ? (
         <div className="grid justify-items-end gap-1" key={message.id}>
           <div className="max-w-[68%] rounded-2xl rounded-tr-md bg-surface-hover px-4 py-3 text-sm leading-6 text-foreground">
-            <p className="break-words whitespace-pre-wrap">{message.content}</p>
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="grid gap-1.5" data-chat-message-attachments>
+                {message.attachments.map((attachment, attachmentIndex) => (
+                  <div className="flex items-center gap-2 rounded-xl bg-background/55 px-2.5 py-2" key={`${attachment.name}-${attachmentIndex}`}>
+                    <FileText aria-hidden="true" className="shrink-0 text-success" size={15} />
+                    <span className="min-w-0">
+                      <strong className="block truncate text-xs font-medium">{attachment.name}</strong>
+                      <span className="block text-[10px] tabular-nums text-muted">{t('pastedTextCharacterCount', { count: formatNumber(attachment.characterCount, currentLocale()) })}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {message.content && <p className={`${message.attachments?.length ? 'mt-2' : ''} break-words whitespace-pre-wrap`}>{message.content}</p>}
           </div>
           {message.turnConfig && <TurnConfigLine config={message.turnConfig} />}
         </div>

@@ -236,9 +236,9 @@ describe('home workflow layout', () => {
     expect(source.match(/border-0 bg-transparent px-2\.5 text-xs shadow-none hover:bg-background\/60/g)).toHaveLength(3)
     expect(source).toContain('rounded-lg border-0 bg-transparent px-2.5 text-[11px]')
     expect(source).toContain('data-composer-actions')
-    expect(source).toContain('flex min-h-11 min-w-0 items-center')
+    expect(source).toContain('grid min-h-11 min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto]')
     expect(source.match(/h-8 min-h-8/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
-    expect(source).toContain('border-l border-border pl-3')
+    expect(source).toContain('border-l border-border bg-surface pl-3')
     expect(source).toContain('<Tooltip delay={0}>')
     expect(source).toContain('<Tooltip.Trigger')
     expect(source).toContain('data-context-usage-trigger')
@@ -249,6 +249,21 @@ describe('home workflow layout', () => {
     expect(source).toContain('shouldShowNativeChatStop(isSending, thread)')
     expect(source).toContain('{showStopChatTurn && (')
     expect(source).toContain('queueRef.current')
+  })
+
+  it('Codex 长文本粘贴显示附件卡，并裁剪 Composer 右侧滚动区域', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain('onPaste={handleComposerPaste}')
+    expect(source).toContain('createComposerTextAttachment')
+    expect(source).toContain('data-composer-pasted-text-attachments')
+    expect(source).toContain('pastedTextAttachments.length === 0')
+    expect(source).toContain('data-chat-composer-surface')
+    expect(source).toContain('max-w-[51.25rem] overflow-hidden rounded-2xl')
+    expect(source).toContain('[scrollbar-gutter:stable]')
+    expect(source).toContain('data-composer-runtime')
+    expect(source).toContain('min-w-0 flex-1 items-center gap-2 overflow-x-auto')
+    expect(source).toContain('relative z-10 flex h-8 shrink-0')
   })
 
   it('Composer Skills 使用可搜索多选 Picker 而不是普通 Select', () => {

@@ -320,6 +320,11 @@ export interface ChatMessage {
   createdAt: string
   completedAt?: string
   turnConfig?: ChatTurnConfig
+  attachments?: Array<{
+    kind: 'pasted-text'
+    name: string
+    characterCount: number
+  }>
   toolActivities?: NativeToolActivity[]
   timeline?: NativeTurnTimelineItem[]
 }

@@ -39,4 +39,23 @@ describe('prepareSessionContextInput', () => {
     expect(claude.mentions).toBeUndefined()
     expect(claude.message).toBe(`${claudePrompt}\n\nclaude`)
   })
+
+  it('把用户粘贴长文本写为独立 mention，正文不进入文本 Prompt', async () => {
+    const pastedText = '用户请求'.repeat(1_250)
+    const prepared = await prepareSessionContextInput({
+      provider: 'codex', message: '', contextPrompt: null, revision: 0,
+      pastedTextAttachments: [{
+        name: 'Pasted text.txt', text: pastedText, characterCount: pastedText.length,
+      }],
+    })
+    const mention = prepared.mentions?.[0]
+
+    expect(prepared.message).toContain('attached pasted text file(s)')
+    expect(prepared.message).not.toContain(pastedText)
+    expect(mention).toMatchObject({ name: 'Pasted text.txt' })
+    expect(fs.readFileSync(mention!.path, 'utf8')).toBe(pastedText)
+
+    await prepared.cleanup()
+    expect(fs.existsSync(mention!.path)).toBe(false)
+  })
 })

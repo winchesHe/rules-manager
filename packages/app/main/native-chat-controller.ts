@@ -19,6 +19,7 @@ import type {
   NativeSessionReference,
   NativeTurnConfig,
 } from './chat-store.js'
+import type { NativePastedTextAttachment } from './pasted-text-validation.js'
 import type {
   ChatRuntimeManager,
   NativeChatEvent,
@@ -39,6 +40,7 @@ export interface NativeChatSendRequest {
   message: string
   config: NativeTurnConfig
   sessionContext?: NativeSessionReference[]
+  pastedTextAttachments?: NativePastedTextAttachment[]
 }
 
 export interface NativeChatSendResult {
@@ -79,7 +81,11 @@ export class NativeChatController {
 
   async send(request: NativeChatSendRequest): Promise<NativeChatSendResult> {
     const message = request.message.trim()
-    if (!message) throw new Error('chat message is required')
+    const pastedTextAttachments = request.pastedTextAttachments ?? []
+    if (!message && pastedTextAttachments.length === 0) throw new Error('chat message is required')
+    if (pastedTextAttachments.length > 0 && request.provider !== 'codex') {
+      throw new Error('pasted text attachments require Codex')
+    }
     let chatId = request.chatId
     let nativeSessionId: string | null = null
     if (chatId) {
@@ -94,7 +100,7 @@ export class NativeChatController {
         id: chatId,
         provider: request.provider,
         origin: 'chat',
-        title: deriveTitle(message),
+        title: deriveTitle(message || pastedTextAttachments[0]?.name || 'Pasted text'),
         createdAt,
         defaultTurnConfig: request.config,
       })
@@ -123,6 +129,11 @@ export class NativeChatController {
       content: message,
       at: startedAt,
       turnConfig: request.config,
+      attachments: pastedTextAttachments.map(({ name, characterCount }) => ({
+        kind: 'pasted-text' as const,
+        name,
+        characterCount,
+      })),
     }))
     this.options.onThreadChanged?.(chatId)
     let timeline: NativeTurnTimelineItem[] = []
@@ -133,6 +144,7 @@ export class NativeChatController {
           message,
           contextPrompt,
           revision: contextRevision,
+          pastedTextAttachments,
         })
         try {
           return await this.options.runtime.sendTurn({
@@ -472,6 +484,7 @@ function visibleMessage(input: {
   at: string
   startedAt?: string
   turnConfig?: NativeTurnConfig
+  attachments?: ChatMessage['attachments']
   toolActivities?: NativeToolActivity[]
   timeline?: NativeTurnTimelineItem[]
 }): ChatMessage {
@@ -484,6 +497,9 @@ function visibleMessage(input: {
     createdAt: input.startedAt ?? input.at,
     completedAt: input.at,
     ...(input.turnConfig ? { turnConfig: { ...input.turnConfig } } : {}),
+    ...(input.attachments && input.attachments.length > 0
+      ? { attachments: input.attachments.map((attachment) => ({ ...attachment })) }
+      : {}),
     ...(input.toolActivities && input.toolActivities.length > 0
       ? { toolActivities: input.toolActivities.map((activity) => ({ ...activity })) }
       : {}),
