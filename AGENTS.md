@@ -18,6 +18,7 @@
 2. 实现新 plan/round：先在 [docs/plans/](docs/plans/) 落"观察点 + 验证方式"
 3. 完成一段实现：`memory/process.md` 追加 → `npm test` 全绿 → commit
 4. Commit 信息按 `memory/process.md` 末尾"提交信息"段格式
+5. 每次修改完成并按风险验证后，必须 commit 并立即 push 当前分支，不得把改动停留在未提交或仅本地提交状态；若 push 因权限、网络或远端冲突失败，必须明确报告阻塞
 
 ## 命令
 

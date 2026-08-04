@@ -2880,3 +2880,12 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 定向 3 suites / 14 tests、全量 34 suites / 214 tests、production build 与 `git diff --check`
   通过；build 只保留既有 Markstream PURE 注释警告。
 - 提交信息：`feat: 支持顶部双击缩放窗口`
+
+## 修改完成后自动提交推送规则（2026-08-05）
+
+- 根目录 `AGENTS.md` 工作流新增强制收尾规则：每次修改完成并按风险验证后，必须 commit 并立即 push
+  当前分支，不得停留在未提交或仅本地提交状态。
+- push 若因权限、网络或远端冲突失败，必须明确报告阻塞，不得把未推送状态描述为交付完成。
+- 本轮仅修改项目工作流文档，不新增业务测试；替代验证为规则内容回读、`git diff --check`、提交后本地与
+  `origin/main` SHA 对账。
+- 提交信息：`docs: 要求修改后提交并推送`
