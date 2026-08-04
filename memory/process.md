@@ -2864,3 +2864,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 定向 4 suites / 77 tests、App 全量 34 suites / 214 tests、Core 全量 30 suites / 309 tests、production
   build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
 - 提交信息：`fix: 修复 Chat 多段思考摘要拼接`
+
+## 顶部边栏双击缩放窗口（2026-08-04）
+
+- 应用最顶部新增 12px 双击热区：普通窗口双击调用 `maximize()`，已最大化窗口再次双击调用
+  `unmaximize()`，恢复此前普通窗口尺寸；不进入或退出用户主动开启的系统全屏。
+- 保留原有 2rem `-webkit-app-region: drag` 拖拽带；双击热区仅占最上方边缘并显式使用 `no-drag`，Chat
+  Header 等交互控件继续由更高层 `window-no-drag` 保护。
+- Renderer 只发送 `window.toggleMaximize`；Main 使用 `BrowserWindow.fromWebContents(event.sender)` 定位
+  发起事件的窗口，不接受 Renderer 传入窗口标识，也不依赖全局主窗口引用。
+- 首版把 `onDoubleClick` 直接绑定到 `drag` 元素，但真实 Electron 验收确认原生拖拽区域不会派发 DOM
+  双击事件；调整为独立顶部边缘热区后，两次真实双击均命中 IPC，分别执行最大化与还原分支。
+- 观察点、验收标准与验证方式记录在 `docs/plans/window-titlebar-double-click.md`。
+- 新增普通窗口最大化、已最大化还原、全屏保护，以及拖拽层/双击层/IPC 来源窗口合同测试。
+- App 定向 3 suites / 14 tests、全量 34 suites / 214 tests、production build 与 `git diff --check`
+  通过；build 只保留既有 Markstream PURE 注释警告。
+- 提交信息：`feat: 支持顶部双击缩放窗口`

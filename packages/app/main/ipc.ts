@@ -82,6 +82,7 @@ import { resolveProjectLocation, resolveSessionLocation } from './source-locatio
 import { validateSessionReferences } from './session-context-validation.js'
 import { validatePastedTextAttachments } from './pasted-text-validation.js'
 import { recordChatCompletion } from './app-badge.js'
+import { toggleWindowMaximize } from './window-maximize.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
@@ -122,6 +123,11 @@ const providerController = new ProviderController(
 
 export function registerIpcHandlers(): void {
   markInterruptedBackgroundRuns()
+  ipcMain.handle('window.toggleMaximize', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || window.isDestroyed()) throw new Error('window was not found')
+    return toggleWindowMaximize(window)
+  })
   ipcMain.handle('projects.list', () => listProjects())
   ipcMain.handle('projects.sessions', (_event, slug: unknown) => {
     if (typeof slug !== 'string' || !slug.trim()) {

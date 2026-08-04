@@ -226,6 +226,13 @@ body {
   -webkit-app-region: drag;
 }
 
+.window-titlebar-toggle-region {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.75rem;
+  -webkit-app-region: no-drag;
+}
+
 .window-no-drag {
   position: relative;
   z-index: 1001;

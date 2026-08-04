@@ -70,7 +70,12 @@ export function App() {
 
   return (
     <>
-      <div aria-hidden="true" className="window-drag-region" />
+      <div aria-hidden="true" className="window-drag-region">
+        <div
+          className="window-titlebar-toggle-region"
+          onDoubleClick={() => { void window.api.invoke('window.toggleMaximize') }}
+        />
+      </div>
       {activeView === 'settings' ? (
         <SettingsView onBack={() => setActiveView(previousView)} />
       ) : (

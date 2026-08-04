@@ -15,10 +15,17 @@ describe('window drag region', () => {
       path.join(appRoot, 'renderer/src/styles.css'),
       'utf8',
     )
+    const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
 
     expect(appSource).toContain('className="window-drag-region"')
+    expect(appSource).toContain('className="window-titlebar-toggle-region"')
+    expect(appSource).toContain("window.api.invoke('window.toggleMaximize')")
     expect(styles).toMatch(/\.window-drag-region\s*\{[^}]*-webkit-app-region:\s*drag/s)
+    expect(styles).toMatch(/\.window-titlebar-toggle-region\s*\{[^}]*height:\s*0\.75rem[^}]*-webkit-app-region:\s*no-drag/s)
     expect(styles).toMatch(/\.window-no-drag[\s\S]*-webkit-app-region:\s*no-drag/)
+    expect(ipcSource).toContain("ipcMain.handle('window.toggleMaximize'")
+    expect(ipcSource).toContain('BrowserWindow.fromWebContents(event.sender)')
+    expect(ipcSource).toContain('toggleWindowMaximize(window)')
   })
 
   it('Chat Header 位于拖拽层之上，避免顶部按钮被拖拽热区拦截', () => {
