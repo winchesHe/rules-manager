@@ -103,7 +103,7 @@ describe('CodexChatAdapter', () => {
       sandbox: 'danger-full-access',
     })
     expect(server.requests.find((item) => item.method === 'turn/start')?.params).toMatchObject({
-      threadId: 'codex-thread-1', model: 'gpt-5.4', effort: 'xhigh',
+      threadId: 'codex-thread-1', model: 'gpt-5.4', effort: 'xhigh', summary: 'auto',
       serviceTier: 'fast', cwd: '/fixed-workspace', approvalPolicy: 'never',
       sandboxPolicy: { type: 'dangerFullAccess' },
       input: [{ type: 'text', text: 'hello' }],
@@ -138,7 +138,7 @@ describe('CodexChatAdapter', () => {
     expect(server.requests.find((item) => item.method === 'thread/resume')?.params)
       .toEqual({ threadId: 'codex-thread-1' })
     expect(server.requests.find((item) => item.method === 'turn/start')?.params)
-      .toMatchObject({ serviceTier: null })
+      .toMatchObject({ serviceTier: null, summary: 'auto' })
   })
 
   it('把大型文本上下文作为 App Server mention 输入提交', async () => {

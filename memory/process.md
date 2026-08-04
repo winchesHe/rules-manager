@@ -2796,3 +2796,28 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   App 全量 32 suites / 203 tests、production build 与 `git diff --check` 通过；build 只保留既有 Markstream
   PURE 注释警告。
 - 提交信息：`feat: 显示 Codex 长文本附件并修复 Composer 布局`
+
+## Chat 思考正文与单工具展示修复（2026-08-04）
+
+- 核对用户截图对应的真实 ChatStore 数据后确认，Codex App Server 为这些 reasoning item 只发送了生命周期事件，
+  持久化 `content` 为空；App 无法恢复或推断 Provider 未返回的隐藏推理内容。
+- 继续核对本机当前 App Server 生成类型后确认 `TurnStartParams.summary` 支持
+  `auto / concise / detailed / none`；此前 Adapter 只传 `effort`，没有请求推理摘要。本轮为每个 Codex Turn
+  显式传 `summary: "auto"`，复用已有 `item/reasoning/summaryTextDelta` 消费链展示可读摘要。
+- Native Chat 中有正文的 Thinking 改为默认直接展示标题和正文，不再要求点击展开；正文为空或仅空白时不渲染
+  占位行，避免出现满屏无法查看的“思考”。
+- 空 Thinking 同时在 Timeline 分组前过滤，不再形成不可见的阶段边界；因此被空 reasoning 生命周期事件隔开的
+  多条 Tool 会按用户实际看到的连续阶段重新聚合，有正文 Thinking 仍保留分组边界。
+- 实际回放历史 Rules 频道后补充确认：仅按可见相邻关系会跨越 Codex Provider Turn 形成过大分组；现使用
+  Tool 已有的 `sourceLocator.turnId` 划分调用阶段，同一 Turn 聚合、不同 Turn 分开，单工具 Turn 继续直出。
+- Timeline 分组改为先收集连续 Tool：只有连续两条及以上才生成分类汇总组；单条 Tool 保留原始 Timeline item，
+  直接渲染可展开详情的工具卡。旧消息 `toolActivities` fallback 同样在单条时直出。
+- Assistant 与 Thinking 继续作为 Tool 分组边界；Tool 详情仍通过既有 `chat.tool.read` 回源，未修改 ChatStore
+  结构、Provider 协议或 Tool input/output 持久化策略。
+- 隔离生产 Electron 中回放用户的 `生成规则：changed7d` 历史频道：100 条 Tool 按 46 个 Codex Turn
+  分阶段，首段收起显示“运行 8 条命令”、展开后正好 8 条；单 Tool Turn 直接显示 `Command`。历史频道
+  的 96 条 Thinking 正文均为空且不再渲染；另发起真实只读 Codex 任务后出现 1 条可读推理摘要，单条
+  Command 直接展示，证明新 Turn 的 `summary: "auto"` 链路生效。
+- 定向 3 suites / 73 tests、App 全量 32 suites / 206 tests、Core 全量 30 suites / 309 tests、production
+  build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
+- 提交信息：`fix: 显示 Chat 思考摘要并直出单条工具`

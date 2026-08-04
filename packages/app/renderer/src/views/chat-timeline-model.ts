@@ -5,7 +5,7 @@ import type {
 } from '../types'
 
 export type NativeTurnTimelineDisplayItem =
-  | Exclude<NativeTurnTimelineItem, { type: 'tool' }>
+  | NativeTurnTimelineItem
   | { type: 'tool-group'; itemId: string; activities: NativeToolActivity[] }
 
 export interface ToolActivityCounts {
@@ -26,27 +26,46 @@ export function groupNativeTurnTimeline(
   timeline: NativeTurnTimelineItem[],
 ): NativeTurnTimelineDisplayItem[] {
   const grouped: NativeTurnTimelineDisplayItem[] = []
+  let pendingTools: Extract<NativeTurnTimelineItem, { type: 'tool' }>[] = []
 
-  for (const item of timeline) {
-    if (item.type !== 'tool') {
-      grouped.push(item)
-      continue
+  const flushTools = (): void => {
+    if (pendingTools.length === 1) {
+      grouped.push(pendingTools[0])
+    } else if (pendingTools.length > 1) {
+      grouped.push({
+        type: 'tool-group',
+        itemId: pendingTools[0].itemId,
+        activities: pendingTools.map((item) => item.activity),
+      })
     }
-
-    const previous = grouped.at(-1)
-    if (previous?.type === 'tool-group') {
-      previous.activities.push(item.activity)
-      continue
-    }
-
-    grouped.push({
-      type: 'tool-group',
-      itemId: item.itemId,
-      activities: [item.activity],
-    })
+    pendingTools = []
   }
 
+  for (const item of timeline) {
+    if (item.type === 'thinking' && !item.content.trim()) continue
+    if (item.type === 'tool') {
+      const previousTool = pendingTools.at(-1)
+      if (previousTool && !isSameToolPhase(previousTool.activity, item.activity)) {
+        flushTools()
+      }
+      pendingTools.push(item)
+      continue
+    }
+    flushTools()
+    grouped.push(item)
+  }
+  flushTools()
+
   return grouped
+}
+
+function isSameToolPhase(
+  previous: NativeToolActivity,
+  current: NativeToolActivity,
+): boolean {
+  const previousTurnId = previous.sourceLocator?.turnId
+  const currentTurnId = current.sourceLocator?.turnId
+  return !previousTurnId || !currentTurnId || previousTurnId === currentTurnId
 }
 
 export function toolActivityCounts(

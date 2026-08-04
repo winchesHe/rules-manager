@@ -1453,7 +1453,10 @@ function NativeTurnTimeline({ timeline, chatId, final }: {
         if (item.type === 'thinking') {
           return <NativeThinkingRow item={item} key={`thinking-${item.itemId}`} />
         }
-        return <ToolActivityList activities={item.activities} chatId={chatId} key={`tool-group-${item.itemId}`} />
+        if (item.type === 'tool-group') {
+          return <ToolActivityList activities={item.activities} chatId={chatId} key={`tool-group-${item.itemId}`} />
+        }
+        return <NativeToolCard activity={item.activity} chatId={chatId} key={`tool-${item.itemId}`} />
       })}
     </div>
   )
@@ -1463,29 +1466,18 @@ function NativeThinkingRow({ item }: {
   item: Extract<NativeTurnTimelineItem, { type: 'thinking' }>
 }) {
   const { t } = useTranslation('chat')
-  const [expanded, setExpanded] = useState(false)
-  const expandable = Boolean(item.content)
+  if (!item.content.trim()) return null
   return (
     <div className="min-w-0 text-sm text-muted">
-      <button
-        aria-expanded={expandable ? expanded : undefined}
-        className={`grid min-h-8 w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1 text-left transition-colors ${expandable ? 'hover:bg-surface-hover' : 'cursor-default'}`}
-        disabled={!expandable}
-        onClick={() => setExpanded((current) => !current)}
-        type="button"
-      >
+      <div className="grid min-h-8 w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 px-1">
         <Brain aria-hidden="true" size={15} />
         <strong className="text-xs font-medium text-foreground">{t('thinking')}</strong>
         <span />
-        {item.status === 'running'
-          ? <Spinner color="accent" size="sm" />
-          : expandable && <ChevronRight className={`transition-transform ${expanded ? 'rotate-90' : ''}`} size={14} />}
-      </button>
-      {expanded && item.content && (
-        <p className="ml-[1.6rem] mt-1 whitespace-pre-wrap border-l border-border py-1 pl-3 text-xs leading-5 text-muted">
-          {item.content}
-        </p>
-      )}
+        {item.status === 'running' && <Spinner color="accent" size="sm" />}
+      </div>
+      <p className="ml-[1.6rem] mt-1 whitespace-pre-wrap border-l border-border py-1 pl-3 text-xs leading-5 text-muted">
+        {item.content}
+      </p>
     </div>
   )
 }
@@ -1495,6 +1487,9 @@ function ToolActivityList({ activities, chatId }: {
   chatId?: string
 }) {
   if (activities.length === 0) return null
+  if (activities.length === 1) {
+    return <NativeToolCard activity={activities[0]} chatId={chatId} />
+  }
   return <NativeToolGroup activities={activities} chatId={chatId} />
 }
 

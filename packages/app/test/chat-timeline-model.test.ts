@@ -95,7 +95,7 @@ describe('Native Chat Tool activity 分组', () => {
       'assistant:commentary-1',
       'tool-group:read-1',
       'thinking:thinking-1',
-      'tool-group:search-1',
+      'tool:search-1',
       'assistant:final-1',
     ])
     expect(grouped[1]).toMatchObject({
@@ -106,9 +106,80 @@ describe('Native Chat Tool activity 分组', () => {
       ],
     })
     expect(grouped[3]).toMatchObject({
-      type: 'tool-group',
-      activities: [{ itemId: 'search-1', status: 'failed' }],
+      type: 'tool',
+      activity: { itemId: 'search-1', status: 'failed' },
     })
+  })
+
+  it('只有一条 Tool activity 时直接返回单项，不创建汇总分组', () => {
+    const tool: NativeTurnTimelineItem = {
+      type: 'tool', itemId: 'shell-1',
+      activity: {
+        itemId: 'shell-1', kind: 'shell', name: 'Command',
+        status: 'completed', summary: 'pwd',
+      },
+    }
+
+    expect(groupNativeTurnTimeline([tool])).toEqual([tool])
+  })
+
+  it('空 Thinking 不切断可见 Tool 阶段，有正文 Thinking 仍保留边界', () => {
+    const timeline: NativeTurnTimelineItem[] = [
+      {
+        type: 'tool', itemId: 'shell-1',
+        activity: { itemId: 'shell-1', kind: 'shell', name: 'Command', status: 'completed' },
+      },
+      { type: 'thinking', itemId: 'thinking-empty', content: '  ', status: 'completed' },
+      {
+        type: 'tool', itemId: 'shell-2',
+        activity: { itemId: 'shell-2', kind: 'shell', name: 'Command', status: 'completed' },
+      },
+      { type: 'thinking', itemId: 'thinking-visible', content: '继续核对。', status: 'completed' },
+      {
+        type: 'tool', itemId: 'shell-3',
+        activity: { itemId: 'shell-3', kind: 'shell', name: 'Command', status: 'completed' },
+      },
+    ]
+
+    expect(groupNativeTurnTimeline(timeline).map((item) => `${item.type}:${item.itemId}`)).toEqual([
+      'tool-group:shell-1',
+      'thinking:thinking-visible',
+      'tool:shell-3',
+    ])
+  })
+
+  it('按 Codex turnId 切分工具阶段，单工具阶段保持直接展示', () => {
+    const timeline: NativeTurnTimelineItem[] = [
+      {
+        type: 'tool', itemId: 'turn-1-shell-1',
+        activity: {
+          itemId: 'turn-1-shell-1', kind: 'shell', name: 'Command', status: 'completed',
+          sourceLocator: { turnId: 'turn-1', toolIndex: 0 },
+        },
+      },
+      { type: 'thinking', itemId: 'thinking-empty', content: '', status: 'completed' },
+      {
+        type: 'tool', itemId: 'turn-1-shell-2',
+        activity: {
+          itemId: 'turn-1-shell-2', kind: 'shell', name: 'Command', status: 'completed',
+          sourceLocator: { turnId: 'turn-1', toolIndex: 1 },
+        },
+      },
+      {
+        type: 'tool', itemId: 'turn-2-shell-1',
+        activity: {
+          itemId: 'turn-2-shell-1', kind: 'shell', name: 'Command', status: 'completed',
+          sourceLocator: { turnId: 'turn-2', toolIndex: 0 },
+        },
+      },
+    ]
+
+    const grouped = groupNativeTurnTimeline(timeline)
+
+    expect(grouped.map((item) => `${item.type}:${item.itemId}`)).toEqual([
+      'tool-group:turn-1-shell-1',
+      'tool:turn-2-shell-1',
+    ])
   })
 
   it('空 timeline 不产生占位分组', () => {

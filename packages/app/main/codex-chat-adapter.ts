@@ -252,6 +252,7 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         sandboxPolicy: { type: 'dangerFullAccess' },
         ...(request.config.model ? { model: request.config.model } : {}),
         effort: request.config.effort,
+        summary: 'auto',
         serviceTier: request.config.fastMode ? 'fast' : null,
         ...(request.outputSchema ? { outputSchema: request.outputSchema } : {}),
       }))
