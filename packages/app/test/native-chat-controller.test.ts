@@ -116,6 +116,53 @@ describe('NativeChatController', () => {
     })).rejects.toThrow('provider is locked')
   })
 
+  it('只在 Assistant Turn 成功落盘后发送完成通知', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-completion-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const completed: string[] = []
+    let shouldFail = false
+    const adapter: ChatProviderAdapter = {
+      start: async () => {
+        if (shouldFail) throw new Error('provider failed')
+        return { nativeSessionId: 'native-completion', content: 'done' }
+      },
+      resume: async (request) => {
+        if (shouldFail) throw new Error('provider failed')
+        return { nativeSessionId: request.nativeSessionId, content: 'done again' }
+      },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }
+    const controller = new NativeChatController({
+      store,
+      runtime: new ChatRuntimeManager(() => adapter),
+      workingDirectory: '/fixed-workspace',
+      createId: () => 'chat-completion',
+      now: () => '2026-08-04T12:00:00.000Z',
+      onTurnCompleted: (chatId) => completed.push(chatId),
+    })
+
+    await controller.send({
+      provider: 'codex', message: 'first', config: { effort: 'medium', fastMode: false },
+    })
+    expect(completed).toEqual(['chat-completion'])
+    expect(store.readThread('chat-completion')?.messages.at(-1)).toMatchObject({
+      role: 'assistant', content: 'done', status: 'completed',
+    })
+
+    shouldFail = true
+    await expect(controller.send({
+      chatId: 'chat-completion', provider: 'codex', message: 'second',
+      config: { effort: 'medium', fastMode: false },
+    })).rejects.toThrow('provider failed')
+    expect(completed).toEqual(['chat-completion'])
+  })
+
   it('发送后立即暴露用户消息，并用本轮起止时间保存 Assistant 与累计流式正文', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-live-turn-'))
     roots.push(root)

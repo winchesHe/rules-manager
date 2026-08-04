@@ -81,6 +81,7 @@ import { listChatSkills } from './chat-skills.js'
 import { resolveProjectLocation, resolveSessionLocation } from './source-location.js'
 import { validateSessionReferences } from './session-context-validation.js'
 import { validatePastedTextAttachments } from './pasted-text-validation.js'
+import { recordChatCompletion } from './app-badge.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
@@ -94,6 +95,7 @@ const nativeChatController = new NativeChatController({
   workingDirectory: workspace.workspaceDir,
   onEvent: broadcastNativeChatEvent,
   onThreadChanged: broadcastNativeChatChanged,
+  onTurnCompleted: recordChatCompletion,
 })
 const scanController = new ScanController(
   (request) =>

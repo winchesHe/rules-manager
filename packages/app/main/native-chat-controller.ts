@@ -63,6 +63,7 @@ export interface NativeChatControllerOptions {
   now?: () => string
   onEvent?: (envelope: { chatId: string; event: NativeChatEvent }) => void
   onThreadChanged?: (chatId: string) => void
+  onTurnCompleted?: (chatId: string) => void
 }
 
 export interface NativeRulesStartResult {
@@ -197,6 +198,7 @@ export class NativeChatController {
         timeline,
         toolActivities: timeline.flatMap((item) => item.type === 'tool' ? [item.activity] : []),
       }))
+      this.options.onTurnCompleted?.(chatId)
       return { chatId, nativeSessionId: result.nativeSessionId }
     } catch (error) {
       this.options.store.markNativeTurnFailed(chatId, errorMessage(error), this.now())
@@ -356,6 +358,7 @@ export class NativeChatController {
         projectResponses,
       }, completedAt)
       updateRunMetadata(input.runId, 'completed', input.request, evidence, candidateCount)
+      this.options.onTurnCompleted?.(input.chatId)
     } catch (error) {
       const message = errorMessage(error)
       const failedAt = this.now()

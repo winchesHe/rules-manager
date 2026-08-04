@@ -6,6 +6,7 @@ import {
   saveWindowPosition,
 } from './window-position'
 import { cleanupStaleEvidenceContexts } from '../../core/src/evidence-context'
+import { clearChatCompletionBadge } from './app-badge'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -43,6 +44,7 @@ function createWindow(): void {
 
   window.on('move', persistWindowState)
   window.on('resize', persistWindowState)
+  window.on('focus', clearChatCompletionBadge)
   window.once('close', persistWindowState)
   window.once('ready-to-show', () => window.show())
   window.once('closed', () => {

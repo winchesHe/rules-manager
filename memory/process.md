@@ -2833,3 +2833,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 定向 3 suites / 66 tests、App 全量 32 suites / 206 tests、Core 全量 30 suites / 309 tests、production
   build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
 - 提交信息：`fix: 使用 Markdown 渲染 Chat 思考正文`
+
+## Chat 完成应用角标（2026-08-04）
+
+- Native Chat 的 Assistant Turn 成功落盘后触发应用级完成通知；普通 Chat 每轮成功计一次，Rules Native Chat
+  只在整次规则生成成功后计一次，Provider 失败路径不计数。
+- 角标采用进程内未读语义：应用不在前台时依次累计 `1`、`2`；任一主窗口重新获得焦点后清零，应用在
+  前台完成的轮次不产生未读角标。计数不写入 ChatStore、数据库或对话文件。
+- Electron 主进程使用 `app.setBadgeCount` 写入系统应用角标；平台 API 不可用或抛错时隔离失败，不反向改变
+  已成功完成的 Chat Turn。
+- 观察点、验收标准与验证方式记录在 `docs/plans/chat-completion-app-badge.md`。
+- 新增角标累计、前台忽略、聚焦清零、系统 API 异常隔离，以及 Controller 成功通知/失败不通知测试。
+- App 全量 33 suites / 210 tests、production build 与 `git diff --check` 通过；build 只保留既有 Markstream
+  PURE 注释警告。App typecheck 仍被仓库既有 workspace `rootDir` / `TS6307` 配置问题及 `RulesView` 两处
+  既有类型错误阻断，输出中没有本轮新增文件的类型错误。
+- 提交信息：`feat: 增加 Chat 完成应用角标`
