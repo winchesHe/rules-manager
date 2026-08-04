@@ -29,11 +29,24 @@ const navigation = [
   { id: 'rules', labelKey: 'rules', icon: ScrollText },
 ] satisfies Array<{ id: ContentViewId; labelKey: string; icon: typeof ScanSearch }>
 
-const rulesNavigation: Array<{ id: RulesSection; labelKey: string }> = [
-  { id: 'overview', labelKey: 'rulesOverview' },
-  { id: 'agents', labelKey: 'agentInstructions' },
-  { id: 'memories', labelKey: 'agentMemory' },
-  { id: 'generated', labelKey: 'generatedRules' },
+const rulesNavigationGroups: Array<{
+  labelKey: string
+  items: Array<{ id: RulesSection; labelKey: string }>
+}> = [
+  {
+    labelKey: 'rulesManagement',
+    items: [
+      { id: 'overview', labelKey: 'rulesOverview' },
+      { id: 'generated', labelKey: 'rulesWorkbench' },
+    ],
+  },
+  {
+    labelKey: 'agentContext',
+    items: [
+      { id: 'agents', labelKey: 'agentInstructions' },
+      { id: 'memories', labelKey: 'agentMemory' },
+    ],
+  },
 ]
 
 export function App() {
@@ -101,23 +114,39 @@ export function App() {
                     {id === 'rules' && active && (
                       <div
                         aria-label={t('rulesLabel')}
-                        className="ml-5 grid gap-0.5 border-l border-border pl-2"
+                        className="grid gap-0.5 pt-3"
                       >
-                        {rulesNavigation.map((item) => (
-                          <Button
-                            aria-current={activeRulesSection === item.id ? 'page' : undefined}
-                            className={`h-8 justify-start px-2 text-xs ${
-                              activeRulesSection === item.id
-                                ? 'bg-surface-hover text-primary'
-                                : 'text-muted hover:bg-surface-hover hover:text-foreground'
-                            }`}
-                            fullWidth
-                            key={item.id}
-                            onPress={() => setActiveRulesSection(item.id)}
-                            variant="ghost"
+                        {rulesNavigationGroups.map((group, groupIndex) => (
+                          <div
+                            role="group"
+                            aria-label={t(group.labelKey)}
+                            className="grid gap-0.5"
+                            key={group.labelKey}
                           >
-                            {t(item.labelKey)}
-                          </Button>
+                            <span
+                              className={`pl-10 pr-2 text-[10px] font-semibold tracking-[0.075em] text-muted/70 ${
+                                groupIndex === 0 ? '' : 'mt-3.5'
+                              }`}
+                            >
+                              {t(group.labelKey)}
+                            </span>
+                            {group.items.map((item) => (
+                              <Button
+                                aria-current={activeRulesSection === item.id ? 'page' : undefined}
+                                className={`h-8 justify-start pl-10 pr-2 text-xs ${
+                                  activeRulesSection === item.id
+                                    ? 'bg-surface-hover text-foreground'
+                                    : 'text-muted hover:bg-surface-hover hover:text-foreground'
+                                }`}
+                                fullWidth
+                                key={item.id}
+                                onPress={() => setActiveRulesSection(item.id)}
+                                variant="ghost"
+                              >
+                                {t(item.labelKey)}
+                              </Button>
+                            ))}
+                          </div>
                         ))}
                       </div>
                     )}

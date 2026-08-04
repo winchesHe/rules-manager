@@ -27,6 +27,25 @@ describe('home workflow layout', () => {
     expect(source).toContain('overflow-x-hidden')
   })
 
+  it('Rules 二级导航按规则管理和 Agent 上下文分组，并使用整行交互热区', () => {
+    const source = read('App.tsx')
+
+    expect(source).toContain("labelKey: 'rulesManagement'")
+    expect(source).toContain("labelKey: 'agentContext'")
+    expect(source).toContain('role="group"')
+    expect(source.indexOf("id: 'overview'"))
+      .toBeLessThan(source.indexOf("id: 'generated'"))
+    expect(source.indexOf("id: 'generated'"))
+      .toBeLessThan(source.indexOf("id: 'agents'"))
+    expect(source.indexOf("id: 'agents'"))
+      .toBeLessThan(source.indexOf("id: 'memories'"))
+    expect(source).toContain("{ id: 'generated', labelKey: 'rulesWorkbench' }")
+    expect(source).toContain('className="grid gap-0.5 pt-3"')
+    expect(source).toContain("groupIndex === 0 ? '' : 'mt-3.5'")
+    expect(source).toContain('h-8 justify-start pl-10 pr-2 text-xs')
+    expect(source).not.toContain('ml-5 grid gap-0.5 border-l border-border pl-2')
+  })
+
   it('Chat 使用历史 Drawer、Conversation、Context，并提供首次发送才落盘的 Composer', () => {
     const source = read('views/ChatView.tsx')
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
@@ -135,6 +154,8 @@ describe('home workflow layout', () => {
     expect(source).toContain('data-chat-history-tabs')
     expect(source).toContain('grid grid-cols-2 gap-1')
     expect(source).toContain('h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal]')
+    expect(source.match(/text-pane-muted hover:bg-surface-hover hover:text-pane-foreground/g)).toHaveLength(2)
+    expect(source.match(/focus-visible:bg-surface-hover focus-visible:text-pane-foreground/g)).toHaveLength(2)
     expect(source).toContain('bg-surface-raised text-pane-foreground')
     expect(source).not.toContain('grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1')
   })
@@ -210,6 +231,10 @@ describe('home workflow layout', () => {
     expect(source).toContain('data-composer-context')
     expect(source).toContain('data-composer-runtime')
     expect(source).toContain('data-composer-fast-mode')
+    expect(source).toContain('data-composer-context onPress')
+    expect(source).toContain('border-0 bg-transparent px-2 shadow-none hover:bg-background/60')
+    expect(source.match(/border-0 bg-transparent px-2\.5 text-xs shadow-none hover:bg-background\/60/g)).toHaveLength(3)
+    expect(source).toContain('rounded-lg border-0 bg-transparent px-2.5 text-[11px]')
     expect(source).toContain('data-composer-actions')
     expect(source).toContain('flex min-h-11 min-w-0 items-center')
     expect(source.match(/h-8 min-h-8/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
@@ -221,6 +246,8 @@ describe('home workflow layout', () => {
     expect(source).toContain("t('fullAccess')")
     expect(source).toContain('liveUsage')
     expect(source).toContain('stopChatTurn')
+    expect(source).toContain('shouldShowNativeChatStop(isSending, thread)')
+    expect(source).toContain('{showStopChatTurn && (')
     expect(source).toContain('queueRef.current')
   })
 
@@ -430,7 +457,7 @@ describe('home workflow layout', () => {
     expect(source).toContain("tr('scope.changed')")
     expect(appSource).toContain("t('rulesLabel')")
     expect(appSource).toContain("labelKey: 'agentInstructions'")
-    expect(appSource).toContain("labelKey: 'generatedRules'")
+    expect(appSource).toContain("labelKey: 'rulesWorkbench'")
     expect(appSource).not.toContain("labelKey: 'generationHistory'")
     expect(source).toContain("section === 'agents'")
     expect(source).toContain("section === 'generated'")
@@ -513,7 +540,7 @@ describe('home workflow layout', () => {
     const source = read('views/RulesView.tsx')
     const agentPage = source.slice(
       source.indexOf('function AgentInstructionsIndexPage'),
-      source.indexOf('function GeneratedRulesIndexPage'),
+      source.indexOf('function AgentMemoryIndexPage'),
     )
     const generatedPage = source.slice(
       source.indexOf('function GeneratedRulesIndexPage'),
@@ -565,12 +592,24 @@ describe('home workflow layout', () => {
     expect(appSource).toContain("{ id: 'memories', labelKey: 'agentMemory' }")
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.list'")
     expect(ipcSource).toContain("ipcMain.handle('rules.memories.read'")
+    expect(ipcSource).toContain("ipcMain.handle('rules.memories.reveal'")
     expect(ipcSource).toContain('isAutoMemoryAgent(agent)')
     expect(ipcSource).toContain('readAutoMemorySource(agent, memoryId)')
+    expect(ipcSource).toContain('shell.showItemInFolder(source.path)')
     expect(source).toContain('AgentMemoryIndexPage')
     expect(source).toContain('AgentMemoryDetailPage')
     expect(source).toContain("'rules.memories.list'")
     expect(source).toContain("'rules.memories.read'")
+    expect(source).toContain("'rules.memories.reveal'")
+    expect(source).toContain("tr('memory.reveal')")
+    expect(source).toContain("tr('memory.appliesToProject'")
+    expect(source).toContain("tr('memory.codexProjectTitle'")
+    expect(source).toContain("tr('memory.codexProjectScopeNote')")
+    expect(source).toContain('groupAutoMemoryProjects(sources)')
+    expect(source).toContain('partitionAutoMemorySources(sources)')
+    expect(source).toContain("(['projects', 'sources'] as const)")
+    expect(source).toContain("tr('memory.unresolvedDescription')")
+    expect(source).toContain("tr('memory.projectAggregateDescription'")
     const memoryPage = source.slice(
       source.indexOf('function AgentMemoryIndexPage'),
       source.indexOf('function GeneratedRulesIndexPage'),

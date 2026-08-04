@@ -1,6 +1,11 @@
 import { describe, expect, it } from '@jest/globals'
 import { mergeNativeTimelineEvent } from '../main/native-chat-timeline.js'
-import { mergeLiveTimeline } from '../renderer/src/views/chat-timeline-model.js'
+import {
+  groupNativeTurnTimeline,
+  mergeLiveTimeline,
+  shouldShowNativeChatStop,
+  toolActivityCounts,
+} from '../renderer/src/views/chat-timeline-model.js'
 import type { NativeChatEvent, NativeTurnTimelineItem } from '../main/chat-runtime.js'
 
 type TimelineMerge = (
@@ -61,5 +66,89 @@ describe.each(timelineMerges)('%s Native Chat timeline', (_name, merge) => {
     })
 
     expect(duplicate).toEqual([{ type: 'assistant', itemId: 'message-1', content: '你好' }])
+  })
+})
+
+describe('Native Chat Tool activity 分组', () => {
+  it('只合并连续 Tool，并由 Assistant 与 Thinking 保留原始分组边界', () => {
+    const timeline: NativeTurnTimelineItem[] = [
+      { type: 'assistant', itemId: 'commentary-1', content: '先检查。' },
+      {
+        type: 'tool', itemId: 'read-1',
+        activity: { itemId: 'read-1', kind: 'read', name: 'Read', status: 'completed' },
+      },
+      {
+        type: 'tool', itemId: 'shell-1',
+        activity: { itemId: 'shell-1', kind: 'shell', name: 'Command', status: 'running' },
+      },
+      { type: 'thinking', itemId: 'thinking-1', content: '继续确认。', status: 'completed' },
+      {
+        type: 'tool', itemId: 'search-1',
+        activity: { itemId: 'search-1', kind: 'search', name: 'Search', status: 'failed' },
+      },
+      { type: 'assistant', itemId: 'final-1', content: '完成。' },
+    ]
+
+    const grouped = groupNativeTurnTimeline(timeline)
+
+    expect(grouped.map((item) => `${item.type}:${item.itemId}`)).toEqual([
+      'assistant:commentary-1',
+      'tool-group:read-1',
+      'thinking:thinking-1',
+      'tool-group:search-1',
+      'assistant:final-1',
+    ])
+    expect(grouped[1]).toMatchObject({
+      type: 'tool-group',
+      activities: [
+        { itemId: 'read-1', status: 'completed' },
+        { itemId: 'shell-1', status: 'running' },
+      ],
+    })
+    expect(grouped[3]).toMatchObject({
+      type: 'tool-group',
+      activities: [{ itemId: 'search-1', status: 'failed' }],
+    })
+  })
+
+  it('空 timeline 不产生占位分组', () => {
+    expect(groupNativeTurnTimeline([])).toEqual([])
+  })
+
+  it('按 Read、Search、Shell 与通用 Tool 汇总组头分类', () => {
+    expect(toolActivityCounts([
+      { itemId: 'read-1', kind: 'read', name: 'Read', status: 'completed' },
+      { itemId: 'read-2', kind: 'read', name: 'Read', status: 'completed' },
+      { itemId: 'search-1', kind: 'search', name: 'Search', status: 'completed' },
+      { itemId: 'shell-1', kind: 'shell', name: 'Command', status: 'running' },
+      { itemId: 'tool-1', kind: 'tool', name: 'Browser', status: 'failed' },
+    ])).toEqual({ read: 2, search: 1, shell: 1, tool: 1 })
+  })
+})
+
+describe('Native Chat 终止按钮运行态', () => {
+  it('本地发送过程显示终止按钮', () => {
+    expect(shouldShowNativeChatStop(true, null)).toBe(true)
+  })
+
+  it('从 Rules 跳转或刷新恢复的运行中 Native Chat 显示终止按钮', () => {
+    expect(shouldShowNativeChatStop(false, {
+      kind: 'native-chat',
+      status: 'running',
+    })).toBe(true)
+  })
+
+  it.each(['ready', 'failed', 'interrupted'])('Native Chat 终态 %s 不显示终止按钮', (status) => {
+    expect(shouldShowNativeChatStop(false, {
+      kind: 'native-chat',
+      status,
+    })).toBe(false)
+  })
+
+  it('非 Native Thread 不显示 Composer 终止按钮', () => {
+    expect(shouldShowNativeChatStop(false, {
+      kind: 'rules-generation',
+      status: 'running',
+    })).toBe(false)
   })
 })

@@ -141,6 +141,25 @@ describe('CodexChatAdapter', () => {
       .toMatchObject({ serviceTier: null })
   })
 
+  it('把大型文本上下文作为 App Server mention 输入提交', async () => {
+    const server = fakeServer()
+    const adapter = new CodexChatAdapter(() => server.child)
+    await adapter.start({
+      chatId: 'chat-mention', provider: 'codex', message: 'read the attachment',
+      workingDirectory: '/fixed-workspace',
+      config: { effort: 'medium', fastMode: false },
+      mentions: [{ name: 'session-context-r1.txt', path: '/tmp/session-context-r1.txt' }],
+    })
+
+    expect(server.requests.find((item) => item.method === 'turn/start')?.params)
+      .toMatchObject({
+        input: [
+          { type: 'text', text: 'read the attachment', text_elements: [] },
+          { type: 'mention', name: 'session-context-r1.txt', path: '/tmp/session-context-r1.txt' },
+        ],
+      })
+  })
+
   it('Rules turn 把 outputSchema 交给原生 turn/start', async () => {
     const server = fakeServer()
     const adapter = new CodexChatAdapter(() => server.child)

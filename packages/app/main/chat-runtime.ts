@@ -11,7 +11,13 @@ export interface NativeTurnRequest {
   workingDirectory: string
   config: NativeTurnConfig
   outputSchema?: Record<string, unknown>
+  mentions?: NativeTurnMention[]
   onEvent?: (event: NativeChatEvent) => void
+}
+
+export interface NativeTurnMention {
+  name: string
+  path: string
 }
 
 export interface NativeToolActivity {

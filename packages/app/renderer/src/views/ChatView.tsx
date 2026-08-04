@@ -74,7 +74,12 @@ import {
   consumeSkillPickerTrigger,
   updateRecentSkillNames,
 } from './chat-skill-picker-model'
-import { mergeLiveTimeline } from './chat-timeline-model'
+import {
+  groupNativeTurnTimeline,
+  mergeLiveTimeline,
+  shouldShowNativeChatStop,
+  toolActivityCounts,
+} from './chat-timeline-model'
 
 interface QueuedChatTurn {
   message: string
@@ -781,6 +786,7 @@ export function ChatView({
   const contextUsageLabel = contextUsage
     ? formatContextUsage(contextUsage, contextPercent)
     : t('contextUnavailable')
+  const showStopChatTurn = shouldShowNativeChatStop(isSending, thread)
   const contextPanelOpen = compactLayout ? compactContextOpen : contextPaneOpen
   let contextVisibilityClass = 'translate-x-0 opacity-100'
   if (compactLayout && !compactContextOpen) {
@@ -822,14 +828,14 @@ export function ChatView({
         </button>
         <div className="grid grid-cols-2 gap-1" data-chat-history-tabs>
           <button
-            className={`h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal] ${historyMode === 'active' ? 'bg-surface-raised text-pane-foreground' : 'bg-transparent text-pane-muted'}`}
+            className={`h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal] transition-colors focus-visible:bg-surface-hover focus-visible:text-pane-foreground ${historyMode === 'active' ? 'bg-surface-raised text-pane-foreground' : 'bg-transparent text-pane-muted hover:bg-surface-hover hover:text-pane-foreground'}`}
             onClick={() => setHistoryMode('active')}
             type="button"
           >
             {t('activeChats')}
           </button>
           <button
-            className={`h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal] ${historyMode === 'archived' ? 'bg-surface-raised text-pane-foreground' : 'bg-transparent text-pane-muted'}`}
+            className={`h-7 w-full min-w-0 rounded-[7px] border-0 text-[10px] font-normal leading-[normal] transition-colors focus-visible:bg-surface-hover focus-visible:text-pane-foreground ${historyMode === 'archived' ? 'bg-surface-raised text-pane-foreground' : 'bg-transparent text-pane-muted hover:bg-surface-hover hover:text-pane-foreground'}`}
             onClick={() => setHistoryMode('archived')}
             type="button"
           >
@@ -1028,23 +1034,23 @@ export function ChatView({
                         />
                       )}
                     </div>
-                    <Button className="h-8 min-h-8 gap-1 border border-border bg-background/20 px-2" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
+                    <Button className="h-8 min-h-8 gap-1 border-0 bg-transparent px-2 shadow-none hover:bg-background/60" data-composer-context onPress={() => setContextOpen(true)} size="sm" variant="ghost">
                       <PanelRight aria-hidden="true" size={14} />{t('contextShort')} <span className="font-semibold text-success">{selectedContext.length}</span>
                     </Button>
                     <div className="flex h-8 min-w-0 items-center gap-2" data-composer-runtime>
                       <Select aria-label={t('agent')} className="w-24" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => setProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
-                        <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item><ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item></ListBox></Select.Popover>
                       </Select>
                       <Select aria-label={t('model')} className="w-36" onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))} selectedKey={model || '__default'}>
-                        <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>{(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
                       <Select aria-label={t('effort')} className="w-24" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
-                        <Select.Trigger className="h-8 min-h-8 border-0 bg-background/40 px-2.5 text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{CHAT_EFFORTS.map((value) => <ListBox.Item id={value} key={value}>{value}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
-                      <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-background/40 px-2.5 text-[11px] text-foreground" data-composer-fast-mode>
+                      <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-2.5 text-[11px] text-foreground shadow-none transition-colors hover:bg-background/60" data-composer-fast-mode>
                         <Zap aria-hidden="true" className={fastMode ? 'text-success' : 'text-muted'} size={13} />
                         <span>{t('fast')}</span>
                         <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={setFastMode} size="sm">
@@ -1070,7 +1076,7 @@ export function ChatView({
                           {contextUsageLabel}
                         </Tooltip.Content>
                       </Tooltip>
-                      {isSending && (
+                      {showStopChatTurn && (
                         <Button className="h-8 min-h-8 w-8 min-w-8" isIconOnly onPress={() => void stopChatTurn()} size="sm" variant="ghost"><Square aria-label={t('stopChat')} size={14} /></Button>
                       )}
                       <Button aria-label={isSending ? t('queue', { count: queuedCount }) : t('send')} className="h-8 min-h-8 w-8 min-w-8 rounded-full bg-primary text-primary-foreground" isDisabled={!composer.trim()} isIconOnly onPress={sendChatMessage} size="sm">
@@ -1345,9 +1351,10 @@ function NativeTurnTimeline({ timeline, chatId, final }: {
   final: boolean
 }) {
   if (timeline.length === 0) return null
+  const groupedTimeline = groupNativeTurnTimeline(timeline)
   return (
     <div className="grid min-w-0 max-w-full gap-3" data-native-turn-timeline>
-      {timeline.map((item) => {
+      {groupedTimeline.map((item) => {
         if (item.type === 'assistant') {
           return item.content
             ? <MarkdownMessage content={item.content} final={final} key={`assistant-${item.itemId}`} />
@@ -1356,13 +1363,7 @@ function NativeTurnTimeline({ timeline, chatId, final }: {
         if (item.type === 'thinking') {
           return <NativeThinkingRow item={item} key={`thinking-${item.itemId}`} />
         }
-        return (
-          <ToolActivityList
-            activities={[item.activity]}
-            chatId={chatId}
-            key={`tool-${item.itemId}`}
-          />
-        )
+        return <ToolActivityList activities={item.activities} chatId={chatId} key={`tool-group-${item.itemId}`} />
       })}
     </div>
   )
@@ -1404,11 +1405,59 @@ function ToolActivityList({ activities, chatId }: {
   chatId?: string
 }) {
   if (activities.length === 0) return null
+  return <NativeToolGroup activities={activities} chatId={chatId} />
+}
+
+function NativeToolGroup({ activities, chatId }: {
+  activities: NativeToolActivity[]
+  chatId?: string
+}) {
+  const { t } = useTranslation('chat')
+  const failedCount = activities.filter((activity) => activity.status === 'failed').length
+  const running = activities.some((activity) => activity.status === 'running')
+  const [expanded, setExpanded] = useState(failedCount > 0)
+  const revealedFailure = useRef(failedCount > 0)
+  const counts = toolActivityCounts(activities)
+  const summary = [
+    counts.read > 0 ? t('toolGroupRead', { count: counts.read }) : null,
+    counts.search > 0 ? t('toolGroupSearch', { count: counts.search }) : null,
+    counts.shell > 0 ? t('toolGroupShell', { count: counts.shell }) : null,
+    counts.tool > 0 ? t('toolGroupTool', { count: counts.tool }) : null,
+  ].filter((part): part is string => Boolean(part))
+    .join(currentLocale() === 'zh-CN' ? '，' : ', ')
+  const kinds = new Set(activities.map((activity) => activity.kind))
+  const GroupIcon = kinds.size === 1 ? activityIcon(activities[0].kind) : Wrench
+
+  useEffect(() => {
+    if (failedCount > 0 && !revealedFailure.current) {
+      revealedFailure.current = true
+      setExpanded(true)
+    }
+  }, [failedCount])
+
   return (
-    <div className="grid min-w-0 max-w-full gap-1 overflow-hidden" role="list">
-      {activities.map((activity) => (
-        <NativeToolCard activity={activity} chatId={chatId} key={activity.itemId} />
-      ))}
+    <div className="min-w-0 max-w-full overflow-hidden" data-tool-activity-group>
+      <button
+        aria-expanded={expanded}
+        className="grid min-h-8 w-full grid-cols-[1.1rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1 text-left text-muted transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:text-foreground"
+        onClick={() => setExpanded((current) => !current)}
+        type="button"
+      >
+        <GroupIcon aria-hidden="true" size={15} />
+        <strong className="min-w-0 truncate text-xs font-medium text-foreground">{summary}</strong>
+        <span className="flex items-center gap-2">
+          {failedCount > 0 && <span className="text-[11px] font-medium text-danger">{t('toolGroupFailed', { count: failedCount })}</span>}
+          {running && <Spinner color="accent" size="sm" />}
+          <ChevronRight aria-hidden="true" className={`transition-transform ${expanded ? 'rotate-90' : ''}`} size={14} />
+        </span>
+      </button>
+      {expanded && (
+        <div className="ml-[1.6rem] mt-1 grid min-w-0 gap-1 border-l border-border pl-3" role="list">
+          {activities.map((activity) => (
+            <NativeToolCard activity={activity} chatId={chatId} key={activity.itemId} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -1449,13 +1498,24 @@ function NativeToolCard({ activity, chatId }: {
   }
 
   const Icon = activityIcon(activity.kind)
+  const failed = activity.status === 'failed'
   return (
     <div className="min-w-0 max-w-full overflow-hidden" role="listitem">
-      <button className="grid min-h-8 w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1 text-left text-muted transition-colors hover:bg-surface-hover" onClick={toggle} type="button">
+      <button
+        aria-expanded={expanded}
+        className={`grid min-h-8 w-full grid-cols-[1.1rem_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1 text-left transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover ${failed ? 'text-danger' : 'text-muted'}`}
+        onClick={toggle}
+        type="button"
+      >
         <Icon aria-hidden="true" size={15} />
-        <strong className="text-xs font-medium text-foreground">{activity.name}</strong>
+        <strong className={`text-xs font-medium ${failed ? 'text-danger' : 'text-foreground'}`}>{activity.name}</strong>
         <span className="min-w-0 truncate text-xs">{activity.summary}</span>
-        {activity.status === 'running' ? <Spinner color="accent" size="sm" /> : <ChevronRight className={`transition-transform ${expanded ? 'rotate-90' : ''}`} size={14} />}
+        <span className="flex items-center gap-2">
+          {failed && <span className="text-[11px] font-medium">{t('status.failed')}</span>}
+          {activity.status === 'running'
+            ? <Spinner color="accent" size="sm" />
+            : <ChevronRight aria-hidden="true" className={`transition-transform ${expanded ? 'rotate-90' : ''}`} size={14} />}
+        </span>
       </button>
       {expanded && (
         <div className="mb-2 ml-[1.6rem] border-l border-border py-2 pl-3">

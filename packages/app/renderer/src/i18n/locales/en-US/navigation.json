@@ -8,10 +8,12 @@
   "localSessions": "Local agent sessions",
   "mainLabel": "Main navigation",
   "rulesLabel": "Rules navigation",
+  "rulesManagement": "Rule management",
+  "agentContext": "Agent context",
   "rulesOverview": "Overview",
+  "rulesWorkbench": "Rules workbench",
   "agentInstructions": "Agent instructions",
   "agentMemory": "Agent Memory",
-  "generatedRules": "Generated rules",
   "generationHistory": "Generation history",
   "switchLight": "Switch to light theme",
   "switchDark": "Switch to dark theme"

@@ -8,10 +8,12 @@
   "localSessions": "本地 Agent Session",
   "mainLabel": "主导航",
   "rulesLabel": "规则导航",
+  "rulesManagement": "规则管理",
+  "agentContext": "Agent 上下文",
   "rulesOverview": "概览",
+  "rulesWorkbench": "规则工作台",
   "agentInstructions": "Agent 指令",
   "agentMemory": "Agent Memory",
-  "generatedRules": "生成的规则",
   "generationHistory": "生成历史",
   "switchLight": "切换到浅色模式",
   "switchDark": "切换到深色模式"

@@ -27,6 +27,7 @@ import type {
   NativeTurnTimelineItem,
 } from './chat-runtime.js'
 import { buildSessionContextPrompt } from './session-context-prompt.js'
+import { prepareSessionContextInput } from './session-context-input.js'
 import {
   completeNativeTimeline,
   mergeNativeTimelineEvent,
@@ -126,31 +127,44 @@ export class NativeChatController {
     this.options.onThreadChanged?.(chatId)
     let timeline: NativeTurnTimelineItem[] = []
     try {
-      const result = await this.options.runtime.sendTurn({
-        chatId,
-        provider: request.provider,
-        nativeSessionId,
-        message: contextPrompt ? `${contextPrompt}\n\n${message}` : message,
-        workingDirectory: this.options.workingDirectory,
-        config: request.config,
-        onEvent: (event) => {
-          timeline = mergeNativeTimelineEvent(timeline, event)
-          if (event.type === 'assistant_delta' || event.type === 'thinking_delta') {
-            const item = timeline.find((current) =>
-              current.itemId === event.itemId
-              && current.type === (event.type === 'assistant_delta' ? 'assistant' : 'thinking'),
-            )
-            this.options.onEvent?.({
-              chatId,
-              event: { ...event, content: item?.type === 'assistant' || item?.type === 'thinking'
-                ? item.content
-                : event.text },
-            })
-          } else {
-            this.options.onEvent?.({ chatId, event })
-          }
-        },
-      })
+      const result = await (async () => {
+        const preparedInput = await prepareSessionContextInput({
+          provider: request.provider,
+          message,
+          contextPrompt,
+          revision: contextRevision,
+        })
+        try {
+          return await this.options.runtime.sendTurn({
+            chatId,
+            provider: request.provider,
+            nativeSessionId,
+            message: preparedInput.message,
+            ...(preparedInput.mentions ? { mentions: preparedInput.mentions } : {}),
+            workingDirectory: this.options.workingDirectory,
+            config: request.config,
+            onEvent: (event) => {
+              timeline = mergeNativeTimelineEvent(timeline, event)
+              if (event.type === 'assistant_delta' || event.type === 'thinking_delta') {
+                const item = timeline.find((current) =>
+                  current.itemId === event.itemId
+                  && current.type === (event.type === 'assistant_delta' ? 'assistant' : 'thinking'),
+                )
+                this.options.onEvent?.({
+                  chatId,
+                  event: { ...event, content: item?.type === 'assistant' || item?.type === 'thinking'
+                    ? item.content
+                    : event.text },
+                })
+              } else {
+                this.options.onEvent?.({ chatId, event })
+              }
+            },
+          })
+        } finally {
+          await preparedInput.cleanup()
+        }
+      })()
       const completedAt = this.now()
       if (contextPrompt) {
         this.options.store.markNativeSessionContextInjected(
@@ -258,23 +272,36 @@ export class NativeChatController {
                 previous: [],
               })
             : null
-          const result = await this.options.runtime.sendTurn({
-            chatId: input.chatId,
-            provider: input.provider,
-            nativeSessionId,
-            message: contextPrompt ? `${contextPrompt}\n\n${prompt}` : prompt,
-            workingDirectory: this.options.workingDirectory,
-            config: input.config,
-            outputSchema,
-            onEvent: (event) => {
-              timeline = mergeNativeTimelineEvent(timeline, event)
-              if (event.type === 'tool_activity' || event.type === 'thinking_delta') {
-                this.options.onEvent?.({ chatId: input.chatId, event })
-              } else if (event.type === 'usage') {
-                this.options.onEvent?.({ chatId: input.chatId, event })
-              }
-            },
-          })
+          const result = await (async () => {
+            const preparedInput = await prepareSessionContextInput({
+              provider: input.provider,
+              message: prompt,
+              contextPrompt,
+              revision: contextRevision,
+            })
+            try {
+              return await this.options.runtime.sendTurn({
+                chatId: input.chatId,
+                provider: input.provider,
+                nativeSessionId,
+                message: preparedInput.message,
+                ...(preparedInput.mentions ? { mentions: preparedInput.mentions } : {}),
+                workingDirectory: this.options.workingDirectory,
+                config: input.config,
+                outputSchema,
+                onEvent: (event) => {
+                  timeline = mergeNativeTimelineEvent(timeline, event)
+                  if (event.type === 'tool_activity' || event.type === 'thinking_delta') {
+                    this.options.onEvent?.({ chatId: input.chatId, event })
+                  } else if (event.type === 'usage') {
+                    this.options.onEvent?.({ chatId: input.chatId, event })
+                  }
+                },
+              })
+            } finally {
+              await preparedInput.cleanup()
+            }
+          })()
           nativeSessionId = result.nativeSessionId
           this.options.store.bindNativeSession(input.chatId, result.nativeSessionId, this.now())
           this.options.store.markNativeTurnRunning(input.chatId, input.config, this.now())

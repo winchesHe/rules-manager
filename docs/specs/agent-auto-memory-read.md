@@ -8,7 +8,8 @@
 
 1. `memories list [agent]` 只列自动记忆主入口的 metadata，不输出正文。
 2. `memories show <agent> [memory-id]` 只读取 locator 当前发现的主入口正文，不接受任意路径。
-3. Claude 按项目列出 `MEMORY.md`；Codex 只使用官方公开文件目录，不依赖私有 SQLite schema。
+3. Claude 按项目列出 `MEMORY.md`；Codex 从公开 `MEMORY.md` 的 `applies_to.cwd` 派生只读项目视图，
+   不依赖私有 SQLite schema。
 4. 命令不要求 memory-manager workspace init，不访问或修改 DB。
 
 ## 非目标
@@ -18,7 +19,8 @@ MVP 不做以下能力：
 1. 不读取项目 `CLAUDE.md`、`CLAUDE.local.md`、`AGENTS.md` 或 rules，它们属于 instruction，不是自动记忆。
 2. 不展开 Claude memory topic 文件，只读取各项目的 `memory/MEMORY.md` 主入口。
 3. 不展开 Codex `memory_summary.md`、`raw_memories.md`、`rollout_summaries/` 或 skills，只读取 `memories/MEMORY.md` 主入口。
-4. 不读取 Codex `memories_1.sqlite`、`state_5.sqlite` 等私有 schema，也不尝试从 thread cwd 做项目筛选。
+4. 不读取 Codex `memories_1.sqlite`、`state_5.sqlite` 等私有 schema，也不从 thread/session 数据猜项目；
+   项目范围只接受 `MEMORY.md` 自身显式声明的 `applies_to.cwd`。
 5. 不编辑、删除、生成或合并任何 agent memory。
 6. 不把 memory 正文写入 memory-manager DB、日志、缓存或副本。
 7. 不扩展到其他 agent；其本地自动记忆路径缺少稳定公开契约。
@@ -55,7 +57,10 @@ path: <config>/memories/MEMORY.md
 status: present | missing
 ```
 
-Codex 官方当前将本地 memories 放在统一 store 中，没有公开稳定的 per-project 文件映射。该 source 是跨项目合并 memory，不伪装成项目级结果；list/show 的 note 必须明确这一点。
+Codex 官方当前将本地 memories 放在统一 store 中，没有公开稳定的 per-project 文件映射。保留该跨项目
+合并 source，同时解析其中 `# Task Group` 的 `applies_to: cwd=...`，派生 `scope: project` 的虚拟只读
+source。虚拟 source 的 `path` 仍指向统一 `MEMORY.md`，并携带 `projectPath` 与 `taskGroupCount`，不得
+伪装成独立项目文件。
 
 ## 数据模型
 
@@ -73,6 +78,8 @@ type AutoMemorySource = {
   status: 'present' | 'missing'
   discoveredFrom: 'filesystem' | 'default' | 'environment'
   note?: string
+  projectPath?: string
+  taskGroupCount?: number
 }
 
 type AutoMemoryListResult = {
@@ -88,7 +95,9 @@ type AutoMemoryShowResult = {
 }
 ```
 
-结果按 `agent / id / path` 使用代码点稳定排序。Claude 只返回现存项目 memory，不为所有未知项目伪造 missing 槽位；Codex 固定槽位即使不存在也返回 missing。
+结果按 `agent / scope / projectPath / id / path` 稳定排序。Claude 只返回现存项目 memory，不为所有未知
+项目伪造 missing 槽位；Codex 固定槽位即使不存在也返回 missing，现存且可安全读取时再追加
+`applies_to.cwd` 派生的项目 source。
 
 ## 接口设计
 
@@ -138,7 +147,8 @@ function showAutoMemorySource(
 2. 不跟随项目目录 symlink；允许最终 `MEMORY.md` 是文件 symlink。
 3. show 只接受 locator 返回的 memory id，不接受任意文件路径。
 4. 单文件上限 1 MiB，必须是有效 UTF-8；读取前后 stat 必须一致。
-5. list 不读取正文；show 正文只进入内存和 stdout。
+5. list 为解析 Codex 项目 metadata 会在内存中读取公开 `MEMORY.md`，但不返回正文；show 正文只进入
+   内存和 stdout。
 6. 不 import DB/workspace 模块，不创建 `.memory-manager`。
 7. Codex 私有 SQLite 即使存在也完全忽略。
 
@@ -154,8 +164,9 @@ function showAutoMemorySource(
 ## 假设
 
 - ⚠ Claude `<config>/projects/*/memory/MEMORY.md` 的目录层级保持官方文档当前契约；encoded project 名只作为不透明 id 使用。
-- ⚠ Codex `~/.codex/memories/MEMORY.md` 是公开主入口；本机 0.142.2 当前目录为空，需用临时 fixture 验证 present 行为。
-- ⚠ 用户接受 Codex 当前只能读取跨项目合并 memory，不能通过公开文件契约按项目筛选。
+- ⚠ Codex `~/.codex/memories/MEMORY.md` 的 `# Task Group`、`scope:` 与 `applies_to:` 仍是生成态文本格式；
+  格式变化时项目视图可能为空，但全局主入口仍保留。
+- ⚠ 项目视图依赖 Codex 已显式写出的绝对 `applies_to.cwd`，不从模糊描述、Session 或 repo 名猜测路径。
 
 ## 风险
 
@@ -181,8 +192,9 @@ git diff --check
 
 1. Claude list 只返回各项目的 `memory/MEMORY.md`，不返回 topic、session 或 instruction 文件。
 2. Claude 多项目 show 未传 id 时失败，传 list 返回 id 时只读取对应 memory。
-3. Codex list 只返回公开 `memories/MEMORY.md` 固定槽位，缺失时为 missing；私有 SQLite 存在不改变结果。
-4. Codex source 唯一且 present 时可以直接 `memories show codex`。
+3. Codex list 保留公开 `memories/MEMORY.md` 固定槽位，并为显式 `applies_to.cwd` 返回项目切片；私有
+   SQLite 存在不改变结果。
+4. 即使存在项目切片，`memories show codex` 仍直接读取全局 `memory` 主入口；项目切片必须使用稳定 id。
 5. 任意 path、未知 id、非法 agent、missing、超限和非法 UTF-8 均明确失败。
 6. list/show 前后 fixture hash 不变，不创建 workspace，不访问 memory-manager DB。
 7. 本机 smoke 能列出 Claude 已有项目 memory；Codex 当前公开主入口缺失时如实返回 missing。

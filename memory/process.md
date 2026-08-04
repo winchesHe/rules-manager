@@ -2603,3 +2603,162 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 27 suites / 178 tests、production build 与 `git diff --check` 通过，build 仅保留既有 Markstream
   PURE 注释警告。
 - 提交信息：`style: 固定发布工作区高度`
+
+## Agent Memory 增加文件定位入口（2026-08-03）
+
+- Agent Memory 详情页标题右侧新增「在文件夹中显示」次级操作；Codex 与 Claude Memory 共用同一入口，
+  保持内容预览只读，不打开编辑器也不修改原始文件。
+- Renderer 只提交 `agent + memoryId`；主进程重新从 `listAutoMemorySources` 解析已授权来源，校验 Agent、
+  memory id 与文件存在状态后才调用 Electron `shell.showItemInFolder`，不接受任意 Renderer 路径。
+- 文件定位错误与 Memory 读取错误分开显示；定位操作不清空或破坏已经加载的预览内容。
+- 真实 Electron 验收中按钮位于 Codex Memory 页标题右侧；点击后 Finder 打开
+  `~/.codex/memories/` 并选中 `MEMORY.md`。Computer Use 截图与可访问性树均确认目标正确。
+- App 27 suites / 178 tests、production build 与 `git diff --check` 通过；build 只保留既有 Markstream
+  PURE 注释警告。App typecheck 仍被既有 workspace `rootDir` / `TS6307` 配置错误及两处既有 Renderer
+  类型错误阻断，本次新增区域没有新增类型错误。
+- 提交信息：`feat: 增加 Memory 文件定位入口`
+
+## Codex Memory 按 applies_to 展示项目视图（2026-08-04）
+
+- 新增独立 `codex-memory-parser.ts`，按 `# Task Group` 边界读取 `scope` 与 `applies_to`，只把
+  `cwd=` 中显式的绝对路径视为项目；支持 `and/or` 多 cwd、路径规范化、去重，以及同 cwd 多 Task Group
+  按原文件顺序聚合。
+- Codex Auto Memory 继续保留物理 `memory` 全局主入口，并为每个 cwd 派生 SHA-256 截断 id 的虚拟项目
+  source；项目详情只返回该 cwd 对应的原始 Task Group，`memories show codex` 无 id 行为仍读取全局文件。
+- 项目切片不落 DB、缓存或副本，所有 source 的物理路径仍是统一 `~/.codex/memories/MEMORY.md`；读取继续
+  执行 1 MiB、严格 UTF-8 与前后 stat 一致性校验，文件定位也继续只接受重新发现后的 source id。
+- Agent Memory 列表为 Codex 项目展示项目名、完整 `applies_to.cwd`、Task Group 数量和“Codex 项目作用域”；
+  详情说明这是统一文件派生的只读视图，不伪装成独立项目文件。
+- 本机真实文件解析出 9 个 Codex 项目作用域；`agent-workspace` 聚合 5 个 Task Group，`rules-manager` 详情
+  只显示其自身 Task Group。Computer Use 截图与可访问性树确认列表和详情布局，无写入操作。
+- Core 30 suites / 307 tests、App 27 suites / 178 tests、Core/App production build 与
+  `git diff --check` 通过；build 仅保留既有 tsdown define 与 Markstream PURE 注释警告。App typecheck 仍被
+  既有 workspace `rootDir` / `TS6307` 及两处既有 `RulesView` 类型错误阻断，本轮新增类型错误已清零。
+- 提交信息：`feat: 按项目展示 Codex Memory`
+
+## Agent Memory 项目浏览 HTML 原型（2026-08-04）
+
+- 新增独立 `agent-memory-project-browser.html`，不接入 Renderer、IPC 或本机文件读写。默认以项目为主视图，
+  同一真实工作目录归组 Claude 与 Codex Memory，并保留「全部来源」查看物理文件和 Codex 派生范围。
+- 项目列表提供搜索、Agent 筛选、来源数量、最近更新时间和待关联状态；点击项目进入独立详情，汇总、
+  Claude、Codex 三个 tab 始终展示来源文件或 `applies_to.cwd` 匹配条件，不伪装成新的合并文件。
+- Claude 缺少可靠 `projectPath` 时进入待关联，不通过编码目录名猜测真实路径；原型明确提示后续需从 Session
+  元数据确认 cwd。Codex 继续使用显式 `applies_to.cwd` 归组。
+- Chrome 1440×900 截图确认按项目、全部来源和项目详情三种状态的层级与密度；390×844 CSS 视口截图无
+  横向溢出，实测 `scrollWidth=375`、`innerWidth=390`。浏览器脚本验证视图切换、搜索、详情进入和返回。
+- 静态原型未新增自动化测试，替代验证为浏览器交互脚本、JS 语法检查、HTML 合同检查与 `git diff --check`。
+- 提交信息：`docs: 新增 Agent Memory 项目浏览原型`
+
+## Agent Memory 项目浏览落地（2026-08-04）
+
+- 将 Agent Memory 首页落为「按项目 / 全部来源」双视图：默认按真实 `projectPath` 聚合 Claude 与 Codex，
+  提供搜索、Agent 筛选、来源数量、更新时间和未关联提示；全部来源继续区分 Claude 物理文件、Codex
+  本机合并文件与 Codex `applies_to.cwd` 派生范围。
+- Claude 项目路径只从对应项目目录下 Session JSONL 的顶层 `cwd` 字段取证：最多检查最新 24 个文件、
+  每个只读前 1 MiB；只有唯一绝对路径时才关联，冲突或缺失时保持未关联，不解析消息正文也不猜目录编码。
+- 项目详情支持汇总、Claude、Codex 三个 tab；同一工作目录的来源并列展示，各自保留物理文件路径或
+  `applies_to.cwd`，明确项目视图只做只读归组，不创建新的合并 Memory，也不触碰原始文件。
+- 真实 Electron 对比截图覆盖项目列表、全部来源和 `agent-workspace` 聚合详情；本机结果为 9 个项目、
+  13 个可读取来源，其中 `agent-workspace` 聚合 Claude 1 份与 Codex 5 个 Task Group，另有 2 份 Claude
+  Memory 因 cwd 证据不唯一保持待关联。
+- Core 30 suites / 309 tests、App 28 suites / 181 tests、Core/App production build 与
+  `git diff --check` 通过；build 只保留既有 tsdown define 与 Markstream PURE 注释警告。App typecheck
+  仍被既有 workspace `rootDir` / `TS6307` 配置错误及 `RulesView` 两处既有类型错误阻断，本轮新增区域
+  没有新增类型错误。
+- 提交信息：`feat: 增加 Agent Memory 项目浏览`
+
+## Chat 输入栏控件改为无边框（2026-08-04）
+
+- Chat Composer 底部的上下文按钮、Provider、Model、Effort Picker 与 Fast 控件统一移除静态描边、
+  静态阴影和常驻底色，保持在同一工具栏平面；发送按钮继续保留主操作强调。
+- 无边框不是无反馈：控件保留轻量 hover 背景，Picker 的 Popover、禁用状态、键盘 focus、Fast Switch
+  和所有选择逻辑均保持不变。
+- 真实 Electron 截图确认完成态 Chat 输入栏不再呈现一排独立输入框；验收只读取页面并截图，未发送消息、
+  未切换 Provider、Model、Effort 或 Fast 状态。
+- App 28 suites / 181 tests、production build 与 `git diff --check` 通过；build 只保留既有 Markstream
+  PURE 注释警告。纯样式改动未新增业务逻辑测试，补充了 Composer 布局契约断言。
+- 提交信息：`style: 统一 Chat 输入栏无边框控件`
+
+## Rules 导航信息架构 HTML 原型（2026-08-04）
+
+- 新增独立 `rules-navigation-information-architecture.html`，只验证 Rules 二级导航的信息架构与视觉分组，
+  不修改真实 Renderer、路由、IPC、翻译或数据读取。
+- 二级导航从四个同权入口改为两个轻量分组：`规则管理` 包含 `概览 / 规则工作台`，`Agent 上下文`
+  包含 `Agent 指令 / Agent Memory`；原 `生成的规则` 改名为 `规则工作台`，覆盖生成、审核、接受与发布。
+- 评审后移除二级导航左侧整条竖线及 active 项绿色短标；缩进、分组标题、选中背景和数量状态已经足够
+  表达层级与当前位置，避免产生时间轴或步骤条暗示。
+- 二级导航按钮改为与父级同宽的整行交互热区，再用 `2.4rem` 内部 padding 保持文字缩进；实测父子按钮
+  左右边界同为 16px / 207px，子项文字与父级「规则」文字只差 3px。左侧空白现在也响应 hover、点击与 focus。
+- 两处分组边界共用 `--group-block-gap: 1rem`：父级「规则」到「规则管理」、`规则工作台` 到
+  `Agent 上下文` 的浏览器实测间距均为 16px，避免分别维护不一致的数字。
+- 四个入口都提供可点击的页面示意；规则工作台增加 `Session → 生成候选 → 审核规则 → Agent 指令 / Agent Memory`
+  生命周期带，明确后两者是发布位置和已有上下文，不是规则审核状态。
+- 本机 Chrome 自动化依次点击四个入口，active 状态、`aria-current`、页面标题和可见内容同步正确；
+  1440×900 与 390×844 的 `scrollWidth` 分别等于 `innerWidth`，控制台与页面错误均为空。桌面工作台、
+  Agent Memory 与窄屏截图已保存到 `docs/prototypes/`。
+- 本轮是独立 HTML/CSS/JS 原型，未新增业务自动化测试；替代验证为内联脚本语法检查、导航合同检查、
+  真实浏览器交互、响应式视觉检查与 `git diff --check`。
+- 建议提交信息：`docs: 新增 Rules 导航信息架构原型`
+
+## Rules 导航信息架构落入真实 App（2026-08-04）
+
+- 将真实 App 的 Rules 二级导航按 HTML 原型重组为两组：`规则管理` 包含 `概览 / 规则工作台`，
+  `Agent 上下文` 包含 `Agent 指令 / Agent Memory`；仅调整导航结构与中英文文案，既有 section id、
+  页面内容、返回逻辑和深链行为保持不变。
+- 移除旧的二级导航左侧竖线；所有二级项使用与父级相同宽度的整行 Button 热区，文字通过内部 padding
+  对齐。分组容器补充 `role="group"` 和本地化 `aria-label`，激活项继续使用 `aria-current="page"`。
+- 父级「规则」到首个「规则管理」标题、`规则工作台` 到 `Agent 上下文` 标题均按 16px 分组边界处理；
+  组内标题与条目保持紧凑，不引入原型中的演示数量或虚构主内容。
+- 真实 Electron 验收覆盖暗色、浅色和应用最小 900px 宽窗口；直接点击 `Agent 指令` 文字左侧空白区域
+  成功切换页面，确认整行热区生效，导航无截断、横向溢出或层级错位。验收后恢复深色与常用窗口尺寸。
+- App 全量 28 suites / 182 tests、最终定向 2 suites / 53 tests、production build 与
+  `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。App typecheck 仍被仓库既有
+  workspace `rootDir` / `TS6307` 配置问题阻断，本轮 `App.tsx` 未新增类型错误。
+- 提交信息：`style: 对齐 Rules 分组导航`
+
+## Chat 历史 Tab 补充 Hover 反馈（2026-08-04）
+
+- 为对话历史顶部「当前 / 归档」两个筛选 Tab 的未选中态补充整块 `surface-hover` 背景和前景文字色，
+  保留现有 `surface-raised` 选中态、尺寸、圆角与切换逻辑。
+- 同步增加 `transition-colors` 和 `focus-visible` 反馈，使鼠标与键盘操作具备一致的当前位置提示。
+- 真实 Electron 中将鼠标停在未选中的「归档」Tab，暗色与浅色主题均出现清晰背景和文字变化；检查后
+  恢复用户原有深色主题，未切换筛选状态或修改对话数据。
+- App 定向 1 suite / 46 tests、production build 与 `git diff --check` 通过；build 仅保留既有
+  Markstream PURE 注释警告。纯交互样式修复未新增业务逻辑测试，使用布局契约测试与真实视觉检查替代。
+- 提交信息：`style: 补充 Chat 历史 Tab hover`
+
+## Chat 工具活动按阶段分组（2026-08-04）
+
+- Native Chat 不再逐条平铺 Tool activity：同一 Assistant Turn 内相邻的 Tool 按阶段聚合，Assistant 正文与
+  Thinking 保持时间顺序并作为分组边界；旧消息的 `toolActivities` fallback 也复用相同分组展示。
+- 组头只基于安全 Activity 元数据汇总 Read / Search / Shell / Tool 分类计数，例如“读取 97 个文件，运行
+  54 条命令，调用 9 个工具”；完成态默认收起，运行态显示 Spinner，失败态显示失败数量并首次自动展开调用清单。
+- 展开采用两级渐进展示：第一层展示逐条安全摘要，第二层才沿用 `chat.tool.read` 从 Native Session 回源详情；
+  本轮未修改 IPC、ChatStore 或 Tool input/output 持久化策略。
+- 分组按钮与单条按钮都补充 `aria-expanded`、hover、focus 和箭头状态；详细设计、观察点与验证方式记录在
+  `docs/plans/chat-tool-activity-groups.md`。
+- 真实 Electron 暗色界面验收使用已有 160 条 Tool 的历史对话：默认只显示一行分类摘要，展开组后出现
+  逐条调用，展开单条可正常回源详情，最终恢复收起；没有发送消息、切换运行配置或修改 Chat 数据。
+- App 定向 3 suites / 56 tests、App 全量 28 suites / 185 tests、Core 全量 30 suites / 309 tests、
+  production build 与 `git diff --check` 通过；build 只保留既有 Markstream PURE 注释警告。
+- 提交信息：`feat: 分组展示 Chat 工具活动`
+
+## Codex 大型 Session Context 附件化（2026-08-04）
+
+- 研究当前本机 Codex Desktop 后确认：Composer 对粘贴文本使用 5,000 个 JavaScript 字符作为转文本附件的
+  边界，5,000–25,000 字符的附件允许恢复回输入框；这属于 Desktop 客户端策略，Codex App Server 官方
+  文档与协议没有声明自动转换阈值。
+- 使用本机 `codex app-server generate-ts --experimental` 生成当前协议类型，确认文本文件应通过
+  `v2.UserInput` 的 `mention { name, path }` 输入项提交；文本输入同时补齐协议中的 `text_elements: []`。
+- App 沿用 5,000 字符边界：较小 Session Context 与所有 Claude 请求保持原有内联行为；Codex 的大型
+  Session Context 写入权限为 `0600` 的临时文本文件，本轮通过 `mention` 提交，Turn 成功、失败或中断
+  结束后均删除临时目录，不把隐藏 Prompt 或附件正文写入 ChatStore。
+- 移除 IPC 的 500 条 Session 引用数量上限；agent、id 与数组结构校验保持不变。Provider 仍负责按附件中
+  的完整 replace 列表执行 `memory-manager sessions show <id> --stream`，App 不预读 Session 原文，也不替
+  Codex 规划最终上下文容量。
+- 新增阈值边界、Claude 内联回归、1,000 条 IPC 引用、App Server `mention` 协议、Provider 成功/失败清理
+  的自动化测试。App 全量 30 suites / 191 tests、production build 与 `git diff --check` 通过；build 只保留
+  既有 Markstream PURE 注释警告。
+- App typecheck 仍被仓库既有 workspace `rootDir` / `TS6307` 配置问题，以及 `RulesView` 两处既有类型错误
+  阻断；输出中没有本轮新增文件的类型错误。
+- 提交信息：`feat: 附件化 Codex 大型 Session Context`

@@ -239,7 +239,14 @@ export class CodexChatAdapter implements ChatProviderAdapter {
     try {
       const response = asRecord(await client.request('turn/start', {
         threadId,
-        input: [{ type: 'text', text: request.message }],
+        input: [
+          { type: 'text', text: request.message, text_elements: [] },
+          ...(request.mentions ?? []).map((mention) => ({
+            type: 'mention',
+            name: mention.name,
+            path: mention.path,
+          })),
+        ],
         cwd: request.workingDirectory,
         approvalPolicy: 'never',
         sandboxPolicy: { type: 'dangerFullAccess' },

@@ -573,6 +573,8 @@ export interface AutoMemorySource {
   status: 'present' | 'missing'
   discoveredFrom: 'filesystem' | 'default' | 'environment'
   note?: string
+  projectPath?: string
+  taskGroupCount?: number
   modifiedAt: string | null
   sizeBytes: number
 }

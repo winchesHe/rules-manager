@@ -79,6 +79,7 @@ import { CodexChatAdapter } from './codex-chat-adapter.js'
 import { NativeChatController } from './native-chat-controller.js'
 import { listChatSkills } from './chat-skills.js'
 import { resolveProjectLocation, resolveSessionLocation } from './source-location.js'
+import { validateSessionReferences } from './session-context-validation.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
@@ -344,6 +345,22 @@ export function registerIpcHandlers(): void {
     }
     return readAutoMemorySource(agent, memoryId)
   })
+  ipcMain.handle('rules.memories.reveal', (_event, agent: unknown, memoryId: unknown) => {
+    if (typeof agent !== 'string' || !isAutoMemoryAgent(agent)) {
+      throw new Error('unsupported auto memory agent')
+    }
+    if (typeof memoryId !== 'string' || !memoryId.trim()) {
+      throw new Error('memory id is required')
+    }
+    const source = listAutoMemorySources({ agent }).sources.find(
+      (candidate) => candidate.id === memoryId,
+    )
+    if (!source) throw new Error(`未知的 Agent Memory：${agent}/${memoryId}`)
+    if (source.status !== 'present') {
+      throw new Error(`Agent Memory 尚未生成：${agent}/${source.id}`)
+    }
+    shell.showItemInFolder(source.path)
+  })
   ipcMain.handle('rules.memories.publishTargets', () =>
     listClaudeProjectMemoryPublishTargets())
   ipcMain.handle('rules.memories.publishProjectRules', (_event, value: unknown) => {
@@ -563,25 +580,6 @@ function validateNativeChatSendRequest(value: unknown) {
       ? { sessionContext: validateSessionReferences(request.sessionContext) }
       : {}),
   }
-}
-
-function validateSessionReferences(value: unknown) {
-  if (!Array.isArray(value) || value.length > 500) {
-    throw new Error('session context selected must be an array of at most 500 items')
-  }
-  return value.map((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error('session context reference is invalid')
-    }
-    const reference = item as Record<string, unknown>
-    if (!['claude', 'codex', 'copilot', 'cursor', 'opencode', 'pi'].includes(String(reference.agent))) {
-      throw new Error('session context agent is unsupported')
-    }
-    if (typeof reference.id !== 'string' || !reference.id.trim()) {
-      throw new Error('session context id is required')
-    }
-    return { agent: String(reference.agent), id: reference.id }
-  })
 }
 
 function validateSessionContextQuery(value: unknown) {

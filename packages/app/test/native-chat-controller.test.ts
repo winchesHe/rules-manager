@@ -402,6 +402,58 @@ describe('NativeChatController', () => {
     expect(providerMessages.every((message) => message.includes('revision="1"'))).toBe(true)
   })
 
+  it('Codex 大型 Session Context 在 Turn 期间使用临时 mention，成功或失败后都清理', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-context-attachment-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const attachmentPaths: string[] = []
+    let attempts = 0
+    const adapter: ChatProviderAdapter = {
+      start: async (request) => {
+        const attachmentPath = request.mentions?.[0]?.path
+        expect(attachmentPath).toBeDefined()
+        expect(fs.existsSync(attachmentPath!)).toBe(true)
+        expect(fs.readFileSync(attachmentPath!, 'utf8')).toContain('session-79')
+        expect(request.message).not.toContain('memory-manager sessions show session-79')
+        attachmentPaths.push(attachmentPath!)
+        attempts++
+        if (attempts === 1) throw new Error('provider failed')
+        return { nativeSessionId: 'native-attachment', content: 'done' }
+      },
+      resume: async () => { throw new Error('unexpected resume') },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }
+    const controller = new NativeChatController({
+      store, runtime: new ChatRuntimeManager(() => adapter), workingDirectory: '/fixed-workspace',
+      createId: () => 'chat-context-attachment', now: () => '2026-08-01T04:30:00.000Z',
+    })
+    const sessionContext = Array.from({ length: 80 }, (_, index) => ({
+      agent: 'codex' as const,
+      id: `session-${index}`,
+    }))
+
+    await expect(controller.send({
+      provider: 'codex', message: 'first', config: { effort: 'high', fastMode: false },
+      sessionContext,
+    })).rejects.toThrow('provider failed')
+    expect(fs.existsSync(attachmentPaths[0])).toBe(false)
+
+    await controller.send({
+      chatId: 'chat-context-attachment', provider: 'codex', message: 'retry',
+      config: { effort: 'high', fastMode: false },
+    })
+    expect(attachmentPaths).toHaveLength(2)
+    expect(fs.existsSync(attachmentPaths[1])).toBe(false)
+    expect(store.readThread('chat-context-attachment')).toMatchObject({
+      sessionContext: { revision: 1, lastInjectedRevision: 1 },
+    })
+  })
+
   it('生命周期先同步 Native，再改本地；删除失败保留 Archived 记录重试', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-lifecycle-'))
     roots.push(root)

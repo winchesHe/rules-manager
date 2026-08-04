@@ -25,6 +25,7 @@ import {
   CircleDot,
   FilePenLine,
   FileOutput,
+  FolderOpen,
   Search,
   SearchCheck,
   Save,
@@ -48,6 +49,7 @@ import {
 import type {
   GenerateProgress,
   AgentInstructionPublishSummary,
+  AutoMemoryAgent,
   AutoMemoryListResult,
   AutoMemoryReadResult,
   AutoMemorySource,
@@ -82,6 +84,11 @@ import {
   type CandidateEvidence,
   type EvidenceReference,
 } from './rules-view-model'
+import {
+  groupAutoMemoryProjects,
+  partitionAutoMemorySources,
+  type AutoMemoryProjectGroup,
+} from './auto-memory-projects'
 
 type RulesPage =
   | 'overview'
@@ -92,6 +99,11 @@ type RulesPage =
   | 'review'
   | 'output'
 export type RulesSection = 'overview' | 'agents' | 'memories' | 'generated'
+
+interface AutoMemorySelection {
+  projectPath?: string
+  sources: AutoMemorySource[]
+}
 const NO_SELECTION_KEY = '__none__'
 type GenerateMode = GenerationMode
 type GenerationPhaseKey = 'evidence' | 'generate' | 'validate' | 'save'
@@ -196,7 +208,7 @@ export function RulesView({
   const [selectedInstructionAgent, setSelectedInstructionAgent] =
     useState<GlobalInstructionAgent | null>(null)
   const [selectedMemory, setSelectedMemory] =
-    useState<AutoMemorySource | null>(null)
+    useState<AutoMemorySelection | null>(null)
   const [queueRefresh, setQueueRefresh] = useState(0)
   const mounted = useRef(true)
   const previousSection = useRef(section)
@@ -535,7 +547,7 @@ export function RulesView({
   if (page === 'memory' && selectedMemory) {
     return (
       <AgentMemoryDetailPage
-        source={selectedMemory}
+        selection={selectedMemory}
         onBack={() => {
           setSelectedMemory(null)
           setPage('overview')
@@ -566,8 +578,8 @@ export function RulesView({
         setSelectedInstructionAgent(agent)
         setPage('agent')
       }}
-      onOpenMemory={(source) => {
-        setSelectedMemory(source)
+      onOpenMemory={(selection) => {
+        setSelectedMemory(selection)
         setPage('memory')
       }}
       onOpenOutput={() => setPage('output')}
@@ -631,7 +643,7 @@ function RulesOverviewPage({
     status: 'accepted' | 'rejected',
   ) => Promise<boolean>
   onOpenAgent: (agent: GlobalInstructionAgent) => void
-  onOpenMemory: (source: AutoMemorySource) => void
+  onOpenMemory: (selection: AutoMemorySelection) => void
   onOpenOutput: () => void
   onOpenHistory: (entry: GenerationHistoryEntry) => void
   onOpenProjectRules?: (slug?: string) => void
@@ -1280,12 +1292,15 @@ function AgentInstructionsIndexPage({
 function AgentMemoryIndexPage({
   onOpenMemory,
 }: {
-  onOpenMemory: (source: AutoMemorySource) => void
+  onOpenMemory: (selection: AutoMemorySelection) => void
 }) {
   const [result, setResult] = useState<AutoMemoryListResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
+  const [view, setView] = useState<'projects' | 'sources'>('projects')
+  const [query, setQuery] = useState('')
+  const [agentFilter, setAgentFilter] = useState<'all' | 'claude' | 'codex'>('all')
 
   useEffect(() => {
     let current = true
@@ -1308,68 +1323,232 @@ function AgentMemoryIndexPage({
     }
   }, [refresh])
 
-  const presentCount = result?.sources.filter((source) => source.status === 'present').length ?? 0
+  const sources = result?.sources ?? []
+  const projects = useMemo(() => groupAutoMemoryProjects(sources), [sources])
+  const partitions = useMemo(() => partitionAutoMemorySources(sources), [sources])
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const filteredProjects = projects.filter((project) => {
+    const matchesAgent = agentFilter === 'all'
+      || project.sources.some((source) => source.agent === agentFilter)
+    const matchesQuery = !normalizedQuery
+      || project.projectName.toLocaleLowerCase().includes(normalizedQuery)
+      || project.projectPath.toLocaleLowerCase().includes(normalizedQuery)
+      || project.sources.some((source) => memorySourceSearchText(source).includes(normalizedQuery))
+    return matchesAgent && matchesQuery
+  })
+  const filteredUnresolved = partitions.unresolvedProjectSources.filter((source) =>
+    (agentFilter === 'all' || source.agent === agentFilter)
+    && (!normalizedQuery || memorySourceSearchText(source).includes(normalizedQuery)))
+  const visibleSourceGroups = [
+    {
+      key: 'claude',
+      title: tr('memory.claudeFiles'),
+      description: tr('memory.claudeFilesDescription'),
+      sources: partitions.claudeProjectFiles,
+    },
+    {
+      key: 'codex-global',
+      title: tr('memory.codexGlobalFiles'),
+      description: tr('memory.codexGlobalFilesDescription'),
+      sources: partitions.codexGlobalFiles,
+    },
+    {
+      key: 'codex-projects',
+      title: tr('memory.codexDerivedScopes'),
+      description: tr('memory.codexDerivedScopesDescription'),
+      sources: partitions.codexProjectScopes,
+    },
+  ].map((group) => ({
+    ...group,
+    sources: group.sources.filter((source) =>
+      (agentFilter === 'all' || source.agent === agentFilter)
+      && (!normalizedQuery || memorySourceSearchText(source).includes(normalizedQuery))),
+  })).filter((group) => group.sources.length > 0)
+  const projectClaudeCount = sources.filter((source) =>
+    source.agent === 'claude' && source.projectPath).length
+  const projectCodexCount = sources.filter((source) =>
+    source.agent === 'codex' && source.scope === 'project').length
+  const presentCount = sources.filter((source) => source.status === 'present').length
   const sourceErrors = result?.errors
     .map((item) => `${item.path}: ${item.message}`)
     .join('\n')
   return (
     <>
+      <PageHeader
+        description={tr('memory.sourcesDescription')}
+        title={tr('memory.title')}
+      />
       {(error || sourceErrors) && (
         <div className="mb-4">
           <ErrorAlert message={error ?? sourceErrors ?? ''} title={tr('memory.errors.list')} />
         </div>
       )}
-      <div className="mb-3 flex items-end justify-between gap-4 border-b border-border pb-4">
-        <div>
-          <h2 className="text-lg font-medium text-foreground">{tr('memory.sources')}</h2>
-          <p className="mt-1 text-sm text-muted">{tr('memory.sourcesDescription')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Chip color={presentCount > 0 ? 'success' : 'warning'} size="sm" variant="soft">
-            {tr('memory.available', { count: presentCount })}
-          </Chip>
-          <Button onPress={() => setRefresh((value) => value + 1)} size="sm" variant="ghost">
+      <div className="mb-3 grid w-full max-w-[27rem] grid-cols-2 gap-1 rounded-xl border border-border bg-background p-1">
+        {(['projects', 'sources'] as const).map((item) => (
+          <button
+            aria-pressed={view === item}
+            className={`flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors ${
+              view === item
+                ? 'bg-surface text-foreground shadow-sm'
+                : 'text-muted hover:text-foreground'
+            }`}
+            key={item}
+            onClick={() => setView(item)}
+            type="button"
+          >
+            {tr(item === 'projects' ? 'memory.byProject' : 'memory.allSources')}
+            <span className={`rounded-md px-1.5 py-0.5 text-xs tabular-nums ${
+              view === item ? 'bg-accent/10 text-accent' : 'bg-surface text-muted'
+            }`}>
+              {item === 'projects' ? projects.length : presentCount}
+            </span>
+          </button>
+        ))}
+      </div>
+      <section className="overflow-hidden rounded-2xl border border-border bg-surface" aria-label={tr('memory.listLabel')}>
+        <div className="grid grid-cols-[minmax(0,1fr)_11rem_auto] gap-2 border-b border-border p-3 max-md:grid-cols-[minmax(0,1fr)_9rem] max-sm:grid-cols-1">
+          <label className="relative min-w-0">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={15} />
+            <input
+              aria-label={tr('memory.search')}
+              className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-accent"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={tr(view === 'projects' ? 'memory.searchProjects' : 'memory.searchSources')}
+              type="search"
+              value={query}
+            />
+          </label>
+          <Select
+            aria-label={tr('memory.agentFilter')}
+            onSelectionChange={(key) => setAgentFilter(String(key) as typeof agentFilter)}
+            selectedKey={agentFilter}
+          >
+            <Select.Trigger className="h-9 min-h-9">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue={tr('memory.allAgents')}>{tr('memory.allAgents')}</ListBox.Item>
+                <ListBox.Item id="claude" textValue={instructionAgentLabel('claude')}>
+                  {instructionAgentLabel('claude')}
+                </ListBox.Item>
+                <ListBox.Item id="codex" textValue={instructionAgentLabel('codex')}>
+                  {instructionAgentLabel('codex')}
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <Button
+            className="max-md:col-span-2 max-sm:col-span-1"
+            onPress={() => setRefresh((value) => value + 1)}
+            size="sm"
+            variant="ghost"
+          >
             {tr('actions.reload')}
           </Button>
         </div>
-      </div>
-      {loading ? (
-        <ViewLoading label={tr('memory.loading')} />
-      ) : (
-        <div aria-label={tr('memory.listLabel')} className="overflow-hidden border-y border-border">
-          {(result?.sources ?? []).map((source) => (
-            <button
-              className="grid w-full cursor-pointer grid-cols-[2.5rem_minmax(0,1fr)_auto_auto] items-center gap-4 border-b border-border px-4 py-5 text-left transition-colors last:border-b-0 hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent max-sm:grid-cols-[2.5rem_minmax(0,1fr)_auto]"
-              disabled={source.status === 'missing'}
-              key={`${source.agent}:${source.id}`}
-              onClick={() => onOpenMemory(source)}
-              type="button"
-            >
-              <AgentMark agent={source.agent} />
-              <span className="min-w-0">
-                <strong className="block truncate text-sm font-semibold text-foreground">
-                  {autoMemorySourceTitle(source)}
-                </strong>
-                <code className="mt-1 block truncate text-xs text-muted">{source.path}</code>
+        {loading ? (
+          <div aria-label={tr('memory.loading')} className="animate-pulse">
+            {[0, 1, 2, 3].map((item) => (
+              <div className="grid grid-cols-[minmax(0,1fr)_14rem_8rem] gap-4 border-b border-border px-5 py-4 last:border-b-0 max-sm:grid-cols-1" key={item}>
+                <span className="h-9 rounded-lg bg-background" />
+                <span className="h-7 rounded-lg bg-background" />
+                <span className="h-7 rounded-lg bg-background" />
+              </div>
+            ))}
+          </div>
+        ) : view === 'projects' ? (
+          <>
+            <div className="flex items-center justify-between gap-4 border-b border-border bg-background/60 px-5 py-3">
+              <strong className="text-sm font-semibold text-foreground">
+                {tr('memory.groupedProjects', { count: projects.length })}
+              </strong>
+              <div className="flex flex-wrap justify-end gap-4 text-xs text-muted max-sm:gap-2">
+                <span>{instructionAgentLabel('claude')} <b className="text-foreground tabular-nums">{projectClaudeCount}</b></span>
+                <span>{instructionAgentLabel('codex')} <b className="text-foreground tabular-nums">{projectCodexCount}</b></span>
+                <span>{tr('memory.unresolvedShort')} <b className="text-foreground tabular-nums">{partitions.unresolvedProjectSources.length}</b></span>
+              </div>
+            </div>
+            {filteredProjects.length > 0 ? (
+              <div>
+                <div className="grid grid-cols-[minmax(18rem,1.5fr)_minmax(13rem,.7fr)_9rem_1.25rem] gap-4 px-5 py-2.5 text-xs font-medium text-muted max-md:hidden">
+                  <span>{tr('memory.project')}</span>
+                  <span>{tr('memory.memorySources')}</span>
+                  <span>{tr('memory.lastUpdated')}</span>
+                  <span />
+                </div>
+                {filteredProjects.map((project) => (
+                  <AutoMemoryProjectRow
+                    key={project.projectPath}
+                    onOpen={() => onOpenMemory({
+                      projectPath: project.projectPath,
+                      sources: project.sources,
+                    })}
+                    project={project}
+                  />
+                ))}
+              </div>
+            ) : filteredUnresolved.length === 0 ? (
+              <AutoMemoryEmptyState
+                description={tr('memory.emptySearchDescription')}
+                title={tr('memory.emptySearch')}
+              />
+            ) : null}
+            {filteredUnresolved.length > 0 && (
+              <div className="border-t border-border bg-warning/5 px-5 py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <strong className="text-sm font-semibold text-foreground">
+                      {tr('memory.unresolved', { count: filteredUnresolved.length })}
+                    </strong>
+                    <p className="mt-0.5 text-xs text-muted">{tr('memory.unresolvedDescription')}</p>
+                  </div>
+                  <Button
+                    onPress={() => {
+                      setView('sources')
+                      setAgentFilter('claude')
+                      setQuery('')
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {tr('memory.viewUnresolved')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : visibleSourceGroups.length > 0 ? (
+          <div className="px-5 pb-4">
+            <div className="flex items-center justify-between gap-4 py-3">
+              <strong className="text-sm font-semibold text-foreground">
+                {tr('memory.available', { count: presentCount })}
+              </strong>
+              <span className="text-xs text-muted">
+                {tr('memory.sourceSummary', {
+                  files: partitions.claudeProjectFiles.length + partitions.codexGlobalFiles.length,
+                  scopes: partitions.codexProjectScopes.length,
+                })}
               </span>
-              <span className="text-right max-sm:hidden">
-                <strong className="block text-sm font-normal text-foreground">
-                  {source.status === 'present'
-                    ? `${formatInstructionSize(source.sizeBytes)} · ${formatInstructionModified(source.modifiedAt)}`
-                    : tr('memory.notGenerated')}
-                </strong>
-                <span className="mt-1 block text-xs text-muted">
-                  {source.scope === 'project' ? tr('memory.projectScope') : tr('memory.localScope')}
-                </span>
-              </span>
-              <span className="flex items-center gap-1 text-sm text-foreground">
-                {source.status === 'present' ? tr('actions.view') : tr('status.none')}
-                {source.status === 'present' && <ChevronRight aria-hidden="true" size={16} />}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+            </div>
+            {visibleSourceGroups.map((group) => (
+              <AutoMemorySourceGroup
+                description={group.description}
+                key={group.key}
+                onOpen={(source) => onOpenMemory({ sources: [source] })}
+                sources={group.sources}
+                title={group.title}
+              />
+            ))}
+          </div>
+        ) : (
+          <AutoMemoryEmptyState
+            description={tr('memory.emptySearchDescription')}
+            title={tr('memory.emptySearch')}
+          />
+        )}
+      </section>
       <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-border bg-surface px-5 py-4">
         <Brain aria-hidden="true" className="mt-0.5 text-muted" size={18} />
         <div>
@@ -1378,6 +1557,113 @@ function AgentMemoryIndexPage({
         </div>
       </div>
     </>
+  )
+}
+
+function AutoMemoryProjectRow({
+  onOpen,
+  project,
+}: {
+  onOpen: () => void
+  project: AutoMemoryProjectGroup
+}) {
+  const claudeCount = project.sources.filter((source) => source.agent === 'claude').length
+  const codexCount = project.sources
+    .filter((source) => source.agent === 'codex')
+    .reduce((count, source) => count + (source.taskGroupCount ?? 1), 0)
+  return (
+    <button
+      className="grid w-full cursor-pointer grid-cols-[minmax(18rem,1.5fr)_minmax(13rem,.7fr)_9rem_1.25rem] items-center gap-4 border-t border-border px-5 py-4 text-left transition-colors first:border-t-0 hover:bg-surface-hover max-md:grid-cols-[minmax(0,1fr)_auto]"
+      onClick={onOpen}
+      type="button"
+    >
+      <span className="min-w-0">
+        <strong className="block truncate text-sm font-semibold text-foreground">{project.projectName}</strong>
+        <code className="mt-1 block truncate text-xs text-muted">{project.projectPath}</code>
+      </span>
+      <span className="flex flex-wrap gap-1.5 max-md:col-span-2 max-md:row-start-2">
+        {claudeCount > 0 && (
+          <span className="rounded-md bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
+            {instructionAgentLabel('claude')} {claudeCount}
+          </span>
+        )}
+        {codexCount > 0 && (
+          <span className="rounded-md bg-accent/10 px-2 py-1 text-xs font-semibold text-accent">
+            {instructionAgentLabel('codex')} {codexCount}
+          </span>
+        )}
+      </span>
+      <span className="text-xs text-muted max-md:hidden">
+        {formatInstructionModified(project.modifiedAt)}
+      </span>
+      <ChevronRight aria-hidden="true" className="text-muted" size={18} />
+    </button>
+  )
+}
+
+function AutoMemorySourceGroup({
+  description,
+  onOpen,
+  sources,
+  title,
+}: {
+  description: string
+  onOpen: (source: AutoMemorySource) => void
+  sources: AutoMemorySource[]
+  title: string
+}) {
+  return (
+    <section className="border-t border-border py-4 first:border-t-0">
+      <div className="mb-2 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="mt-0.5 text-xs text-muted">{description}</p>
+        </div>
+        <span className="rounded-md bg-background px-2 py-0.5 text-xs tabular-nums text-muted">{sources.length}</span>
+      </div>
+      {sources.map((source) => (
+        <button
+          className="grid w-full cursor-pointer grid-cols-[2.25rem_minmax(0,1fr)_10rem_auto] items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-surface-hover max-sm:grid-cols-[2.25rem_minmax(0,1fr)_auto]"
+          disabled={source.status !== 'present'}
+          key={`${source.agent}:${source.id}`}
+          onClick={() => onOpen(source)}
+          type="button"
+        >
+          <AgentMark agent={source.agent} />
+          <span className="min-w-0">
+            <strong className="block truncate text-sm font-semibold text-foreground">{autoMemorySourceTitle(source)}</strong>
+            <code className="mt-0.5 block truncate text-xs text-muted">
+              {source.projectPath ? tr('memory.appliesToProject', { path: source.projectPath }) : source.path}
+            </code>
+          </span>
+          <span className="text-right text-xs text-muted max-sm:hidden">
+            <strong className="block font-medium text-foreground">
+              {source.taskGroupCount
+                ? tr('memory.taskGroups', { count: source.taskGroupCount })
+                : formatInstructionSize(source.sizeBytes)}
+            </strong>
+            {formatInstructionModified(source.modifiedAt)}
+          </span>
+          <span className="flex items-center gap-1 text-sm text-foreground">
+            {tr('actions.view')} <ChevronRight aria-hidden="true" size={16} />
+          </span>
+        </button>
+      ))}
+    </section>
+  )
+}
+
+function AutoMemoryEmptyState({ description, title }: { description: string; title: string }) {
+  return (
+    <div className="grid min-h-72 place-items-center px-6 py-12 text-center">
+      <div>
+        <span className="mx-auto grid size-11 place-items-center rounded-xl bg-background text-muted">
+          <Search aria-hidden="true" size={19} />
+        </span>
+        <h3 className="mt-3 text-sm font-semibold text-foreground">{title}</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted">{description}</p>
+      </div>
+    </div>
   )
 }
 
@@ -1901,34 +2187,55 @@ function AgentInstructionDetailPage({
 }
 
 function AgentMemoryDetailPage({
-  source,
+  selection,
   onBack,
 }: {
-  source: AutoMemorySource
+  selection: AutoMemorySelection
   onBack: () => void
 }) {
-  const [record, setRecord] = useState<AutoMemoryReadResult | null>(null)
+  const [records, setRecords] = useState<AutoMemoryReadResult[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [revealError, setRevealError] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
+  const [revealingId, setRevealingId] = useState<string | null>(null)
+  const availableAgents = [...new Set(selection.sources.map((source) => source.agent))]
+  const [activeAgent, setActiveAgent] = useState<'all' | AutoMemoryAgent>(
+    selection.sources.length > 1 ? 'all' : selection.sources[0]?.agent ?? 'all',
+  )
+  const selectionKey = selection.sources
+    .map((source) => `${source.agent}:${source.id}`)
+    .join('|')
+  const primarySource = selection.sources[0]
+  const title = selection.projectPath
+    ? autoMemoryProjectName(selection.projectPath)
+    : primarySource
+      ? autoMemorySourceTitle(primarySource)
+      : tr('memory.title')
 
   useEffect(() => {
     let current = true
     setLoading(true)
     setError(null)
-    setRecord(null)
+    setRecords([])
     void afterNextPaint(() =>
-      window.api.invoke<AutoMemoryReadResult>(
-        'rules.memories.read',
-        source.agent,
-        source.id,
-      ),
+      Promise.allSettled(selection.sources.map((source) =>
+        window.api.invoke<AutoMemoryReadResult>(
+          'rules.memories.read',
+          source.agent,
+          source.id,
+        ))),
     )
-      .then((value) => {
-        if (current) setRecord(value)
-      })
-      .catch((reason: unknown) => {
-        if (current) setError(reason instanceof Error ? reason.message : String(reason))
+      .then((values) => {
+        if (!current) return
+        const succeeded = values
+          .filter((value): value is PromiseFulfilledResult<AutoMemoryReadResult> => value.status === 'fulfilled')
+          .map((value) => value.value)
+        const failed = values
+          .filter((value): value is PromiseRejectedResult => value.status === 'rejected')
+          .map((value) => value.reason instanceof Error ? value.reason.message : String(value.reason))
+        setRecords(succeeded)
+        setError(failed.length > 0 ? failed.join('\n') : null)
       })
       .finally(() => {
         if (current) setLoading(false)
@@ -1936,7 +2243,23 @@ function AgentMemoryDetailPage({
     return () => {
       current = false
     }
-  }, [refresh, source.agent, source.id])
+  }, [refresh, selectionKey])
+
+  async function revealMemory(source: AutoMemorySource): Promise<void> {
+    setRevealingId(`${source.agent}:${source.id}`)
+    setRevealError(null)
+    try {
+      await window.api.invoke('rules.memories.reveal', source.agent, source.id)
+    } catch (reason) {
+      setRevealError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setRevealingId(null)
+    }
+  }
+
+  const visibleRecords = activeAgent === 'all'
+    ? records
+    : records.filter((record) => record.source.agent === activeAgent)
 
   return (
     <>
@@ -1949,64 +2272,124 @@ function AgentMemoryDetailPage({
           {tr('memory.title')}
         </button>
         <span>/</span>
-        <span className="text-foreground">{autoMemorySourceTitle(source)}</span>
+        <span className="text-foreground">{title}</span>
       </nav>
       <PageHeader
-        description={source.scope === 'project'
-          ? tr('memory.projectDescription')
-          : tr('memory.codexDescription')}
-        title={autoMemorySourceTitle(source)}
+        actions={
+          <Button onPress={() => setRefresh((value) => value + 1)} variant="ghost">
+            {tr('actions.reload')}
+          </Button>
+        }
+        description={selection.projectPath
+          ? tr('memory.projectAggregateDescription', { path: selection.projectPath })
+          : primarySource?.scope === 'project'
+            ? tr('memory.projectDescription')
+            : tr('memory.codexDescription')}
+        title={title}
       />
       {error && (
         <div className="mb-4">
           <ErrorAlert message={error} title={tr('memory.errors.read')} />
         </div>
       )}
-      <Card className="border border-border bg-surface shadow-none">
-        <Card.Header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
-          <code className="min-w-0 truncate text-sm text-foreground">
-            {record?.source.path ?? source.path}
-          </code>
-          <Chip color="success" size="sm" variant="soft">{tr('memory.readOnly')}</Chip>
-        </Card.Header>
-        <Card.Content className="p-0">
-          {loading ? (
-            <ViewLoading label={tr('memory.loadingSource', { source: autoMemorySourceTitle(source) })} />
-          ) : record ? (
-            <pre
-              aria-label={tr('memory.contentLabel', { source: autoMemorySourceTitle(source) })}
-              className="min-h-[25rem] whitespace-pre-wrap break-words bg-background/60 p-5 font-mono text-sm leading-7 text-foreground"
-            >
-              {record.content}
-            </pre>
-          ) : null}
-        </Card.Content>
-        <Card.Footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3.5">
-          <span className="text-xs text-muted">
-            {record?.source.modifiedAt
-              ? tr('memory.modified', {
-                  size: formatInstructionSize(record.source.sizeBytes),
-                  time: formatDateTime(record.source.modifiedAt, currentLocale()),
-                })
-              : tr('memory.readOnlyHint')}
-          </span>
-          <div className="flex gap-2">
-            <Button onPress={() => setRefresh((value) => value + 1)} variant="ghost">
-              {tr('actions.reload')}
-            </Button>
-            <Button onPress={onBack} variant="ghost">{tr('memory.back')}</Button>
-          </div>
-        </Card.Footer>
-      </Card>
-      {source.note && (
-        <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-border bg-surface px-5 py-4">
-          <Brain aria-hidden="true" className="mt-0.5 text-muted" size={18} />
-          <div>
-            <strong className="text-sm font-medium text-foreground">{tr('memory.scopeNoteTitle')}</strong>
-            <p className="mt-1 text-sm text-muted">{tr('memory.codexScopeNote')}</p>
-          </div>
+      {revealError && (
+        <div className="mb-4">
+          <ErrorAlert message={revealError} title={tr('memory.errors.reveal')} />
         </div>
       )}
+      {availableAgents.length > 1 && (
+        <div className="mb-4 flex gap-1 border-b border-border" role="tablist" aria-label={tr('memory.sourceTabs')}>
+          {(['all', ...availableAgents] as const).map((agent) => (
+            <button
+              aria-selected={activeAgent === agent}
+              className={`cursor-pointer border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                activeAgent === agent
+                  ? 'border-accent text-foreground'
+                  : 'border-transparent text-muted hover:text-foreground'
+              }`}
+              key={agent}
+              onClick={() => setActiveAgent(agent)}
+              role="tab"
+              type="button"
+            >
+              {agent === 'all' ? tr('memory.summary') : instructionAgentLabel(agent)}
+            </button>
+          ))}
+        </div>
+      )}
+      {loading ? (
+        <ViewLoading label={tr('memory.loadingProject')} />
+      ) : (
+        <div className="grid gap-5">
+          {visibleRecords.map((record) => {
+            const source = record.source
+            const sourceKey = `${source.agent}:${source.id}`
+            const revealing = revealingId === sourceKey
+            return (
+              <Card className="border border-border bg-surface shadow-none" key={sourceKey}>
+                <Card.Header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <AgentMark agent={source.agent} />
+                    <div className="min-w-0">
+                      <strong className="block text-sm font-semibold text-foreground">{autoMemorySourceSectionTitle(source)}</strong>
+                      <code className="mt-1 block break-all text-xs text-muted">
+                        {source.agent === 'codex' && source.scope === 'project' && source.projectPath
+                          ? tr('memory.appliesToProject', { path: source.projectPath })
+                          : source.path}
+                      </code>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Chip color="success" size="sm" variant="soft">{tr('memory.readOnly')}</Chip>
+                    <Button
+                      className="gap-2"
+                      isDisabled={revealing || source.status !== 'present'}
+                      onPress={() => void revealMemory(source)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      {revealing
+                        ? <Spinner color="current" size="sm" />
+                        : <FolderOpen aria-hidden="true" size={16} />}
+                      {tr('memory.reveal')}
+                    </Button>
+                  </div>
+                </Card.Header>
+                <Card.Content className="p-0">
+                  <pre
+                    aria-label={tr('memory.contentLabel', { source: autoMemorySourceTitle(source) })}
+                    className="max-h-[38rem] min-h-64 overflow-auto whitespace-pre-wrap break-words bg-background/60 p-5 font-mono text-sm leading-7 text-foreground"
+                  >
+                    {record.content}
+                  </pre>
+                </Card.Content>
+                <Card.Footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3.5">
+                  <span className="text-xs text-muted">
+                    {source.modifiedAt
+                      ? tr('memory.modified', {
+                          size: formatInstructionSize(source.sizeBytes),
+                          time: formatDateTime(source.modifiedAt, currentLocale()),
+                        })
+                      : tr('memory.readOnlyHint')}
+                  </span>
+                  <span className="text-xs text-muted">
+                    {source.agent === 'codex' && source.scope === 'project'
+                      ? tr('memory.codexProjectScopeNote')
+                      : tr('memory.sourceFileBoundary')}
+                  </span>
+                </Card.Footer>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+      <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-border bg-surface px-5 py-4">
+        <Brain aria-hidden="true" className="mt-0.5 text-muted" size={18} />
+        <div>
+          <strong className="text-sm font-medium text-foreground">{tr('memory.aggregateBoundaryTitle')}</strong>
+          <p className="mt-1 text-sm text-muted">{tr('memory.aggregateBoundaryDescription')}</p>
+        </div>
+      </div>
     </>
   )
 }
@@ -5012,7 +5395,13 @@ function instructionAgentLabel(agent: GlobalInstructionAgent): string {
 }
 
 function autoMemorySourceTitle(source: AutoMemorySource): string {
-  if (source.agent === 'codex') return tr('memory.codexTitle')
+  if (source.agent === 'codex') {
+    if (source.scope === 'project' && source.projectPath) {
+      const project = source.projectPath.split('/').filter(Boolean).at(-1) ?? source.projectPath
+      return tr('memory.codexProjectTitle', { project })
+    }
+    return tr('memory.codexTitle')
+  }
   const projectId = source.id.startsWith('project:')
     ? source.id.slice('project:'.length)
     : source.id
@@ -5020,6 +5409,25 @@ function autoMemorySourceTitle(source: AutoMemorySource): string {
     agent: instructionAgentLabel(source.agent),
     project: projectId,
   })
+}
+
+function autoMemoryProjectName(projectPath: string): string {
+  return projectPath.split('/').filter(Boolean).at(-1) ?? projectPath
+}
+
+function autoMemorySourceSectionTitle(source: AutoMemorySource): string {
+  if (source.agent === 'claude') return tr('memory.claudeProjectMemory')
+  if (source.scope === 'project') return tr('memory.codexProjectMemory')
+  return tr('memory.codexTitle')
+}
+
+function memorySourceSearchText(source: AutoMemorySource): string {
+  return [
+    autoMemorySourceTitle(source),
+    source.path,
+    source.projectPath,
+    source.note,
+  ].filter(Boolean).join(' ').toLocaleLowerCase()
 }
 
 function instructionAgentInitial(agent: GlobalInstructionAgent): string {
