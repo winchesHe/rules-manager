@@ -315,7 +315,7 @@ function GeneralContent({
         </Alert>
       )}
       <Card className="border border-border bg-surface shadow-none">
-        <Card.Content className="flex min-h-28 items-center justify-between gap-8 p-5">
+        <Card.Content className="flex min-h-28 flex-row items-center justify-between gap-8 p-5">
           <div>
             <p className="font-medium text-foreground">{t('general.language')}</p>
             <p className="mt-1 text-sm text-muted">{t('general.languageDescription')}</p>

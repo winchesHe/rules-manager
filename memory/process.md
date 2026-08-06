@@ -2889,3 +2889,14 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 本轮仅修改项目工作流文档，不新增业务测试；替代验证为规则内容回读、`git diff --check`、提交后本地与
   `origin/main` SHA 对账。
 - 提交信息：`docs: 要求修改后提交并推送`
+
+## Settings 语言设置行横向对齐（2026-08-06）
+
+- 根因是 HeroUI 3.2.2 的 `Card.Content` 默认带 `flex-col`；原实现只声明 `flex`、`items-center` 与
+  `justify-between`，导致语言说明和选择器纵向排列并整体居中，卡片左侧出现大块无效留白。
+- 为该设置行显式补充 `flex-row`，恢复“说明在左、选择器在右”的预期关系；语言切换、持久化、错误态、
+  Card surface 与现有间距均保持不变。
+- 本轮是纯样式修复，未新增业务测试；使用现有 i18n / 布局契约测试、App 与 Core 全量测试、production
+  build、`git diff --check` 和真实 Electron 暗色/浅色视觉检查替代。App 34 suites / 214 tests、Core 30
+  suites / 309 tests 全绿，build 只保留既有 Markstream PURE 注释警告；验收后恢复暗色主题和原窗口尺寸。
+- 提交信息：`style: 修复语言设置行对齐`
