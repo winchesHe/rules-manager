@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals'
 import {
   assistantTurnStartedAt,
   canRegenerate,
+  createProviderSnapshotSync,
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
@@ -34,6 +35,53 @@ describe('chat view model', () => {
 
   it('completed 一次性返回全部 Rules', () => {
     expect(visibleProjectResponses('completed', responses)).toBe(responses)
+  })
+
+  it('Provider 全量更新不会被首次返回的空 snapshot 覆盖', () => {
+    const applied: Array<{ entries: Array<{ id: string }> }> = []
+    const sync = createProviderSnapshotSync((snapshot) => applied.push(snapshot))
+    const fullSnapshot = {
+      entries: [{
+        id: 'codex' as const,
+        label: 'Codex',
+        status: 'available' as const,
+        enabled: true,
+        isDefault: true,
+        models: [{ id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol', source: 'discovered' as const }],
+        fetchedAt: '2026-08-06T00:00:00.000Z',
+      }],
+      refreshing: false,
+    }
+
+    sync.receiveUpdate(fullSnapshot)
+    sync.receiveInitial({ entries: [], refreshing: true })
+
+    expect(applied).toEqual([fullSnapshot])
+  })
+
+  it('Provider 初始 snapshot 后仍接收后台全量更新，卸载后停止写入', () => {
+    const applied: Array<{ entries: Array<{ id: string }> }> = []
+    const sync = createProviderSnapshotSync((snapshot) => applied.push(snapshot))
+    const initialSnapshot = { entries: [], refreshing: true }
+    const fullSnapshot = {
+      entries: [{
+        id: 'claude' as const,
+        label: 'Claude',
+        status: 'available' as const,
+        enabled: true,
+        isDefault: true,
+        models: [{ id: 'sonnet', label: 'Sonnet', source: 'discovered' as const }],
+        fetchedAt: '2026-08-06T00:00:00.000Z',
+      }],
+      refreshing: false,
+    }
+
+    sync.receiveInitial(initialSnapshot)
+    sync.receiveUpdate(fullSnapshot)
+    sync.stop()
+    sync.receiveUpdate({ ...fullSnapshot, entries: [] })
+
+    expect(applied).toEqual([initialSnapshot, fullSnapshot])
   })
 
   it('failed 终态仍展示已完成项目并过滤失败项目', () => {

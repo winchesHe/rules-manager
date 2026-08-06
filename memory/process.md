@@ -2900,3 +2900,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   build、`git diff --check` 和真实 Electron 暗色/浅色视觉检查替代。App 34 suites / 214 tests、Core 30
   suites / 309 tests 全绿，build 只保留既有 Markstream PURE 注释警告；验收后恢复暗色主题和原窗口尺寸。
 - 提交信息：`style: 修复语言设置行对齐`
+
+## Chat 首次进入同步 Provider 全量目录（2026-08-06）
+
+- 根因是 `settings.providers.snapshot` 在缓存为空时只负责启动后台 Provider probe，并立即返回
+  `entries: [] / refreshing: true`；Main 随后通过 `settings.providers.updated` 广播完整目录，但 ChatView
+  此前只读取一次 snapshot、没有订阅更新，因此配置中的已选模型找不到对应条目并显示 `Select an item`。
+- ChatView 现在先订阅 `settings.providers.updated`，再并行读取初始 snapshot 与 LLM 配置，卸载时同步解绑；
+  Provider、Model、Effort、Fast Mode、Native Chat 会话绑定和发送协议均未修改。
+- 新增 `createProviderSnapshotSync` 处理初始化竞态：初始空 snapshot 先返回时继续接收后台全量更新；全量更新
+  先到时拒绝随后返回的旧空 snapshot 覆盖；卸载后不再写入状态。
+- 新增两条行为测试覆盖上述两种事件顺序与卸载边界，并用布局契约测试固定“先监听、后请求、卸载解绑”；
+  定向 3 suites / 65 tests、App 全量 34 suites / 216 tests、Core 全量 30 suites / 309 tests、production
+  build 与 `git diff --check` 通过，build 只保留既有 Markstream PURE 注释警告。
+- `simplify` 复核确认同步器已保持单一职责和最小状态，没有再扩大抽象或改动无关 Chat 逻辑。
+- 提交信息：`fix: 同步 Chat Provider 全量目录`

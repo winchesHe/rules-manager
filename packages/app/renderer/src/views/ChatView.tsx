@@ -60,6 +60,7 @@ import type {
 import {
   assistantTurnStartedAt,
   canRegenerate,
+  createProviderSnapshotSync,
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
@@ -216,6 +217,11 @@ export function ChatView({
   }, [composerOptionsOpen])
 
   useEffect(() => {
+    let current = true
+    const providerSnapshotSync = createProviderSnapshotSync(setProviderSnapshot)
+    const onProvidersUpdated = (value: unknown) => providerSnapshotSync.receiveUpdate(value)
+
+    window.api.onEvent('settings.providers.updated', onProvidersUpdated)
     void Promise.all([
       window.api.invoke<ProviderSnapshot>('settings.providers.snapshot'),
       window.api.invoke<{
@@ -225,12 +231,19 @@ export function ChatView({
         fastMode?: boolean
       }>('settings.load'),
     ]).then(([snapshot, config]) => {
-      setProviderSnapshot(snapshot)
+      if (!current) return
+      providerSnapshotSync.receiveInitial(snapshot)
       setProvider(config.provider)
       setModel(config.model ?? '')
       setEffort(config.effort)
       setFastMode(config.fastMode === true)
     }).catch(() => undefined)
+
+    return () => {
+      current = false
+      providerSnapshotSync.stop()
+      window.api.offEvent('settings.providers.updated', onProvidersUpdated)
+    }
   }, [])
 
   useEffect(() => {

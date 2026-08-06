@@ -2,8 +2,33 @@ import type {
   ChatMessage,
   GenerationChatThread,
   NativeSessionReference,
+  ProviderSnapshot,
   ProjectGenerationResponse,
 } from '../types'
+
+export function createProviderSnapshotSync(
+  apply: (snapshot: ProviderSnapshot) => void,
+): {
+  receiveInitial(snapshot: ProviderSnapshot): void
+  receiveUpdate(value: unknown): void
+  stop(): void
+} {
+  let active = true
+  let receivedUpdate = false
+  return {
+    receiveInitial(snapshot) {
+      if (active && !receivedUpdate) apply(snapshot)
+    },
+    receiveUpdate(value) {
+      if (!active || !isProviderSnapshot(value)) return
+      receivedUpdate = true
+      apply(value)
+    },
+    stop() {
+      active = false
+    },
+  }
+}
 
 export function assistantTurnStartedAt(
   messages: ChatMessage[],
@@ -115,4 +140,13 @@ export function toggleAvailableSessionSelection(
 
 function sessionReferenceKey(reference: NativeSessionReference): string {
   return `${reference.agent}\0${reference.id}`
+}
+
+function isProviderSnapshot(value: unknown): value is ProviderSnapshot {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && Array.isArray((value as { entries?: unknown }).entries)
+    && typeof (value as { refreshing?: unknown }).refreshing === 'boolean',
+  )
 }
