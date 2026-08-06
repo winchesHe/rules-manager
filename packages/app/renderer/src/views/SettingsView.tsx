@@ -13,7 +13,9 @@ import {
 import {
   ArrowLeft,
   Boxes,
+  CircleDot,
   ChevronRight,
+  Code2,
   Languages,
   Info,
   Sparkles,
@@ -493,7 +495,7 @@ function ProviderRow({
   separated: boolean
 }) {
   const { t } = useTranslation('settings')
-  const Icon = entry.id === 'claude' ? Sparkles : Terminal
+  const Icon = providerIcon(entry.id)
   return (
     <div
       className={`flex min-h-24 items-center gap-4 px-6 transition-colors hover:bg-surface-hover ${
@@ -548,6 +550,13 @@ function ProviderRow({
       </Switch>
     </div>
   )
+}
+
+function providerIcon(provider: ProviderId): typeof Terminal {
+  if (provider === 'claude') return Sparkles
+  if (provider === 'opencode') return Code2
+  if (provider === 'pi') return CircleDot
+  return Terminal
 }
 
 function AboutContent() {

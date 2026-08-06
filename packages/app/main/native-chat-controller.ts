@@ -267,8 +267,7 @@ export class NativeChatController {
       await runRulesGenerate({
         ...generationEvidenceOptions(input.request),
         runId: input.runId,
-        provider: input.provider,
-        model: input.config.model,
+        ...rulesGenerationCoreBridge(input.provider, input.config.model),
         effort: input.config.effort,
         fastMode: input.config.fastMode,
         onEvidence: (bundles) => {
@@ -469,6 +468,17 @@ export class NativeChatController {
     if (!thread || thread.version !== 2) throw new Error('native chat was not found')
     return thread
   }
+}
+
+export function rulesGenerationCoreBridge(
+  provider: NativeChatProvider,
+  model: string | undefined,
+): { provider: 'claude' | 'codex'; model?: string } {
+  if (provider === 'pi') throw new Error('Pi 不支持规则生成')
+  if (provider === 'opencode') {
+    return { provider: 'codex', model: model ?? 'opencode:default' }
+  }
+  return { provider, ...(model ? { model } : {}) }
 }
 
 function locateToolActivity(messages: ChatMessage[], itemId: string): {

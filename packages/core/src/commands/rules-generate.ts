@@ -15,7 +15,6 @@ import {
 } from '../llm.js'
 import { isRunCancelledError, throwIfAborted } from '../abort.js'
 import type { LlmStreamEvent } from '../llm.js'
-import { getProviderCapabilities } from '../provider-catalog.js'
 import {
   cleanupStaleEvidenceContexts,
   createEvidenceContext,
@@ -323,11 +322,8 @@ export async function runRulesGenerate(
   const effort = opts.effort ?? config.effort
   const fastMode = opts.fastMode ?? config.fastMode ?? false
   throwIfAborted(opts.signal)
-  if (!getProviderCapabilities(provider).supportsStructuredOutput) {
-    throw new Error('provider 不支持结构化规则生成')
-  }
-  if (provider === 'opencode' && !deps.generate) {
-    throw new Error('opencode 规则生成需要原生运行时')
+  if (provider !== 'claude' && provider !== 'codex') {
+    throw new Error('provider 只支持 claude 或 codex')
   }
   if (!isLlmEffort(effort)) {
     throw new Error('effort 只支持 low、medium、high、xhigh 或 max')

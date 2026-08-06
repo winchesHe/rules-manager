@@ -18,6 +18,7 @@
 3. **Pi runtime**
    - 观察：JSONL 请求关联、超时、非法行、进程退出与树清理可靠；恢复使用 session file；问题请求可回答。
    - 验证：假进程覆盖分片/乱序/超时/退出/恢复/Tool/问题；本机三轮与重启恢复 smoke。
+   - 实现边界：Chat 与模型 probe 复用 `jsonl-rpc-process.ts`；真实子进程使用独立进程组，关闭按 SIGTERM→SIGKILL，原生 session file 不删除。
 4. **UI 与数据边界**
    - 观察：设置与 Chat 根据 capability 展示模型、thinking、Fast；问题卡不静默处理；Tool output 不新增持久化。
    - 验证：IPC、i18n、布局与隐私测试，Electron 暗/亮主题手工验收，ChatStore 文件回读。
@@ -28,3 +29,4 @@
 - `npm test -w @memory-manager/app -- --runInBand`：不少于 34 suites / 216 tests，0 skipped。
 - `npm run build`、`npm run build -w @memory-manager/app`、`git diff --check` 通过。
 - OpenCode/Pi 各三轮真实 Chat 且 runtime 重启后恢复相同原生 Session；OpenCode 真实结构化规则生成成功；Pi 不出现在 Rules。
+- 真实 question 不能由假进程替代：OpenCode 使用原生 question tool；Pi 使用仓库外临时 extension 触发 RPC UI，验收后删除临时文件。

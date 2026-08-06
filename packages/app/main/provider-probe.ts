@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
 import { createOpencodeClient } from '@opencode-ai/sdk/v2/client'
 import { sharedOpenCodeServerManager } from './opencode-server-manager.js'
+import { JsonlRpcProcess } from './jsonl-rpc-process.js'
 import {
   getProviderEnabled,
   getProviderCapabilities,
@@ -163,7 +164,7 @@ async function probeVersion(provider: LlmProvider): Promise<string> {
     maxBuffer: 64 * 1024,
   })
   const version = `${stdout}${stderr}`.trim()
-  if (!version) throw new Error(`${command} --version 未返回版本`)
+  if (!version) throw new Error(`${provider} --version 未返回版本`)
   return version.slice(0, 200)
 }
 
@@ -244,46 +245,16 @@ async function discoverPiModels(): Promise<ProviderModel[]> {
   })
 }
 
-function runPiRequest(type: string): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('pi', ['--mode', 'rpc'], { stdio: ['pipe', 'pipe', 'pipe'] })
-    let buffer = ''
-    let stderr = ''
-    let settled = false
-    const finish = (error?: Error, value?: unknown): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      child.kill('SIGTERM')
-      if (error) reject(error)
-      else resolve(value)
-    }
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => { stderr = `${stderr}${chunk}`.slice(-4_000) })
-    child.stdout.on('data', (chunk: string) => {
-      buffer += chunk
-      const lines = buffer.split(/\r?\n/)
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        if (!line.trim()) continue
-        try {
-          const message = JSON.parse(line) as Record<string, unknown>
-          if (message.id !== 'models') continue
-          if (message.success === false) finish(new Error(String(message.error ?? 'Pi model list 失败')))
-          else finish(undefined, message.data)
-        } catch {
-          // Pi extensions may write non-JSON diagnostics; ignore them.
-        }
-      }
-    })
-    child.on('error', finish)
-    child.on('exit', (code) => {
-      if (!settled) finish(new Error(`Pi RPC 提前退出（${code ?? 'unknown'}）：${stderr}`))
-    })
-    const timer = setTimeout(() => finish(new Error('Pi model list 超时')), PROBE_TIMEOUT_MS)
-    child.stdin.write(`${JSON.stringify({ id: 'models', type })}\n`)
+async function runPiRequest(type: string): Promise<unknown> {
+  const rpc = new JsonlRpcProcess({
+    name: 'Pi RPC', command: 'pi', args: ['--mode', 'rpc'], cwd: process.cwd(),
+    requestTimeoutMs: PROBE_TIMEOUT_MS,
   })
+  try {
+    return await rpc.request({ type })
+  } finally {
+    await rpc.close()
+  }
 }
 
 interface CodexModelRow {

@@ -1,5 +1,17 @@
 # 执行进度
 
+## OpenCode / Pi Paseo 对齐复审（2026-08-06）
+
+- 作废上一轮“已完成”结论并逐条复审。撤回越界的 Core `rules-generate` 改动；OpenCode Rules 改为 App 层显式兼容桥，真实 runtime/provider 仍是 OpenCode，Pi 进入桥时直接拒绝。
+- Pi 已抽出 Paseo 同款 JSONL RPC 进程：request id、30s 默认超时、8192-byte stderr 尾部、非法 JSON 隔离、exit fail-all、独立进程组 SIGTERM→SIGKILL；Provider probe 复用同一实现。
+- OpenCode server 现在在 ready 前即拥有 generation；启动失败会清理，真实进程使用独立进程组；并发 acquire 共享服务，lease release 幂等，shutdown TERM→KILL。
+- OpenCode SSE 修复嵌套 `info/part.sessionID` 过滤、终态前正常 EOF 报错、运行态 Tool 详情内存读取；Pi 修复真实 abort 导致进程先退出时的空引用竞态。
+- 反向证据：Pi RPC suite 首次因模块不存在红；实现后 4/4 绿。OpenCode Session 过滤断言故意期待 `wrongtarget` 时实际只收到 `target` 红；恢复正确断言后相关 5 suites / 17 tests 绿。
+- 真实 Pi：Session `019fd6f5-2b29-7ff4-bdc1-0669e0a28718`，文件 `/Users/moego-winches/.pi/agent/sessions/--Users-moego-winches-Desktop-Company-AI-Agent-rules-manager--/2026-08-06T12-03-39-433Z_019fd6f5-2b29-7ff4-bdc1-0669e0a28718.jsonl`；重建 Adapter 后仍逐字 `PI-ONE/PI-TWO/PI-THREE`。仓库外临时 extension 真实触发 question，回答 A 后逐字 `PI-QUESTION-A`，事件含 Thinking/Tool/interaction_request；真实 Tool running 后 interrupt 返回 `Pi turn interrupted`。
+- 真实 OpenCode：Session `ses_0290a780affeAYujRYTyMHvg42`；重建 Adapter 后仍逐字 `OC-ONE/OC-TWO/OC-THREE`。真实 question 回答 A 得 `OC-QUESTION-A`；bash Tool 得 `OC-TOOL-OK`；candidate schema 返回 1 条 `Run tests before commit`；真实 interrupt 返回 `MessageAbortedError`。
+- 一次 OpenCode 能力 smoke 遇到 `unknown certificate verification error`，随后原命令重试成功；作为外部 TLS 瞬态记录，不改本地实现规避证书校验。
+- 最终全量：Core 30 suites / 310 tests；App 40 suites / 239 tests；skipped=0。两项 production build 与 `git diff --check` 通过。
+
 ## OpenCode / Pi 原生 Provider（2026-08-06）
 
 - 目标：按 Paseo direct adapter 落地四 Provider 目录；OpenCode 覆盖 Chat/Rules，Pi 覆盖 Chat 且从 Rules 排除。
@@ -15,7 +27,7 @@
 - Pi 使用 `pi --mode rpc` JSONL、session file 恢复、模型/thinking 设置、Tool/Thinking/中断与 `extension_ui_request` 交互；App archive/delete 不触碰原生 JSONL。
 - ChatStore 新增 provider-neutral `nativeSessionHandle`，兼容旧 `nativeSessionId` 字符串；Tool 只持久化安全摘要与 locator，不落 input/output。
 - 真实 OpenCode 三轮均恢复 `ses_02928e684ffeHtkoa27FZTxmIC`，真实 Pi 三轮均恢复 `019fd6d7-9990-7c15-8d21-7ee9dcf4a9ac` 及同一 session file；两者第三轮前均重建 Adapter。
-- 真实能力 smoke：OpenCode/Pi Tool、Thinking、interrupt 通过；OpenCode question 回答 A、结构化 Rules 与原生 archive/unarchive/delete 通过；Pi App archive/delete 前后原生 JSONL 均存在。
+- 真实能力 smoke：OpenCode/Pi Tool、Thinking、interrupt 通过；OpenCode question 回答 A、结构化 Rules 与原生 archive/unarchive/delete 通过；Pi App archive/delete 前后原生 JSONL 均存在；Pi question 已在复审中以临时真实 extension 补齐。
 - 最终回归：Core 30 suites / 311 tests、App 36 suites / 224 tests，0 skipped；Core/App production build 与 `git diff --check` 通过。build 仅保留既有 tsdown define、Markstream PURE warning。
 
 

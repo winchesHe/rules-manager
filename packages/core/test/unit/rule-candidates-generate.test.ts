@@ -135,28 +135,6 @@ describe('runRulesGenerate', () => {
     }))
   })
 
-  it('允许 App 原生运行时注入 OpenCode 结构化生成器，并拒绝 Pi Rules', async () => {
-    const generate = jest.fn(async (..._args: unknown[]) => generated)
-
-    await runRulesGenerate({ homeDir: home, provider: 'opencode', dryRun: true }, {
-      extract: async () => evidence,
-      generate,
-    })
-
-    expect(generate).toHaveBeenCalledWith(
-      expect.any(String),
-      'opencode',
-      undefined,
-      'medium',
-      false,
-      expect.any(Object),
-    )
-    await expect(runRulesGenerate({ homeDir: home, provider: 'pi', dryRun: true }, {
-      extract: async () => evidence,
-      generate,
-    })).rejects.toThrow('provider 不支持结构化规则生成')
-  })
-
   it('大型 Evidence 使用选择性检索并要求逐 batch 覆盖检查', async () => {
     const generate = jest.fn(async (..._args: unknown[]) => generated)
     const largeEvidence: EvidenceBundle[] = [{

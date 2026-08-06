@@ -40,6 +40,7 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
   private streamTask: Promise<void> | null = null
   private directory = ''
   private pendingQuestions = new Map<string, Array<{ id: string }>>()
+  private runningToolDetails = new Map<string, string>()
 
   constructor(private readonly deps: OpenCodeAdapterDependencies = {}) {}
 
@@ -76,6 +77,8 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
   }
 
   async readToolItem(request: NativeToolItemReadRequest): Promise<NativeToolItemPage> {
+    const running = this.runningToolDetails.get(request.itemId)
+    if (running) return pageContent(running, request.cursor, request.limit)
     const client = await this.ensureClient(this.directory || process.cwd())
     const response = await client.session.messages({
       sessionID: request.nativeSessionId,
@@ -114,6 +117,7 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
   }
 
   async close(): Promise<void> {
+    this.failActive(new Error('OpenCode adapter 已关闭'))
     this.streamAbort?.abort()
     await this.streamTask?.catch(() => undefined)
     this.streamAbort = null
@@ -190,6 +194,9 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
     this.streamTask = (async () => {
       try {
         for await (const raw of response.stream) this.handleEvent(raw)
+        if (!abort.signal.aborted && this.active) {
+          this.failActive(new Error('OpenCode SSE 在 turn 完成前断开'))
+        }
       } catch (error) {
         if (!abort.signal.aborted) this.failActive(toError(error))
       }
@@ -204,6 +211,8 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
     const data = Object.keys(dataRecord).length > 0 ? dataRecord : asRecord(event.properties)
     const active = this.active
     const sessionId = asString(data.sessionID)
+      ?? asString(asRecord(data.info).sessionID)
+      ?? asString(asRecord(data.part).sessionID)
     if (!active || (sessionId && sessionId !== active.sessionId)) return
 
     if (event.type === 'permission.asked') {
@@ -251,6 +260,7 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
       const part = asRecord(data.part)
       const itemId = asString(part.id) ?? asString(part.callID) ?? 'opencode-part'
       if (part.type === 'tool') {
+        this.runningToolDetails.set(itemId, JSON.stringify(part, null, 2))
         const state = asRecord(part.state)
         const activity = safeToolActivity({
           itemId,
@@ -268,8 +278,10 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
       if (info.role === 'assistant') {
         if (info.structured !== undefined) active.structuredOutput = info.structured
         const tokens = asRecord(info.tokens)
-        const usedTokens = numeric(tokens.total)
-          ?? numeric(tokens.input) + numeric(tokens.output) + numeric(tokens.reasoning)
+        const total = numeric(tokens.total)
+        const usedTokens = total > 0
+          ? total
+          : numeric(tokens.input) + numeric(tokens.output) + numeric(tokens.reasoning)
         if (usedTokens > 0) active.contextUsage = { usedTokens, maxTokens: 0 }
       }
       return

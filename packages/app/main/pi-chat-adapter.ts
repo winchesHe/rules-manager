@@ -8,25 +8,24 @@ import type {
   NativeTurnResult,
 } from './chat-runtime.js'
 import { safeToolActivity } from './chat-event.js'
+import { JsonlRpcProcess, type JsonlRpcChild } from './jsonl-rpc-process.js'
 
-interface PendingRequest {
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
-}
-
-export interface PiProcess {
+export interface PiProcess extends JsonlRpcChild {
   stdin: NodeJS.WritableStream
   stdout: NodeJS.ReadableStream
   stderr: NodeJS.ReadableStream
-  kill(signal?: NodeJS.Signals | number): boolean
-  on(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): this
 }
 
 export type PiProcessFactory = (
   args: string[],
   cwd: string,
 ) => PiProcess
+
+export interface PiChatAdapterOptions {
+  requestTimeoutMs?: number
+  gracefulTimeoutMs?: number
+  forceTimeoutMs?: number
+}
 
 const defaultProcessFactory: PiProcessFactory = (args, cwd) => spawn(
   'pi', args, { cwd, stdio: 'pipe' },
@@ -40,11 +39,7 @@ interface ActiveTurn {
 }
 
 export class PiChatAdapter implements ChatProviderAdapter {
-  private process: PiProcess | null = null
-  private buffer = ''
-  private stderr = ''
-  private nextId = 1
-  private pending = new Map<string, PendingRequest>()
+  private rpc: JsonlRpcProcess | null = null
   private active: ActiveTurn | null = null
   private sessionId = ''
   private sessionFile = ''
@@ -52,7 +47,10 @@ export class PiChatAdapter implements ChatProviderAdapter {
   private pendingUi = new Map<string, string>()
   private interruptRequested = false
 
-  constructor(private readonly createProcess: PiProcessFactory = defaultProcessFactory) {}
+  constructor(
+    private readonly createProcess: PiProcessFactory = defaultProcessFactory,
+    private readonly processOptions: PiChatAdapterOptions = {},
+  ) {}
 
   start(request: NativeTurnRequest): Promise<NativeTurnResult> {
     return this.run(request, false)
@@ -63,18 +61,18 @@ export class PiChatAdapter implements ChatProviderAdapter {
   }
 
   async interrupt(): Promise<void> {
-    if (!this.process) return
+    const rpc = this.rpc
+    if (!rpc) return
     this.interruptRequested = true
     this.failActive(new Error('Pi turn interrupted'))
-    await this.request({ type: 'abort' }, 1_000).catch(() => undefined)
-    const process = this.process
-    this.process = null
-    process?.kill('SIGTERM')
+    await rpc.request({ type: 'abort' }, 1_000).catch(() => undefined)
+    if (this.rpc === rpc) this.rpc = null
+    await rpc.close()
   }
 
   async respondToInteraction(response: NativeInteractionResponse): Promise<void> {
     const method = this.pendingUi.get(response.requestId)
-    if (!this.process || !method) {
+    if (!this.rpc || !method) {
       throw new Error('Pi 交互请求已失效')
     }
     const values = Object.values(response.answers).flat()
@@ -100,20 +98,9 @@ export class PiChatAdapter implements ChatProviderAdapter {
   async delete(_nativeSessionId: string): Promise<void> {}
 
   async close(): Promise<void> {
-    const process = this.process
-    this.process = null
-    if (!process) return
-    process.kill('SIGTERM')
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        process.kill('SIGKILL')
-        resolve()
-      }, 5_000)
-      process.on('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-    })
+    const rpc = this.rpc
+    this.rpc = null
+    await rpc?.close()
   }
 
   private async run(request: NativeTurnRequest, resuming: boolean): Promise<NativeTurnResult> {
@@ -149,75 +136,34 @@ export class PiChatAdapter implements ChatProviderAdapter {
   }
 
   private async ensureProcess(cwd: string, sessionFile?: string): Promise<void> {
-    if (this.process) return
+    if (this.rpc) return
     this.cwd = cwd
     const args = ['--mode', 'rpc', ...(sessionFile ? ['--session', sessionFile] : [])]
-    const process = this.createProcess(args, cwd)
-    this.process = process
-    process.stdout.setEncoding?.('utf8')
-    process.stderr.setEncoding?.('utf8')
-    process.stdout.on('data', (chunk) => this.consume(chunk.toString()))
-    process.stderr.on('data', (chunk) => {
-      this.stderr = `${this.stderr}${chunk.toString()}`.slice(-8_000)
+    const rpc = new JsonlRpcProcess({
+      name: 'Pi RPC', command: 'pi', args, cwd,
+      spawnProcess: (_command, launchArgs, launchCwd) => this.createProcess(launchArgs, launchCwd),
+      ...this.processOptions,
     })
-    process.on('exit', (code, signal) => {
-      const error = new Error(
-        `Pi RPC exited (${code ?? signal ?? 'unknown'})${this.stderr ? `: ${this.stderr}` : ''}`,
-      )
-      for (const pending of this.pending.values()) {
-        clearTimeout(pending.timer)
-        pending.reject(error)
-      }
-      this.pending.clear()
+    this.rpc = rpc
+    rpc.onMessage((message) => this.handleEvent(message))
+    rpc.onExit((error) => {
       this.failActive(error)
-      this.process = null
+      if (this.rpc === rpc) this.rpc = null
     })
     const state = asRecord(await this.request({ type: 'get_state' }))
     this.captureState(state)
   }
 
-  private request(command: Record<string, unknown>, timeoutMs = 30_000): Promise<unknown> {
-    const id = `mm-${this.nextId++}`
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id)
-        reject(new Error(`Pi RPC ${String(command.type)} 超时`))
-      }, timeoutMs)
-      this.pending.set(id, { resolve, reject, timer })
-      this.send({ ...command, id })
-    })
+  private request(command: Record<string, unknown>, timeoutMs?: number): Promise<unknown> {
+    if (!this.rpc) return Promise.reject(new Error('Pi RPC process 不可用'))
+    return timeoutMs === undefined
+      ? this.rpc.request(command)
+      : this.rpc.request(command, timeoutMs)
   }
 
   private send(frame: Record<string, unknown>): void {
-    if (!this.process) throw new Error('Pi RPC process 不可用')
-    this.process.stdin.write(`${JSON.stringify(frame)}\n`)
-  }
-
-  private consume(chunk: string): void {
-    this.buffer += chunk
-    for (;;) {
-      const end = this.buffer.indexOf('\n')
-      if (end < 0) return
-      const line = this.buffer.slice(0, end).trim()
-      this.buffer = this.buffer.slice(end + 1)
-      if (!line) continue
-      let message: Record<string, unknown>
-      try {
-        message = JSON.parse(line) as Record<string, unknown>
-      } catch {
-        continue
-      }
-      if (message.type === 'response' && typeof message.id === 'string') {
-        const pending = this.pending.get(message.id)
-        if (!pending) continue
-        this.pending.delete(message.id)
-        clearTimeout(pending.timer)
-        if (message.success === false) pending.reject(new Error(String(message.error ?? 'Pi RPC 失败')))
-        else pending.resolve(message.data)
-        continue
-      }
-      this.handleEvent(message)
-    }
+    if (!this.rpc) throw new Error('Pi RPC process 不可用')
+    this.rpc.send(frame)
   }
 
   private handleEvent(event: Record<string, unknown>): void {

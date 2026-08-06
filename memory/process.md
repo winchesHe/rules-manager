@@ -2934,3 +2934,14 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 30 suites / 311 tests、App 36 suites / 224 tests，skipped=0；Core/App production build、
   `git diff --check` 通过。构建仅有既有 tsdown define 与 Markstream PURE 注释 warning。
 - 提交信息：`feat: 接入 OpenCode 与 Pi 原生 Provider`
+
+## OpenCode / Pi Paseo 对齐复审（2026-08-06）
+
+- 撤回越界修改的 Core `rules-generate` 命令与测试；OpenCode Rules 在 App 层通过可审计的 Core 编排兼容桥进入，注入生成器仍明确调用 OpenCode runtime，Pi 直接拒绝。
+- Pi JSONL 通信抽成共享进程层，覆盖 request id、分片/乱序、超时、stderr 上限、非法 JSON、exit fail-all 和进程组 TERM→KILL；Chat 与 Provider probe 复用。
+- OpenCode server 补齐 ready 前 generation 所有权、启动失败清理、共享 lease、进程组 TERM→KILL；SSE 补齐嵌套 Session 过滤、EOF 失败及运行态 Tool 内存详情。
+- 真实 smoke 捕获并修复 Pi abort/exit 竞态；新增回归锁定进程先退出后 interrupt 仍安全完成。
+- 真实 Pi question 通过仓库外临时 extension 触发并回答 A；OpenCode question、Tool、结构化 candidate schema、interrupt 与两者三轮重启恢复均通过。
+- 反向验证：Pi 缺少共享 RPC 模块时 suite 编译红→4/4 绿；OpenCode 错误 Session 断言 `wrongtarget` 实际收到 `target` 红→恢复后绿。
+- 全量 Core 30 suites / 310 tests、App 40 suites / 239 tests，skipped=0；两项 build 与 `git diff --check` 通过；构建仅既有 tsdown define 与 Markstream PURE warning。
+- 提交信息：`fix: 补齐 OpenCode Pi Paseo 运行时合同`

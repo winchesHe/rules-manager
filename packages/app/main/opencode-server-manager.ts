@@ -9,18 +9,42 @@ export interface OpenCodeServerLease {
   release(): Promise<void>
 }
 
+export interface OpenCodeServerProcess {
+  stdout: NodeJS.ReadableStream
+  stderr: NodeJS.ReadableStream
+  pid?: number
+  exitCode: number | null
+  kill(signal?: NodeJS.Signals | number): boolean
+  once(event: 'error', listener: (error: Error) => void): this
+  once(event: 'exit', listener: (code: number | null) => void): this
+}
+
 interface ServerGeneration {
-  process: ChildProcessWithoutNullStreams
+  process: OpenCodeServerProcess
   url: string
   refs: number
+  ownsProcessGroup: boolean
+}
+
+export interface OpenCodeServerManagerOptions {
+  allocatePort?: () => Promise<number>
+  resolveCwd?: () => string
+  spawnProcess?: (port: number, cwd: string) => OpenCodeServerProcess
+  startupTimeoutMs?: number
+  gracefulTimeoutMs?: number
+  forceTimeoutMs?: number
 }
 
 export class OpenCodeServerManager {
   private server: ServerGeneration | null = null
   private starting: Promise<ServerGeneration> | null = null
 
+  constructor(private readonly options: OpenCodeServerManagerOptions = {}) {}
+
   async acquire(): Promise<OpenCodeServerLease> {
-    const server = this.server ?? await this.start()
+    const server = this.starting
+      ? await this.starting
+      : this.server ?? await this.start()
     server.refs += 1
     let released = false
     return {
@@ -37,33 +61,49 @@ export class OpenCodeServerManager {
     const server = this.server
     this.server = null
     if (!server || server.process.exitCode !== null) return
-    server.process.kill('SIGTERM')
-    await waitForExit(server.process, 5_000)
-    if (server.process.exitCode === null) {
-      server.process.kill('SIGKILL')
-      await waitForExit(server.process, 1_000)
-    }
+    await terminateServer(
+      server,
+      this.options.gracefulTimeoutMs ?? 2_000,
+      this.options.forceTimeoutMs ?? 1_000,
+    )
   }
 
   private async start(): Promise<ServerGeneration> {
     if (this.starting) return this.starting
     this.starting = this.spawnServer().finally(() => { this.starting = null })
-    const server = await this.starting
-    this.server = server
-    return server
+    return this.starting
   }
 
   private async spawnServer(): Promise<ServerGeneration> {
-    const port = await availablePort()
-    const cwd = path.join(os.homedir(), '.local', 'share', 'opencode')
+    const port = await (this.options.allocatePort ?? availablePort)()
+    const cwd = this.options.resolveCwd?.()
+      ?? path.join(os.homedir(), '.local', 'share', 'opencode')
     fs.mkdirSync(cwd, { recursive: true })
-    const child = spawn('opencode', ['serve', '--port', String(port)], {
-      cwd,
-      stdio: 'pipe',
-    })
-    const url = `http://127.0.0.1:${port}`
-    await waitUntilListening(child, 30_000)
-    return { process: child, url, refs: 0 }
+    const customSpawn = this.options.spawnProcess
+    const child = customSpawn
+      ? customSpawn(port, cwd)
+      : spawn('opencode', ['serve', '--port', String(port)], {
+          cwd, stdio: 'pipe', detached: process.platform !== 'win32',
+        }) as ChildProcessWithoutNullStreams
+    const server: ServerGeneration = {
+      process: child,
+      url: `http://127.0.0.1:${port}`,
+      refs: 0,
+      ownsProcessGroup: !customSpawn && process.platform !== 'win32',
+    }
+    this.server = server
+    try {
+      await waitUntilListening(child, this.options.startupTimeoutMs ?? 30_000)
+      return server
+    } catch (error) {
+      if (this.server === server) this.server = null
+      await terminateServer(
+        server,
+        this.options.gracefulTimeoutMs ?? 2_000,
+        this.options.forceTimeoutMs ?? 1_000,
+      )
+      throw error
+    }
   }
 }
 
@@ -84,7 +124,7 @@ function availablePort(): Promise<number> {
   })
 }
 
-function waitUntilListening(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
+function waitUntilListening(child: OpenCodeServerProcess, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     let output = ''
     let settled = false
@@ -95,8 +135,8 @@ function waitUntilListening(child: ChildProcessWithoutNullStreams, timeoutMs: nu
       if (error) reject(error)
       else resolve()
     }
-    const consume = (chunk: Buffer): void => {
-      output = `${output}${chunk.toString()}`.slice(-8_192)
+    const consume = (chunk: Buffer | string): void => {
+      output = `${output}${String(chunk)}`.slice(-8_192)
       if (output.toLowerCase().includes('listening on')) finish()
     }
     child.stdout.on('data', consume)
@@ -111,7 +151,31 @@ function waitUntilListening(child: ChildProcessWithoutNullStreams, timeoutMs: nu
   })
 }
 
-function waitForExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
+async function terminateServer(
+  server: ServerGeneration,
+  gracefulTimeoutMs: number,
+  forceTimeoutMs: number,
+): Promise<void> {
+  signalServer(server, 'SIGTERM')
+  await waitForExit(server.process, gracefulTimeoutMs)
+  if (server.process.exitCode !== null) return
+  signalServer(server, 'SIGKILL')
+  await waitForExit(server.process, forceTimeoutMs)
+}
+
+function signalServer(server: ServerGeneration, signal: NodeJS.Signals): void {
+  if (server.ownsProcessGroup && server.process.pid) {
+    try {
+      process.kill(-server.process.pid, signal)
+      return
+    } catch {
+      // 进程组已退出时回退到直接终止子进程。
+    }
+  }
+  try { server.process.kill(signal) } catch { /* 已退出 */ }
+}
+
+function waitForExit(child: OpenCodeServerProcess, timeoutMs: number): Promise<void> {
   if (child.exitCode !== null) return Promise.resolve()
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, timeoutMs)

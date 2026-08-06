@@ -74,7 +74,10 @@ describe('PiChatAdapter', () => {
 
   it('中断会拒绝当前 turn 并终止 RPC 进程', async () => {
     const signals: Array<NodeJS.Signals | number | undefined> = []
-    const adapter = new PiChatAdapter(() => fakeHangingPiProcess(signals))
+    const adapter = new PiChatAdapter(
+      () => fakeHangingPiProcess(signals),
+      { gracefulTimeoutMs: 5, forceTimeoutMs: 5 },
+    )
     const turn = adapter.start({
       chatId: 'chat-pi', provider: 'pi', message: 'wait', workingDirectory: '/tmp',
       config: { effort: 'medium', fastMode: false },
@@ -86,6 +89,60 @@ describe('PiChatAdapter', () => {
 
     await interrupted
     expect(signals).toContain('SIGTERM')
+  })
+
+  it('abort 期间进程先退出也不会在清理阶段访问空 RPC', async () => {
+    const adapter = new PiChatAdapter(() => fakeHangingPiProcess([], true))
+    const turn = adapter.start({
+      chatId: 'chat-pi', provider: 'pi', message: 'wait', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false },
+    })
+    const interrupted = expect(turn).rejects.toThrow('Pi turn interrupted')
+    await new Promise((resolve) => setImmediate(resolve))
+
+    await expect(adapter.interrupt()).resolves.toBeUndefined()
+    await interrupted
+  })
+
+  it('三轮对话在第三轮重建 Adapter 后仍用同一 session file 恢复', async () => {
+    const launched: string[][] = []
+    const firstFrames: Array<Record<string, unknown>> = []
+    const firstAdapter = new PiChatAdapter((args) => {
+      launched.push(args)
+      return fakePiProcess(firstFrames)
+    })
+    const turn1 = await firstAdapter.start({
+      chatId: 'chat-pi', provider: 'pi', message: 'one', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false },
+    })
+    const turn2 = await firstAdapter.resume({
+      chatId: 'chat-pi', provider: 'pi', nativeSessionId: turn1.nativeSessionId,
+      nativeSessionHandle: turn1.nativeSessionHandle,
+      message: 'two', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false },
+    })
+    await firstAdapter.close()
+
+    const thirdFrames: Array<Record<string, unknown>> = []
+    const recreated = new PiChatAdapter((args) => {
+      launched.push(args)
+      return fakePiProcess(thirdFrames)
+    })
+    const turn3 = await recreated.resume({
+      chatId: 'chat-pi', provider: 'pi', nativeSessionId: turn2.nativeSessionId,
+      nativeSessionHandle: turn2.nativeSessionHandle,
+      message: 'three', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false },
+    })
+
+    expect(launched).toEqual([
+      ['--mode', 'rpc'],
+      ['--mode', 'rpc', '--session', '/tmp/pi-1.jsonl'],
+    ])
+    expect(firstFrames.filter((frame) => frame.type === 'prompt')).toHaveLength(2)
+    expect(thirdFrames.filter((frame) => frame.type === 'prompt')).toHaveLength(1)
+    expect(turn3.nativeSessionHandle).toEqual(turn1.nativeSessionHandle)
+    await recreated.close()
   })
 })
 
@@ -129,9 +186,18 @@ function fakePiProcess(
   })
   return {
     stdin, stdout, stderr,
-    kill: () => true,
+    kill: (signal) => {
+      queueMicrotask(() => {
+        for (const listener of exitListeners) {
+          listener(0, typeof signal === 'string' ? signal : null)
+        }
+      })
+      return true
+    },
     on(event, listener) {
-      if (event === 'exit') exitListeners.push(listener)
+      if (event === 'exit') {
+        exitListeners.push(listener as (code: number | null, signal: NodeJS.Signals | null) => void)
+      }
       return this
     },
   }
@@ -139,11 +205,13 @@ function fakePiProcess(
 
 function fakeHangingPiProcess(
   signals: Array<NodeJS.Signals | number | undefined>,
+  exitOnAbort = false,
 ): PiProcess {
   const stdin = new PassThrough()
   const stdout = new PassThrough()
   const stderr = new PassThrough()
   stdin.setEncoding('utf8')
+  const exitListeners: Array<(code: number | null, signal: NodeJS.Signals | null) => void> = []
   let buffer = ''
   stdin.on('data', (chunk: string) => {
     buffer += chunk
@@ -152,6 +220,12 @@ function fakeHangingPiProcess(
     for (const line of lines) {
       if (!line) continue
       const frame = JSON.parse(line) as Record<string, unknown>
+      if (exitOnAbort && frame.type === 'abort') {
+        queueMicrotask(() => {
+          for (const listener of exitListeners) listener(0, null)
+        })
+        continue
+      }
       stdout.write(`${JSON.stringify({
         id: frame.id,
         type: 'response',
@@ -168,6 +242,11 @@ function fakeHangingPiProcess(
       signals.push(signal)
       return true
     },
-    on() { return this },
+    on(event, listener) {
+      if (event === 'exit') {
+        exitListeners.push(listener as (code: number | null, signal: NodeJS.Signals | null) => void)
+      }
+      return this
+    },
   }
 }

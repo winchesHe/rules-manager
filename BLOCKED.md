@@ -4,9 +4,10 @@
 
 - 非阻塞环境偏差：目标文件记录 OpenCode 版本 `1.4.6`，任务 0 复测为 `1.17.11`；可执行文件仍为
   `/opt/homebrew/bin/opencode`。后续以当前真实版本做兼容与 smoke，不把旧版本号当验收前提。
-- 非阻塞覆盖缺口：本机 Pi 0.79.3 当前加载的 extension/command 集没有能主动调用交互 UI 的 question 工具，
-  因此真实 Chat 无法自然产生 `extension_ui_request`；适配器已按本机 Pi RPC 权威类型实现并以可控 RPC
-  测试覆盖 input/select/confirm 响应及 notify 忽略，其他 Pi 真实三轮、Tool、Thinking、中断与恢复均已通过。
+- 已补齐原覆盖缺口：使用仓库外临时 Pi extension 注册真实交互 Tool，Pi 0.79.3 已实际发出
+  `extension_ui_request`，Adapter 回答 A 后同一 turn 完成并返回 `PI-QUESTION-A`；临时扩展未进入项目或用户配置。
+- 非阻塞瞬态：一次 OpenCode 真实能力请求返回 `unknown certificate verification error`，相同命令随后重试成功；
+  未禁用 TLS 校验，也未对实现增加不安全回退。
 - 当前无阻塞项。
 
 ## Chat V1 原生 Session 重构（2026-08-01）

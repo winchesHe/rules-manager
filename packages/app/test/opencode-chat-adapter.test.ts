@@ -58,6 +58,82 @@ describe('OpenCodeChatAdapter', () => {
     }))
     expect(questionReply).toHaveBeenCalledWith(expect.objectContaining({ answers: [['A']] }))
   })
+
+  it('恢复既有 Session，并严格忽略其他 Session 的嵌套事件', async () => {
+    const create = jest.fn(async () => ({ data: { id: 'unexpected' } }))
+    const promptAsync = jest.fn(async () => ({ data: true }))
+    const client = fakeClient([
+      { type: 'message.part.delta', data: { sessionID: 'other', partID: 'wrong', field: 'text', delta: 'wrong' } },
+      { type: 'message.updated', data: { info: { sessionID: 'other', role: 'assistant', structured: { wrong: true } } } },
+      { type: 'message.part.delta', data: { sessionID: 'oc-existing', partID: 'right', field: 'text', delta: 'target' } },
+      { type: 'session.idle', data: { sessionID: 'oc-existing' } },
+    ], { create, promptAsync })
+    const adapter = new OpenCodeChatAdapter({
+      acquireServer: async () => ({ url: 'http://fake', release: async () => undefined }),
+      createClient: () => client as never,
+    })
+
+    const result = await adapter.resume({
+      chatId: 'chat-oc', provider: 'opencode', nativeSessionId: 'oc-existing',
+      nativeSessionHandle: { sessionId: 'oc-existing', nativeHandle: 'oc-existing' },
+      message: 'resume', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false },
+    })
+
+    expect(create).not.toHaveBeenCalled()
+    expect(promptAsync).toHaveBeenCalledWith(expect.objectContaining({ sessionID: 'oc-existing' }))
+    expect(result.content).toBe('target')
+    expect(result.structuredOutput).toBeUndefined()
+  })
+
+  it('SSE 在终态前正常 EOF 也会拒绝 turn', async () => {
+    const client = fakeClient([
+      { type: 'message.part.delta', data: { sessionID: 'oc-1', partID: 'text-1', field: 'text', delta: 'partial' } },
+    ], {})
+    const adapter = new OpenCodeChatAdapter({
+      acquireServer: async () => ({ url: 'http://fake', release: async () => undefined }),
+      createClient: () => client as never,
+    })
+
+    await expect(adapter.start({
+      chatId: 'chat-oc', provider: 'opencode', message: 'go', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false },
+    })).rejects.toThrow('SSE 在 turn 完成前断开')
+  })
+
+  it('中断调用原生 abort，运行态 Tool 详情优先从内存读取', async () => {
+    const abort = jest.fn(async () => ({ data: true }))
+    let releaseEvents!: () => void
+    let resolveTool!: () => void
+    const gate = new Promise<void>((resolve) => { releaseEvents = resolve })
+    const toolSeen = new Promise<void>((resolve) => { resolveTool = resolve })
+    const client = fakeClient([
+      { type: 'message.part.updated', data: { sessionID: 'oc-1', part: { id: 'tool-live', type: 'tool', tool: 'bash', state: { status: 'running', input: { command: 'pwd' } } } } },
+      { wait: gate },
+      { type: 'session.idle', data: { sessionID: 'oc-1' } },
+    ], { abort })
+    const adapter = new OpenCodeChatAdapter({
+      acquireServer: async () => ({ url: 'http://fake', release: async () => undefined }),
+      createClient: () => client as never,
+    })
+    const turn = adapter.start({
+      chatId: 'chat-oc', provider: 'opencode', message: 'go', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false },
+      onEvent: (event) => { if (event.type === 'tool_activity') resolveTool() },
+    })
+    await toolSeen
+
+    const page = await adapter.readToolItem({
+      nativeSessionId: 'oc-1', itemId: 'tool-live', cursor: 0, limit: 10_000,
+    })
+    await adapter.interrupt()
+    releaseEvents()
+    await turn
+
+    expect(page.available).toBe(true)
+    expect(page.content).toContain('pwd')
+    expect(abort).toHaveBeenCalledWith(expect.objectContaining({ sessionID: 'oc-1' }))
+  })
 })
 
 function fakeClient(
@@ -65,13 +141,16 @@ function fakeClient(
   callbacks: {
     permissionReply?: (value: unknown) => Promise<unknown>
     questionReply?: (value: unknown) => Promise<unknown>
+    create?: (value: unknown) => Promise<unknown>
+    promptAsync?: (value: unknown) => Promise<unknown>
+    abort?: (value: unknown) => Promise<unknown>
   },
 ) {
   return {
     session: {
-      create: async () => ({ data: { id: 'oc-1' } }),
-      promptAsync: async () => ({ data: true }),
-      abort: async () => ({ data: true }),
+      create: callbacks.create ?? (async () => ({ data: { id: 'oc-1' } })),
+      promptAsync: callbacks.promptAsync ?? (async () => ({ data: true })),
+      abort: callbacks.abort ?? (async () => ({ data: true })),
       messages: async () => ({ data: [] }),
       update: async () => ({ data: true }),
       delete: async () => ({ data: true }),
@@ -85,7 +164,10 @@ function fakeClient(
       event: async () => ({
         stream: (async function* () {
           await new Promise((resolve) => setImmediate(resolve))
-          for (const event of events) yield event
+          for (const event of events) {
+            if ('wait' in event && event.wait instanceof Promise) await event.wait
+            else yield event
+          }
         })(),
       }),
     },
