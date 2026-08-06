@@ -38,3 +38,12 @@
 - 验证：行为测试必须排除未连接的 config Provider、保留 connected 与 api Provider；无可访问 Provider 时
   明确报错。真实 probe 数量必须与 `opencode models` 一致，随后运行 Core/App 全量测试、两项 build 与
   `git diff --check`。
+
+## OpenCode Composer 选择器视觉修复（2026-08-06）
+
+- 观察：`OpenCode` 比原有 Provider 名称更宽，96px 槽位使文案和指示器过于拥挤；HeroUI 默认外扩焦点环
+  又会被 Composer 横向滚动容器裁切，表现为控件两侧不连续的白色弧线。
+- 实现：Provider 槽位增至 112px；Composer 的四个运行时 Select 统一使用内嵌焦点环，保留键盘焦点反馈且
+  不再越过滚动容器边界。
+- 验证：布局契约测试锁定 OpenCode 宽度与四个 Select 的内嵌焦点样式；Core/App 全量测试和 App build
+  通过；真实 Electron 暗色主题打开 Provider 菜单并关闭后，OpenCode 聚焦框完整、文字和箭头无裁切。

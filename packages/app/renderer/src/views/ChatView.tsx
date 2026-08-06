@@ -1189,20 +1189,20 @@ export function ChatView({
                       <PanelRight aria-hidden="true" size={14} />{t('contextShort')} <span className="font-semibold text-success">{selectedContext.length}</span>
                     </Button>
                     <div className="flex h-8 min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-composer-runtime>
-                      <Select aria-label={t('agent')} className="w-24 shrink-0" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => changeProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
-                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
+                      <Select aria-label={t('agent')} className="w-28 shrink-0" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => changeProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none ring-inset hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{providerSnapshot.entries.filter((entry) => entry.enabled).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
                       <Select aria-label={t('model')} className="w-36 shrink-0" onSelectionChange={(key) => { const next = String(key) === '__default' ? '' : String(key); setModel(next); const selected = providerSnapshot.entries.find((entry) => entry.id === provider)?.models.find((entry) => entry.id === next); setThinkingOptionId(selected?.defaultThinkingOptionId ?? '') }} selectedKey={model || '__default'}>
-                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none ring-inset hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>{(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
                       {(provider === 'claude' || provider === 'codex') && <Select aria-label={t('effort')} className="w-24 shrink-0" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
-                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none ring-inset hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{CHAT_EFFORTS.map((value) => <ListBox.Item id={value} key={value}>{value}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>}
                       {(providerSnapshot.entries.find((entry) => entry.id === provider)?.models.find((entry) => entry.id === model)?.thinkingOptions?.length ?? 0) > 0 && <Select aria-label={t('thinking')} className="w-24 shrink-0" onSelectionChange={(key) => setThinkingOptionId(String(key))} selectedKey={thinkingOptionId}>
-                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2 text-xs shadow-none ring-inset hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{providerSnapshot.entries.find((entry) => entry.id === provider)?.models.find((entry) => entry.id === model)?.thinkingOptions?.map((option) => <ListBox.Item id={option.id} key={option.id}>{option.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>}
                       {providerSnapshot.entries.find((entry) => entry.id === provider)?.capabilities.supportsFastMode && <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-2.5 text-[11px] text-foreground shadow-none transition-colors hover:bg-background/60" data-composer-fast-mode>

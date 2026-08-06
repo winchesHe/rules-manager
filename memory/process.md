@@ -2975,3 +2975,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - `simplify` 复核未发现需要调整的复杂度。Core 30 suites / 310 tests、App 41 suites / 242 tests，0 skipped；
   Core/App production build 与 `git diff --check` 通过，仅保留既有构建 warning。
 - 提交信息：`fix: 过滤 OpenCode 实际可用模型`
+
+## OpenCode Composer 选择器视觉修复（2026-08-06）
+
+- 截图中的两段白色弧线不是 OpenCode Provider 的独立边框，而是 HeroUI Select 的外扩焦点环被
+  `data-composer-runtime` 横向滚动容器裁切；同时 `w-24` 对 `OpenCode` 文案和 indicator 偏窄。
+- Provider Select 改为 `w-28`，Composer 内四个运行时 Select Trigger 统一增加 `ring-inset`。这样键盘
+  焦点仍使用主题 focus 色，但完整落在 32px Trigger 内部，不改变 Picker、Switch、发送或 Provider 行为。
+- 布局契约先加入宽度和四个内嵌焦点环断言，首次定向运行 1 failed / 46 passed；实现后 47/47 通过。
+- `simplify` 复核确认本次纯样式修改无需抽取共享常量。最终 Core 30 suites / 310 tests、App 41 suites /
+  242 tests 全绿，App production build 与 `git diff --check` 通过；构建只有既有 Markstream PURE warning。
+- 真实 Electron 暗色主题打开 OpenCode Provider 菜单并按 Escape 返回 Trigger 后，内嵌焦点框连续完整，
+  `OpenCode` 和箭头无裁切，原截图中的左右白弧不再出现。
+- 提交信息：`style: 修复 OpenCode Composer 选择器`

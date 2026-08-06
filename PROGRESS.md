@@ -702,3 +702,15 @@ npm test -- --runInBand test/unit/rule-candidates-schema.test.ts test/unit/redac
 - App `npm run typecheck` 仍受既有跨 workspace `rootDir/TS6307` 与 JSON include 配置债务影响；
   production build 能完成类型转译，本轮没有扩大该配置范围。
 - 提交信息：`chore: 收口 Chat V1 验收`。
+
+## OpenCode Composer 选择器视觉修复（2026-08-06）
+
+- 根因是 `OpenCode` 在 96px Provider 槽位内与下拉指示器拥挤，同时 HeroUI 外扩焦点环被 Composer 的
+  横向滚动边界裁切，形成左右两段白色弧线。
+- Provider 槽位调整为 112px，四个运行时 Select 的焦点环统一改为内嵌；保留键盘焦点提示，不改变
+  Provider、模型、thinking、effort 的选择行为。
+- 布局契约测试先红后绿；`simplify` 复核无需额外重构。Core 30 suites / 310 tests、App 41 suites /
+  242 tests 全绿，App production build 与 `git diff --check` 通过。
+- 真实 Electron 暗色主题验证 OpenCode 菜单展开及关闭后的聚焦态：文字、箭头和完整内嵌焦点框均可见，
+  原白色断裂弧线不再出现。
+- 提交信息：`style: 修复 OpenCode Composer 选择器`。
