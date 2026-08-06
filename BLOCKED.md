@@ -8,6 +8,9 @@
   `extension_ui_request`，Adapter 回答 A 后同一 turn 完成并返回 `PI-QUESTION-A`；临时扩展未进入项目或用户配置。
 - 非阻塞瞬态：一次 OpenCode 真实能力请求返回 `unknown certificate verification error`，相同命令随后重试成功；
   未禁用 TLS 校验，也未对实现增加不安全回退。
+- 非阻塞外部等待：production App 内用 Provider 默认模型发起 OpenCode question 时 82 秒无事件，随后真实“停止本轮”
+  正常中断并展示 `MessageAbortedError`。同一原生 question 链路此前以明确模型完成并返回
+  `OC-QUESTION-A`，统一回答卡 Renderer 自动化也已通过，因此不把单次默认模型等待视为本地实现阻塞。
 - 当前无阻塞项。
 
 ## Chat V1 原生 Session 重构（2026-08-01）

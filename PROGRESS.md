@@ -1,5 +1,15 @@
 # 执行进度
 
+## OpenCode / Pi 最终 UI 与生命周期验收（2026-08-06）
+
+- 真实 production Electron 使用本机配置完成界面对账：Settings 同时显示 Claude 5、Codex 7、OpenCode 6120、Pi 4 个模型，四者均为可用/启用；Fast Mode 标签仍仅为 `Claude · Codex`。
+- Chat 的 Agent 选择器包含四 Provider；Pi 真实模型列表显示 Provider 默认与本机 4 个模型，GPT-5.6-sol 的 thinking 选择器完整显示 `off/minimal/low/medium/high/xhigh/max`，且不显示 Fast Mode。
+- Rules 生成页 Agent 选择器只显示 Claude/Codex/OpenCode，Pi 为 0；OpenCode 的普通 Chat 真实发起与停止本轮均穿过 App UI，终止后明确显示原生 `MessageAbortedError`，没有静默吞错。
+- 可回答卡采用统一 `interaction_request` Renderer 路径：OpenCode 原生 question 与 Pi 真实临时 extension 均已在 Adapter 真实 smoke 中回答 A；UI 自动化测试覆盖卡片出现、选项作答与回传。一次 App 内 Provider 默认 OpenCode 问题请求 82 秒无事件，已通过“停止本轮”中断，未把外部模型等待误记为卡片成功。
+- 新增 OpenCode Adapter 生命周期直测：先以错误字段断言得到 1 failed / 5 passed 的红证据，再按 SDK `time.archived` 合同修正为 6/6 绿；锁定 archive/unarchive/delete 分别调用原生 `session.update/update/delete`。
+- UI 验收 Electron 已停止；隔离验收 HOME `/tmp/mm-provider-ui.quDl3z` 已移入废纸篓，可恢复，不污染项目或默认 workspace。
+- 最终全量 Core 30 suites / 310 tests、App 40 suites / 240 tests，0 skipped；Core/App production build 均通过，只有既有 tsdown define 与 Markstream PURE warning。
+
 ## OpenCode / Pi Paseo 对齐复审（2026-08-06）
 
 - 作废上一轮“已完成”结论并逐条复审。撤回越界的 Core `rules-generate` 改动；OpenCode Rules 改为 App 层显式兼容桥，真实 runtime/provider 仍是 OpenCode，Pi 进入桥时直接拒绝。

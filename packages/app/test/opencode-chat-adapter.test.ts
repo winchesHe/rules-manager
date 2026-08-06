@@ -134,6 +134,28 @@ describe('OpenCodeChatAdapter', () => {
     expect(page.content).toContain('pwd')
     expect(abort).toHaveBeenCalledWith(expect.objectContaining({ sessionID: 'oc-1' }))
   })
+
+  it('归档、恢复与删除直接同步 OpenCode 原生 Session', async () => {
+    const update = jest.fn(async () => ({ data: true }))
+    const deleteSession = jest.fn(async () => ({ data: true }))
+    const client = fakeClient([], { update, deleteSession })
+    const adapter = new OpenCodeChatAdapter({
+      acquireServer: async () => ({ url: 'http://fake', release: async () => undefined }),
+      createClient: () => client as never,
+    })
+
+    await adapter.archive('oc-life')
+    await adapter.unarchive('oc-life')
+    await adapter.delete('oc-life')
+
+    expect(update).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      sessionID: 'oc-life', time: { archived: expect.any(Number) },
+    }))
+    expect(update).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      sessionID: 'oc-life', time: { archived: 0 },
+    }))
+    expect(deleteSession).toHaveBeenCalledWith(expect.objectContaining({ sessionID: 'oc-life' }))
+  })
 })
 
 function fakeClient(
@@ -144,6 +166,8 @@ function fakeClient(
     create?: (value: unknown) => Promise<unknown>
     promptAsync?: (value: unknown) => Promise<unknown>
     abort?: (value: unknown) => Promise<unknown>
+    update?: (value: unknown) => Promise<unknown>
+    deleteSession?: (value: unknown) => Promise<unknown>
   },
 ) {
   return {
@@ -152,8 +176,8 @@ function fakeClient(
       promptAsync: callbacks.promptAsync ?? (async () => ({ data: true })),
       abort: callbacks.abort ?? (async () => ({ data: true })),
       messages: async () => ({ data: [] }),
-      update: async () => ({ data: true }),
-      delete: async () => ({ data: true }),
+      update: callbacks.update ?? (async () => ({ data: true })),
+      delete: callbacks.deleteSession ?? (async () => ({ data: true })),
     },
     permission: { reply: callbacks.permissionReply ?? (async () => ({ data: true })) },
     question: {

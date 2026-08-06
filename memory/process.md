@@ -2945,3 +2945,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 反向验证：Pi 缺少共享 RPC 模块时 suite 编译红→4/4 绿；OpenCode 错误 Session 断言 `wrongtarget` 实际收到 `target` 红→恢复后绿。
 - 全量 Core 30 suites / 310 tests、App 40 suites / 239 tests，skipped=0；两项 build 与 `git diff --check` 通过；构建仅既有 tsdown define 与 Markstream PURE warning。
 - 提交信息：`fix: 补齐 OpenCode Pi Paseo 运行时合同`
+
+## OpenCode / Pi 最终 UI 与生命周期验收（2026-08-06）
+
+- production Electron 以真实 HOME 验证四 Provider 状态/模型、Chat 选择器、Pi 四个本机模型与七档 thinking；Fast
+  Mode 只对 Claude/Codex 显示。Rules Agent 选择器只有 Claude/Codex/OpenCode，Pi 为 0。
+- 真实 App 内 OpenCode Provider 默认问题请求等待 82 秒未产生事件；通过“停止本轮”成功中断，UI 明确展示
+  `MessageAbortedError`。原生 question 的明确模型 smoke 已返回 `OC-QUESTION-A`，Pi 临时真实 extension 已返回
+  `PI-QUESTION-A`，统一 `interaction_request` 回答卡由 Renderer 自动化覆盖。
+- 生命周期审计补充 OpenCode Adapter 直测。首轮用错误的 `archivedAt` 字段断言，得到 1 failed / 5 passed；
+  对齐实际 SDK `time.archived` 请求后 6/6 通过，锁定原生 archive/unarchive/delete 路由。
+- 隔离 UI HOME 已移入废纸篓；production Electron 已停止。最终全量 Core 30 suites / 310 tests、App 40
+  suites / 240 tests，0 skipped；Core/App production build 均通过，只保留既有 tsdown define 与 Markstream
+  PURE warning。
+- 提交信息：`test: 补齐 OpenCode Provider 最终验收`
