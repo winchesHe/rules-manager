@@ -2955,6 +2955,8 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `PI-QUESTION-A`，统一 `interaction_request` 回答卡由 Renderer 自动化覆盖。
 - 生命周期审计补充 OpenCode Adapter 直测。首轮用错误的 `archivedAt` 字段断言，得到 1 failed / 5 passed；
   对齐实际 SDK `time.archived` 请求后 6/6 通过，锁定原生 archive/unarchive/delete 路由。
+- 最终反向审计把 Pi 错误加入 Rules 期望，并把无响应 RPC 预期改成“不会超时”，定向得到 2 failed / 7
+  passed；还原后 2 suites / 9 tests 全绿，实际错误分别锁定 Pi 过滤与 `Pi RPC never 超时`。
 - 隔离 UI HOME 已移入废纸篓；production Electron 已停止。最终全量 Core 30 suites / 310 tests、App 40
   suites / 240 tests，0 skipped；Core/App production build 均通过，只保留既有 tsdown define 与 Markstream
   PURE warning。
