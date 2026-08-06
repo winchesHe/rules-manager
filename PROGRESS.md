@@ -1,8 +1,20 @@
 # 执行进度
 
+## OpenCode 可用模型目录修复（2026-08-06）
+
+- 根因：`discoverOpenCodeModels` 直接展开 `provider.list().data.all`，把 OpenCode 全量目录中的未连接 Provider
+  也标记为可用，因此 Settings 显示 6120 个模型；Paseo 实际先按 `connected` 或 `source === "api"` 过滤。
+- 修复：向 `provider.list` 传入当前目录，只映射已连接/API Provider；没有可访问 Provider 时明确报错并走现有
+  探测错误展示，不再伪装成可用目录。
+- 红测因缺少 `mapAccessibleOpenCodeModels` 得到 TS2305；实现后定向 1 suite / 2 tests 全绿。
+- 真实 `probeProviders('opencode')` 返回 `status=available, count=13`，13 个 ID 与 `opencode models` 完全一致。
+- `simplify` 复核确认 SDK 调用与纯映射函数职责已最小且清晰，无需额外重构。
+- Core 30 suites / 310 tests、App 41 suites / 242 tests，0 skipped；两项 production build 与
+  `git diff --check` 通过，build 只保留既有 tsdown define 与 Markstream PURE warning。
+
 ## OpenCode / Pi 最终 UI 与生命周期验收（2026-08-06）
 
-- 真实 production Electron 使用本机配置完成界面对账：Settings 同时显示 Claude 5、Codex 7、OpenCode 6120、Pi 4 个模型，四者均为可用/启用；Fast Mode 标签仍仅为 `Claude · Codex`。
+- 真实 production Electron 使用本机配置完成界面对账：Settings 当时显示 Claude 5、Codex 7、OpenCode 6120、Pi 4 个模型；其中 OpenCode 6120 后续确认为误把全量目录当作可用目录，已由上方修复收敛为 13。Fast Mode 标签仍仅为 `Claude · Codex`。
 - Chat 的 Agent 选择器包含四 Provider；Pi 真实模型列表显示 Provider 默认与本机 4 个模型，GPT-5.6-sol 的 thinking 选择器完整显示 `off/minimal/low/medium/high/xhigh/max`，且不显示 Fast Mode。
 - Rules 生成页 Agent 选择器只显示 Claude/Codex/OpenCode，Pi 为 0；OpenCode 的普通 Chat 真实发起与停止本轮均穿过 App UI，终止后明确显示原生 `MessageAbortedError`，没有静默吞错。
 - 可回答卡采用统一 `interaction_request` Renderer 路径：OpenCode 原生 question 与 Pi 真实临时 extension 均已在 Adapter 真实 smoke 中回答 A；UI 自动化测试覆盖卡片出现、选项作答与回传。一次 App 内 Provider 默认 OpenCode 问题请求 82 秒无事件，已通过“停止本轮”中断，未把外部模型等待误记为卡片成功。

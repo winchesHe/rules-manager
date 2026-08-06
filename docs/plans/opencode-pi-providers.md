@@ -30,3 +30,11 @@
 - `npm run build`、`npm run build -w @memory-manager/app`、`git diff --check` 通过。
 - OpenCode/Pi 各三轮真实 Chat 且 runtime 重启后恢复相同原生 Session；OpenCode 真实结构化规则生成成功；Pi 不出现在 Rules。
 - 真实 question 不能由假进程替代：OpenCode 使用原生 question tool；Pi 使用仓库外临时 extension 触发 RPC UI，验收后删除临时文件。
+
+## OpenCode 可用模型目录修复（2026-08-06）
+
+- 观察：`provider.list().all` 是全量模型目录，不等于本机可用模型；Paseo 仅接受 `connected` Provider 或
+  `source === "api"` Provider，并向 `provider.list` 传入当前目录。
+- 验证：行为测试必须排除未连接的 config Provider、保留 connected 与 api Provider；无可访问 Provider 时
+  明确报错。真实 probe 数量必须与 `opencode models` 一致，随后运行 Core/App 全量测试、两项 build 与
+  `git diff --check`。

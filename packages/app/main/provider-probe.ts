@@ -207,11 +207,42 @@ async function discoverOpenCodeModels(): Promise<ProviderModel[]> {
   const lease = await sharedOpenCodeServerManager.acquire()
   try {
     const client = createOpencodeClient({ baseUrl: lease.url })
-    const response = await withTimeout(client.provider.list(), PROBE_TIMEOUT_MS)
+    const response = await withTimeout(
+      client.provider.list({ directory: process.cwd() }),
+      PROBE_TIMEOUT_MS,
+    )
     if (response.error || !response.data) {
       throw new Error(JSON.stringify(response.error ?? 'OpenCode provider.list 无数据'))
     }
-    return response.data.all.flatMap((provider) => Object.values(provider.models).map((model) => {
+    return mapAccessibleOpenCodeModels(response.data)
+  } finally {
+    await lease.release()
+  }
+}
+
+interface OpenCodeProviderCatalog {
+  connected: string[]
+  all: Array<{
+    id: string
+    name: string
+    source: 'env' | 'config' | 'custom' | 'api'
+    models: Record<string, {
+      id: string
+      name: string
+      variants?: Record<string, unknown>
+    }>
+  }>
+}
+
+export function mapAccessibleOpenCodeModels(catalog: OpenCodeProviderCatalog): ProviderModel[] {
+  const connectedProviderIds = new Set(catalog.connected)
+  const accessibleProviders = catalog.all.filter((provider) =>
+    connectedProviderIds.has(provider.id) || provider.source === 'api')
+  if (accessibleProviders.length === 0) {
+    throw new Error('OpenCode 没有已连接的 Provider，请先完成认证或配置 API Provider')
+  }
+  return accessibleProviders.flatMap((provider) =>
+    Object.values(provider.models).map((model) => {
       const thinkingOptions = Object.keys(model.variants ?? {}).map((id) => ({ id, label: id }))
       return {
         id: `${provider.id}/${model.id}`,
@@ -221,9 +252,6 @@ async function discoverOpenCodeModels(): Promise<ProviderModel[]> {
         ...(thinkingOptions.length ? { thinkingOptions } : {}),
       }
     }))
-  } finally {
-    await lease.release()
-  }
 }
 
 async function discoverPiModels(): Promise<ProviderModel[]> {

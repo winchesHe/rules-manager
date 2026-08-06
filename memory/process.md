@@ -2961,3 +2961,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   suites / 240 tests，0 skipped；Core/App production build 均通过，只保留既有 tsdown define 与 Markstream
   PURE warning。
 - 提交信息：`test: 补齐 OpenCode Provider 最终验收`
+
+## OpenCode 可用模型目录修复（2026-08-06）
+
+- 根因是 OpenCode `provider.list().all` 同时包含可用与未连接 Provider；原 probe 无过滤展开全部模型，导致
+  Settings 把 6120 个全量目录项标记为可用。Paseo 的权威语义是 `connected` 或 `source === "api"`。
+- `provider.list` 现在携带当前目录，并由 `mapAccessibleOpenCodeModels` 只映射可访问 Provider；无可访问
+  Provider 时明确报错，交给现有 probe fallback/error 链路展示。
+- 红测首次因过滤函数不存在得到 TS2305；实现后 1 suite / 2 tests 通过，覆盖未连接排除、API Provider 保留
+  与空可访问目录报错。
+- 真实 probe 返回 `status=available, count=13`，模型 ID 与 `opencode models` 完全一致；第一次用 CJS 形态
+  `tsx -e` 验证受嵌套 SDK export condition 阻断，改用 Node ESM + tsx loader 后成功，不涉及产品代码。
+- `simplify` 复核未发现需要调整的复杂度。Core 30 suites / 310 tests、App 41 suites / 242 tests，0 skipped；
+  Core/App production build 与 `git diff --check` 通过，仅保留既有构建 warning。
+- 提交信息：`fix: 过滤 OpenCode 实际可用模型`
