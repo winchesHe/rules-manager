@@ -1,8 +1,11 @@
 import { spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
+import { createOpencodeClient } from '@opencode-ai/sdk/v2/client'
+import { sharedOpenCodeServerManager } from './opencode-server-manager.js'
 import {
   getProviderEnabled,
+  getProviderCapabilities,
   mergeProviderModels,
   PROVIDER_LABELS,
   redactDiagnosticText,
@@ -30,6 +33,8 @@ const FALLBACK_MODELS: Record<LlmProvider, ProviderModel[]> = {
     { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', description: 'Codex compatible model', source: 'fallback' },
     { id: 'codex-auto-review', label: 'Codex Auto Review', description: 'Codex review model', source: 'fallback' },
   ],
+  opencode: [],
+  pi: [],
 }
 
 export async function probeProviders(
@@ -37,7 +42,7 @@ export async function probeProviders(
   homeDir?: string,
 ): Promise<ProviderSnapshotEntry[]> {
   const config = loadLlmConfig(homeDir)
-  const providers: LlmProvider[] = provider ? [provider] : ['claude', 'codex']
+  const providers: LlmProvider[] = provider ? [provider] : ['claude', 'codex', 'opencode', 'pi']
   return Promise.all(providers.map((id) => probeProvider(id, config)))
 }
 
@@ -90,6 +95,7 @@ async function probeProvider(
       enabled: false,
       isDefault: config.provider === provider,
       models: mergeModels(provider, [], config),
+      capabilities: getProviderCapabilities(provider),
       fetchedAt: new Date().toISOString(),
     }
   }
@@ -105,15 +111,14 @@ async function probeProvider(
       enabled: true,
       isDefault: config.provider === provider,
       models: mergeModels(provider, [], config),
+      capabilities: getProviderCapabilities(provider),
       fetchedAt: new Date().toISOString(),
       error: errorMessage(error),
     }
   }
 
   try {
-    const models = provider === 'claude'
-      ? await discoverClaudeModels()
-      : await discoverCodexModels()
+    const models = await discoverProviderModels(provider)
     return {
       id: provider,
       label: PROVIDER_LABELS[provider],
@@ -121,6 +126,7 @@ async function probeProvider(
       enabled: true,
       isDefault: config.provider === provider,
       models: mergeModels(provider, models, config),
+      capabilities: getProviderCapabilities(provider),
       fetchedAt: new Date().toISOString(),
       version,
     }
@@ -132,6 +138,7 @@ async function probeProvider(
       enabled: true,
       isDefault: config.provider === provider,
       models: mergeModels(provider, FALLBACK_MODELS[provider], config),
+      capabilities: getProviderCapabilities(provider),
       fetchedAt: new Date().toISOString(),
       version,
       error: `模型目录探测失败，当前显示兼容目录：${errorMessage(error)}`,
@@ -151,14 +158,22 @@ function mergeModels(
 }
 
 async function probeVersion(provider: LlmProvider): Promise<string> {
-  const command = provider === 'claude' ? 'claude' : 'codex'
-  const { stdout, stderr } = await execFileAsync(command, ['--version'], {
+  const { stdout, stderr } = await execFileAsync(provider, ['--version'], {
     timeout: 5_000,
     maxBuffer: 64 * 1024,
   })
   const version = `${stdout}${stderr}`.trim()
   if (!version) throw new Error(`${command} --version 未返回版本`)
   return version.slice(0, 200)
+}
+
+function discoverProviderModels(provider: LlmProvider): Promise<ProviderModel[]> {
+  switch (provider) {
+    case 'claude': return discoverClaudeModels()
+    case 'codex': return discoverCodexModels()
+    case 'opencode': return discoverOpenCodeModels()
+    case 'pi': return discoverPiModels()
+  }
 }
 
 async function discoverClaudeModels(): Promise<ProviderModel[]> {
@@ -185,6 +200,90 @@ async function discoverCodexModels(): Promise<ProviderModel[]> {
     description: model.description,
     source: 'discovered' as const,
   }))
+}
+
+async function discoverOpenCodeModels(): Promise<ProviderModel[]> {
+  const lease = await sharedOpenCodeServerManager.acquire()
+  try {
+    const client = createOpencodeClient({ baseUrl: lease.url })
+    const response = await withTimeout(client.provider.list(), PROBE_TIMEOUT_MS)
+    if (response.error || !response.data) {
+      throw new Error(JSON.stringify(response.error ?? 'OpenCode provider.list 无数据'))
+    }
+    return response.data.all.flatMap((provider) => Object.values(provider.models).map((model) => {
+      const thinkingOptions = Object.keys(model.variants ?? {}).map((id) => ({ id, label: id }))
+      return {
+        id: `${provider.id}/${model.id}`,
+        label: model.name,
+        description: provider.name,
+        source: 'discovered' as const,
+        ...(thinkingOptions.length ? { thinkingOptions } : {}),
+      }
+    }))
+  } finally {
+    await lease.release()
+  }
+}
+
+async function discoverPiModels(): Promise<ProviderModel[]> {
+  const response = await runPiRequest('get_available_models') as { models?: Array<Record<string, unknown>> }
+  return (response.models ?? []).flatMap((model) => {
+    if (typeof model.provider !== 'string' || typeof model.id !== 'string') return []
+    const reasoning = model.reasoning === true
+    return [{
+      id: `${model.provider}/${model.id}`,
+      label: typeof model.name === 'string' ? model.name : model.id,
+      description: model.provider,
+      source: 'discovered' as const,
+      ...(reasoning ? {
+        thinkingOptions: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+          .map((id) => ({ id, label: id })),
+        defaultThinkingOptionId: 'medium',
+      } : {}),
+    }]
+  })
+}
+
+function runPiRequest(type: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('pi', ['--mode', 'rpc'], { stdio: ['pipe', 'pipe', 'pipe'] })
+    let buffer = ''
+    let stderr = ''
+    let settled = false
+    const finish = (error?: Error, value?: unknown): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      child.kill('SIGTERM')
+      if (error) reject(error)
+      else resolve(value)
+    }
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk: string) => { stderr = `${stderr}${chunk}`.slice(-4_000) })
+    child.stdout.on('data', (chunk: string) => {
+      buffer += chunk
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.trim()) continue
+        try {
+          const message = JSON.parse(line) as Record<string, unknown>
+          if (message.id !== 'models') continue
+          if (message.success === false) finish(new Error(String(message.error ?? 'Pi model list 失败')))
+          else finish(undefined, message.data)
+        } catch {
+          // Pi extensions may write non-JSON diagnostics; ignore them.
+        }
+      }
+    })
+    child.on('error', finish)
+    child.on('exit', (code) => {
+      if (!settled) finish(new Error(`Pi RPC 提前退出（${code ?? 'unknown'}）：${stderr}`))
+    })
+    const timer = setTimeout(() => finish(new Error('Pi model list 超时')), PROBE_TIMEOUT_MS)
+    child.stdin.write(`${JSON.stringify({ id: 'models', type })}\n`)
+  })
 }
 
 interface CodexModelRow {

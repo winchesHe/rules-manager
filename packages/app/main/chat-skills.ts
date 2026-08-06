@@ -14,7 +14,7 @@ export function listChatSkills(
   homeDirectory = homedir(),
 ): ChatSkill[] {
   const roots = [
-    path.join(homeDirectory, provider === 'claude' ? '.claude/skills' : '.codex/skills'),
+    path.join(homeDirectory, providerSkillRoot(provider)),
     path.join(homeDirectory, '.agents/skills'),
   ]
   const skills = new Map<string, ChatSkill>()
@@ -38,6 +38,13 @@ export function listChatSkills(
     }
   }
   return [...skills.values()].sort((left, right) => left.name.localeCompare(right.name))
+}
+
+function providerSkillRoot(provider: NativeChatProvider): string {
+  if (provider === 'claude') return '.claude/skills'
+  if (provider === 'codex') return '.codex/skills'
+  if (provider === 'opencode') return '.config/opencode/skills'
+  return '.pi/agent/skills'
 }
 
 function isSkillName(value: string): boolean {

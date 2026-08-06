@@ -17,6 +17,7 @@ type GenerationRunOptions = {
   model?: string | null
   effort?: LlmEffort
   fastMode?: boolean
+  thinkingOptionId?: string
 }
 
 export type GenerationRequest = (

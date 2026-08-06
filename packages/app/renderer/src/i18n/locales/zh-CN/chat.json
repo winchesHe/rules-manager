@@ -156,6 +156,9 @@
   "threadRecent": "规则 · 最近活动",
   "threadFull": "规则 · 全部历史",
   "threadProjects": "规则 · {{projects}}",
+  "interactionTitle": "Agent 需要你的回答",
+  "submitAnswer": "提交回答",
+  "thinking": "思考强度",
   "status": {
     "running": "运行中",
     "ready": "就绪",

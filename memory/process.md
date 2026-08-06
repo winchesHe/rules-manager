@@ -2915,3 +2915,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   build 与 `git diff --check` 通过，build 只保留既有 Markstream PURE 注释警告。
 - `simplify` 复核确认同步器已保持单一职责和最小状态，没有再扩大抽象或改动无关 Chat 逻辑。
 - 提交信息：`fix: 同步 Chat Provider 全量目录`
+
+## OpenCode / Pi 原生 Provider（2026-08-06）
+
+- 按 Paseo direct adapter 同步四 Provider 目录：OpenCode 覆盖 Settings、Chat、Rules；Pi 覆盖 Settings、Chat，
+  通过 capability 从 Rules 排除；Fast Mode 仍只对 Claude/Codex 开放。
+- OpenCode 采用共享 `opencode serve` + SDK v2 HTTP/SSE，Session 创建固定 Full Access，permission 自动 always；
+  question 进入 Renderer 回答卡，原生 archive/unarchive/delete 与结构化 JSON Schema Rules 均接通。
+- Pi 采用 `pi --mode rpc` JSONL，使用 session file 作为恢复 handle，支持模型、七档 thinking、流式正文、
+  Thinking、Tool、interrupt 与 extension UI；App archive/delete 明确不修改原生 JSONL。
+- ChatStore 增加 `{ sessionId, nativeHandle }` 的 provider-neutral handle，同时保留旧 v2 字符串读取兼容；Rules
+  和普通 Chat 都写入 handle。Tool output 继续只在需要时从 Provider 回源，不进入 ChatStore。
+- 真实 OpenCode/Pi 各三轮并在第三轮前重建 Adapter，均恢复相同原生 Session；OpenCode question、Rules、
+  生命周期与两者 Tool/Thinking/interrupt 通过。Pi 本机没有可触发 extension UI 的 question extension，协议链
+  由可控 RPC 测试覆盖，记录为非阻塞环境覆盖缺口。
+- `simplify` 复核后拆除了 Provider probe 与 Pi UI response 的嵌套条件，并忽略 Pi notify/setStatus 等非交互
+  UI 事件；行为保持不变，新增测试锁定 notify 不生成回答卡。
+- Core 30 suites / 311 tests、App 36 suites / 224 tests，skipped=0；Core/App production build、
+  `git diff --check` 通过。构建仅有既有 tsdown define 与 Markstream PURE 注释 warning。
+- 提交信息：`feat: 接入 OpenCode 与 Pi 原生 Provider`

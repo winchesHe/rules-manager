@@ -1,5 +1,14 @@
 # 阻塞项
 
+## OpenCode / Pi 原生 Provider（2026-08-06）
+
+- 非阻塞环境偏差：目标文件记录 OpenCode 版本 `1.4.6`，任务 0 复测为 `1.17.11`；可执行文件仍为
+  `/opt/homebrew/bin/opencode`。后续以当前真实版本做兼容与 smoke，不把旧版本号当验收前提。
+- 非阻塞覆盖缺口：本机 Pi 0.79.3 当前加载的 extension/command 集没有能主动调用交互 UI 的 question 工具，
+  因此真实 Chat 无法自然产生 `extension_ui_request`；适配器已按本机 Pi RPC 权威类型实现并以可控 RPC
+  测试覆盖 input/select/confirm 响应及 notify 忽略，其他 Pi 真实三轮、Tool、Thinking、中断与恢复均已通过。
+- 当前无阻塞项。
+
 ## Chat V1 原生 Session 重构（2026-08-01）
 
 无。

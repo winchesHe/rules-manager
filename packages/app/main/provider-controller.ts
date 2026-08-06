@@ -135,7 +135,12 @@ export class ProviderController {
       ...this.state,
       entries: this.state.entries.map((entry) => ({
         ...entry,
-        models: entry.models.map((model) => ({ ...model })),
+        models: entry.models.map((model) => ({
+          ...model,
+          ...(model.thinkingOptions
+            ? { thinkingOptions: model.thinkingOptions.map((option) => ({ ...option })) }
+            : {}),
+        })),
       })),
       diagnostics: this.state.diagnostics
         ? { ...this.state.diagnostics }
@@ -191,7 +196,7 @@ function mergeEntries(
 ): ProviderSnapshotEntry[] {
   const byId = new Map(current.map((entry) => [entry.id, entry]))
   for (const entry of incoming) byId.set(entry.id, entry)
-  return ['claude', 'codex']
+  return ['claude', 'codex', 'opencode', 'pi']
     .map((id) => byId.get(id as LlmProvider))
     .filter((entry): entry is ProviderSnapshotEntry => Boolean(entry))
 }

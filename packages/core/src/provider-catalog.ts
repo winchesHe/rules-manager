@@ -16,6 +16,19 @@ export interface ProviderModel {
   label: string
   description?: string
   source: 'discovered' | 'custom' | 'fallback'
+  thinkingOptions?: ProviderThinkingOption[]
+  defaultThinkingOptionId?: string
+}
+
+export interface ProviderThinkingOption {
+  id: string
+  label: string
+}
+
+export interface ProviderCapabilities {
+  supportsStructuredOutput: boolean
+  supportsFastMode: boolean
+  sessionLifecycle: 'native' | 'app-only'
 }
 
 export interface ProviderSnapshotEntry {
@@ -25,6 +38,7 @@ export interface ProviderSnapshotEntry {
   enabled: boolean
   isDefault: boolean
   models: ProviderModel[]
+  capabilities: ProviderCapabilities
   fetchedAt?: string
   version?: string
   error?: string
@@ -42,6 +56,19 @@ export interface ProviderDiagnostic {
 export const PROVIDER_LABELS: Record<LlmProvider, string> = {
   claude: 'Claude',
   codex: 'Codex',
+  opencode: 'OpenCode',
+  pi: 'Pi',
+}
+
+const PROVIDER_CAPABILITIES: Record<LlmProvider, ProviderCapabilities> = {
+  claude: { supportsStructuredOutput: true, supportsFastMode: true, sessionLifecycle: 'native' },
+  codex: { supportsStructuredOutput: true, supportsFastMode: true, sessionLifecycle: 'native' },
+  opencode: { supportsStructuredOutput: true, supportsFastMode: false, sessionLifecycle: 'native' },
+  pi: { supportsStructuredOutput: false, supportsFastMode: false, sessionLifecycle: 'app-only' },
+}
+
+export function getProviderCapabilities(provider: LlmProvider): ProviderCapabilities {
+  return { ...PROVIDER_CAPABILITIES[provider] }
 }
 
 export function getProviderEnabled(config: LlmConfig, provider: LlmProvider): boolean {

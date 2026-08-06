@@ -1,4 +1,10 @@
-import type { GenerationHistoryEntry, RuleCandidate } from '../types'
+import type { GenerationHistoryEntry, ProviderSnapshotEntry, RuleCandidate } from '../types'
+
+export function generationProviderEntries(
+  entries: ProviderSnapshotEntry[],
+): ProviderSnapshotEntry[] {
+  return entries.filter((entry) => entry.capabilities.supportsStructuredOutput)
+}
 
 export interface EvidenceReference {
   raw: string

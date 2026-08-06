@@ -1,5 +1,6 @@
 import type {
   NativeChatProvider,
+  NativeSessionHandle,
   NativeTurnConfig,
 } from './chat-store.js'
 
@@ -7,6 +8,7 @@ export interface NativeTurnRequest {
   chatId: string
   provider: NativeChatProvider
   nativeSessionId?: string | null
+  nativeSessionHandle?: NativeSessionHandle | null
   message: string
   workingDirectory: string
   config: NativeTurnConfig
@@ -56,9 +58,30 @@ export type NativeChatEvent =
     }
   | { type: 'tool_activity'; activity: NativeToolActivity }
   | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
+  | { type: 'interaction_request'; request: NativeInteractionRequest }
+
+export interface NativeInteractionRequest {
+  requestId: string
+  kind: 'question'
+  title?: string
+  questions: Array<{
+    id: string
+    label: string
+    options?: string[]
+    multiple?: boolean
+    placeholder?: string
+  }>
+}
+
+export interface NativeInteractionResponse {
+  requestId: string
+  answers: Record<string, string[]>
+  cancelled?: boolean
+}
 
 export interface NativeTurnResult {
   nativeSessionId: string
+  nativeSessionHandle?: NativeSessionHandle
   content: string
   contextUsage?: { usedTokens: number; maxTokens: number }
   structuredOutput?: unknown
@@ -66,6 +89,7 @@ export interface NativeTurnResult {
 
 export interface NativeToolItemReadRequest {
   nativeSessionId: string
+  nativeSessionHandle?: NativeSessionHandle | null
   itemId: string
   sourceLocator?: NativeToolSourceLocator
   cursor: number
@@ -81,6 +105,7 @@ export interface NativeToolItemPage {
 export interface ChatProviderAdapter {
   start(request: NativeTurnRequest): Promise<NativeTurnResult>
   resume(request: NativeTurnRequest & { nativeSessionId: string }): Promise<NativeTurnResult>
+  respondToInteraction?(response: NativeInteractionResponse): Promise<void>
   interrupt(): Promise<void>
   readToolItem(request: NativeToolItemReadRequest): Promise<NativeToolItemPage>
   archive(nativeSessionId: string): Promise<void>
@@ -129,6 +154,12 @@ export class ChatRuntimeManager {
     await turn.adapter.interrupt()
   }
 
+  async respondToInteraction(chatId: string, response: NativeInteractionResponse): Promise<void> {
+    const adapter = this.adapters.get(chatId)
+    if (!adapter?.respondToInteraction) throw new Error('当前 Provider 没有待处理的交互请求')
+    await adapter.respondToInteraction(response)
+  }
+
   activeChatIds(): string[] {
     return [...this.active.keys()].sort()
   }
@@ -137,6 +168,7 @@ export class ChatRuntimeManager {
     chatId: string
     provider: NativeChatProvider
     nativeSessionId: string
+    nativeSessionHandle?: NativeSessionHandle | null
     itemId: string
     sourceLocator?: NativeToolSourceLocator
     cursor: number

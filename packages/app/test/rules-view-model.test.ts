@@ -1,11 +1,13 @@
 import { describe, expect, it } from '@jest/globals'
 import type { RuleCandidate } from '../renderer/src/types'
 import {
+  generationProviderEntries,
   filterCandidatesByRun,
   parseCandidateEvidence,
   parseEvidenceReference,
   selectableGenerationRuns,
 } from '../renderer/src/views/rules-view-model'
+import type { ProviderSnapshotEntry } from '../renderer/src/types'
 
 function candidate(id: string, runId: string | null): RuleCandidate {
   return {
@@ -24,6 +26,17 @@ function candidate(id: string, runId: string | null): RuleCandidate {
 }
 
 describe('Rules generation batch view model', () => {
+  it('Rules 只保留支持结构化输出的 Provider，Pi 不得出现', () => {
+    const entries = [
+      providerEntry('claude', true),
+      providerEntry('opencode', true),
+      providerEntry('pi', false),
+    ]
+    expect(generationProviderEntries(entries).map((entry) => entry.id)).toEqual([
+      'claude',
+      'opencode',
+    ])
+  })
   it('默认返回全部候选，选择 runId 后只返回该批次', () => {
     const rows = [
       candidate('latest-1', 'latest'),
@@ -91,3 +104,22 @@ describe('Rules generation batch view model', () => {
     expect(parsed.sourceSessions).toEqual(['session-a', 'session-b'])
   })
 })
+
+function providerEntry(
+  id: ProviderSnapshotEntry['id'],
+  supportsStructuredOutput: boolean,
+): ProviderSnapshotEntry {
+  return {
+    id,
+    label: id,
+    status: 'available',
+    enabled: true,
+    isDefault: id === 'claude',
+    models: [],
+    capabilities: {
+      supportsStructuredOutput,
+      supportsFastMode: id === 'claude' || id === 'codex',
+      sessionLifecycle: id === 'pi' ? 'app-only' : 'native',
+    },
+  }
+}

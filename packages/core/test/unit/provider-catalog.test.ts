@@ -7,6 +7,7 @@ import {
   type LlmConfig,
 } from '../../src/config'
 import {
+  getProviderCapabilities,
   mergeProviderModels,
   normalizeCustomModel,
   redactDiagnosticText,
@@ -42,9 +43,32 @@ describe('provider catalog 与配置兼容', () => {
       providers: {
         claude: { enabled: true },
         codex: { enabled: true },
+        opencode: { enabled: true },
+        pi: { enabled: true },
       },
     })
     expect(loadLlmConfig(home)).toEqual(config)
+  })
+
+  it('四个 Provider 暴露与 Paseo 对齐的能力边界', () => {
+    expect(getProviderCapabilities('claude')).toMatchObject({
+      supportsStructuredOutput: true,
+      supportsFastMode: true,
+    })
+    expect(getProviderCapabilities('codex')).toMatchObject({
+      supportsStructuredOutput: true,
+      supportsFastMode: true,
+    })
+    expect(getProviderCapabilities('opencode')).toMatchObject({
+      supportsStructuredOutput: true,
+      supportsFastMode: false,
+      sessionLifecycle: 'native',
+    })
+    expect(getProviderCapabilities('pi')).toMatchObject({
+      supportsStructuredOutput: false,
+      supportsFastMode: false,
+      sessionLifecycle: 'app-only',
+    })
   })
 
   it('拒绝关闭唯一启用或当前默认 Provider', () => {

@@ -141,6 +141,42 @@ describe('ChatStore', () => {
     expect(store.listThreads().map((thread) => thread.id)).toContain('chat-native')
   })
 
+  it('持久化通用 native session handle，并兼容旧版 string session id', () => {
+    const { chatsDir, store } = createStore()
+    store.createNativeThread({
+      id: 'chat-pi-handle',
+      provider: 'pi',
+      origin: 'chat',
+      title: 'Pi thread',
+      createdAt: '2026-08-01T01:00:00.000Z',
+      defaultTurnConfig: { effort: 'medium', fastMode: false },
+    })
+    store.bindNativeSession('chat-pi-handle', {
+      sessionId: 'pi-session-1',
+      nativeHandle: '/tmp/pi-session-1.jsonl',
+    }, '2026-08-01T01:00:01.000Z')
+
+    expect(store.readThread('chat-pi-handle')).toMatchObject({
+      provider: 'pi',
+      nativeSessionId: 'pi-session-1',
+      nativeSessionHandle: {
+        sessionId: 'pi-session-1',
+        nativeHandle: '/tmp/pi-session-1.jsonl',
+      },
+    })
+
+    const threadPath = path.join(chatsDir, 'chat-pi-handle', 'thread.json')
+    const legacy = JSON.parse(fs.readFileSync(threadPath, 'utf8'))
+    delete legacy.nativeSessionHandle
+    legacy.provider = 'claude'
+    legacy.nativeSessionId = 'legacy-string-session'
+    fs.writeFileSync(threadPath, JSON.stringify(legacy), 'utf8')
+    expect(new ChatStore(chatsDir).readThread('chat-pi-handle')).toMatchObject({
+      nativeSessionId: 'legacy-string-session',
+      nativeSessionHandle: { sessionId: 'legacy-string-session' },
+    })
+  })
+
   it('Session Context 只在集合变化时递增 revision，并独立记录最后成功注入集合', () => {
     const { store } = createStore()
     store.createNativeThread({

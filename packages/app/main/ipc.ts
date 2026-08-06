@@ -18,6 +18,7 @@ import {
 import { publishGlobalRulesToAgents } from '../../core/src/agent-instruction-publish.js'
 import {
   isLlmEffort,
+  isLlmProvider,
   loadLlmConfig,
   saveLlmConfig,
   type LlmConfig,
@@ -71,11 +72,15 @@ import {
   selectProviderModel,
   setProviderEnabled,
 } from '../../core/src/provider-settings.js'
+import { getProviderCapabilities } from '../../core/src/provider-catalog.js'
 import type { AgentName } from '../../core/src/types.js'
 import { ChatStore } from './chat-store.js'
 import { ChatRuntimeManager } from './chat-runtime.js'
 import { ClaudeChatAdapter } from './claude-chat-adapter.js'
 import { CodexChatAdapter } from './codex-chat-adapter.js'
+import { OpenCodeChatAdapter } from './opencode-chat-adapter.js'
+import { sharedOpenCodeServerManager } from './opencode-server-manager.js'
+import { PiChatAdapter } from './pi-chat-adapter.js'
 import { NativeChatController } from './native-chat-controller.js'
 import { listChatSkills } from './chat-skills.js'
 import { resolveProjectLocation, resolveSessionLocation } from './source-location.js'
@@ -88,7 +93,9 @@ const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
 const chatRuntime = new ChatRuntimeManager((provider) => {
   if (provider === 'claude') return new ClaudeChatAdapter()
-  return new CodexChatAdapter()
+  if (provider === 'codex') return new CodexChatAdapter()
+  if (provider === 'opencode') return new OpenCodeChatAdapter()
+  return new PiChatAdapter()
 })
 const nativeChatController = new NativeChatController({
   store: chatStore,
@@ -120,6 +127,11 @@ const providerController = new ProviderController(
     }),
   broadcastProviderEvent,
 )
+
+export async function shutdownNativeChatRuntimes(): Promise<void> {
+  await chatRuntime.close()
+  await sharedOpenCodeServerManager.shutdown()
+}
 
 export function registerIpcHandlers(): void {
   markInterruptedBackgroundRuns()
@@ -182,9 +194,35 @@ export function registerIpcHandlers(): void {
     }
     return nativeChatController.interrupt(threadId)
   })
+  ipcMain.handle('chat.interaction.respond', (_event, value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('invalid interaction response')
+    }
+    const response = value as Record<string, unknown>
+    if (typeof response.chatId !== 'string' || !response.chatId.trim()) {
+      throw new Error('chat id is required')
+    }
+    if (typeof response.requestId !== 'string' || !response.requestId.trim()) {
+      throw new Error('interaction request id is required')
+    }
+    if (!response.answers || typeof response.answers !== 'object' || Array.isArray(response.answers)) {
+      throw new Error('interaction answers are required')
+    }
+    const answers = Object.fromEntries(Object.entries(response.answers).map(([key, answer]) => {
+      if (!Array.isArray(answer) || !answer.every((item) => typeof item === 'string')) {
+        throw new Error('interaction answer must be a string array')
+      }
+      return [key, answer as string[]]
+    }))
+    return chatRuntime.respondToInteraction(response.chatId, {
+      requestId: response.requestId,
+      answers,
+      ...(response.cancelled === true ? { cancelled: true } : {}),
+    })
+  })
   ipcMain.handle('chat.skills', (_event, provider: unknown) => {
-    if (provider !== 'claude' && provider !== 'codex') {
-      throw new Error('chat provider must be claude or codex')
+    if (!isLlmProvider(provider)) {
+      throw new Error('invalid chat provider')
     }
     return listChatSkills(provider)
   })
@@ -554,8 +592,8 @@ function validateNativeChatSendRequest(value: unknown) {
     throw new Error('invalid chat send request')
   }
   const request = value as Record<string, unknown>
-  if (request.provider !== 'claude' && request.provider !== 'codex') {
-    throw new Error('chat provider must be claude or codex')
+  if (!isLlmProvider(request.provider)) {
+    throw new Error('invalid chat provider')
   }
   const pastedTextAttachments = validatePastedTextAttachments(request.pastedTextAttachments)
   if (pastedTextAttachments.length > 0 && request.provider !== 'codex') {
@@ -578,6 +616,9 @@ function validateNativeChatSendRequest(value: unknown) {
   const config = request.config as Record<string, unknown>
   if (!isLlmEffort(config.effort)) throw new Error('chat effort is unsupported')
   if (typeof config.fastMode !== 'boolean') throw new Error('chat fastMode must be boolean')
+  if (config.thinkingOptionId !== undefined && (
+    typeof config.thinkingOptionId !== 'string' || !config.thinkingOptionId.trim()
+  )) throw new Error('chat thinking option must be a non-empty string')
   if (config.model !== undefined && (
     typeof config.model !== 'string' || !config.model.trim()
   )) {
@@ -585,12 +626,15 @@ function validateNativeChatSendRequest(value: unknown) {
   }
   return {
     ...(typeof request.chatId === 'string' ? { chatId: request.chatId } : {}),
-    provider: request.provider as 'claude' | 'codex',
+    provider: request.provider,
     message: request.message,
     config: {
       ...(typeof config.model === 'string' ? { model: config.model } : {}),
       effort: config.effort,
       fastMode: config.fastMode,
+      ...(typeof config.thinkingOptionId === 'string'
+        ? { thinkingOptionId: config.thinkingOptionId.trim() }
+        : {}),
     },
     ...(request.sessionContext !== undefined
       ? { sessionContext: validateSessionReferences(request.sessionContext) }
@@ -952,6 +996,7 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
     model?: unknown
     effort?: unknown
     fastMode?: unknown
+    thinkingOptionId?: unknown
   }
   const provider = request.provider ?? config.provider
   const model = request.model === undefined
@@ -959,8 +1004,9 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
     : request.model
   const effort = request.effort ?? config.effort
   const fastMode = request.fastMode ?? config.fastMode ?? false
-  if (provider !== 'claude' && provider !== 'codex') {
-    throw new Error('generation provider must be claude or codex')
+  const thinkingOptionId = request.thinkingOptionId
+  if (!isLlmProvider(provider) || !getProviderCapabilities(provider).supportsStructuredOutput) {
+    throw new Error('generation provider must support structured output')
   }
   if (config.providers?.[provider]?.enabled === false) {
     throw new Error('generation provider is disabled')
@@ -982,16 +1028,23 @@ function validateGenerateRequest(value: unknown): GenerationRequest {
   if (typeof fastMode !== 'boolean') {
     throw new Error('generation fastMode must be boolean')
   }
+  if (thinkingOptionId !== undefined && (
+    typeof thinkingOptionId !== 'string' || !thinkingOptionId.trim()
+  )) throw new Error('generation thinking option must be a non-empty string')
   const options: {
     provider: LlmProvider
     model: string | null
     effort: LlmEffort
     fastMode: boolean
+    thinkingOptionId?: string
   } = {
     provider,
     model: typeof model === 'string' ? model.trim() : null,
     effort,
     fastMode,
+    ...(typeof thinkingOptionId === 'string'
+      ? { thinkingOptionId: thinkingOptionId.trim() }
+      : {}),
   }
   if (
     request.mode === 'recent'

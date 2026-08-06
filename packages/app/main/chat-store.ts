@@ -66,13 +66,19 @@ export interface GenerationChatThread extends GenerationChatThreadSummary {
 
 interface GenerationChatThreadFile extends Omit<GenerationChatThread, 'messages'> {}
 
-export type NativeChatProvider = 'claude' | 'codex'
+export type NativeChatProvider = 'claude' | 'codex' | 'opencode' | 'pi'
 export type NativeChatEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export interface NativeTurnConfig {
   model?: string
   effort: NativeChatEffort
   fastMode: boolean
+  thinkingOptionId?: string
+}
+
+export interface NativeSessionHandle {
+  sessionId: string
+  nativeHandle?: string
 }
 
 export interface NativeSessionReference {
@@ -89,6 +95,7 @@ export interface NativeChatThreadSummary {
   origin: 'chat' | 'rules'
   provider: NativeChatProvider
   nativeSessionId: string | null
+  nativeSessionHandle: NativeSessionHandle | null
   nativeState: 'starting' | 'ready' | 'resume-failed' | 'deleted'
   status: 'running' | 'ready' | 'failed' | 'interrupted'
   createdAt: string
@@ -207,6 +214,7 @@ export class ChatStore {
       origin: input.origin,
       provider: input.provider,
       nativeSessionId: null,
+      nativeSessionHandle: null,
       nativeState: 'starting',
       status: 'running',
       createdAt: input.createdAt,
@@ -234,15 +242,17 @@ export class ChatStore {
     } satisfies NativeChatThreadFile)
   }
 
-  bindNativeSession(threadId: string, nativeSessionId: string, at: string): void {
-    if (!nativeSessionId.trim()) throw new Error('native session id is required')
+  bindNativeSession(threadId: string, input: string | NativeSessionHandle, at: string): void {
+    const handle = typeof input === 'string' ? { sessionId: input } : { ...input }
+    if (!handle.sessionId.trim()) throw new Error('native session id is required')
     const thread = this.requireNativeThread(threadId)
-    if (thread.nativeSessionId && thread.nativeSessionId !== nativeSessionId) {
+    if (thread.nativeSessionId && thread.nativeSessionId !== handle.sessionId) {
       throw new Error('native session id cannot be replaced')
     }
     atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
       ...thread,
-      nativeSessionId,
+      nativeSessionId: handle.sessionId,
+      nativeSessionHandle: handle,
       nativeState: 'ready',
       status: 'ready',
       updatedAt: at,
@@ -538,8 +548,13 @@ export class ChatStore {
     if (!isThreadFile(value, threadId)) {
       throw new Error(`chat thread ${threadId} metadata is invalid`)
     }
-    if (value.version === 2 && value.pinnedAt === undefined) {
-      return { ...value, pinnedAt: null }
+    if (value.version === 2) {
+      return {
+        ...value,
+        ...(value.pinnedAt === undefined ? { pinnedAt: null } : {}),
+        nativeSessionHandle: value.nativeSessionHandle
+          ?? (value.nativeSessionId ? { sessionId: value.nativeSessionId } : null),
+      }
     }
     return value
   }
@@ -609,7 +624,8 @@ function isThreadFile(value: unknown, expectedId: string): value is StoredChatTh
     const native = record as Partial<NativeChatThreadFile>
     return native.id === expectedId
       && native.kind === 'native-chat'
-      && (native.provider === 'claude' || native.provider === 'codex')
+      && (native.provider === 'claude' || native.provider === 'codex'
+        || native.provider === 'opencode' || native.provider === 'pi')
       && typeof native.title === 'string'
       && typeof native.createdAt === 'string'
       && typeof native.updatedAt === 'string'

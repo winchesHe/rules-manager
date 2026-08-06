@@ -156,6 +156,9 @@
   "threadRecent": "Rules · Recent activity",
   "threadFull": "Rules · Full history",
   "threadProjects": "Rules · {{projects}}",
+  "interactionTitle": "The Agent needs your answer",
+  "submitAnswer": "Submit answer",
+  "thinking": "Thinking level",
   "status": {
     "running": "Running",
     "ready": "Ready",

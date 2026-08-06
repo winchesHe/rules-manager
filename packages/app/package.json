@@ -13,6 +13,7 @@
   "dependencies": {
     "@heroui/react": "3.2.2",
     "@memory-manager/core": "0.1.0",
+    "@opencode-ai/sdk": "1.17.11",
     "better-sqlite3-electron": "npm:better-sqlite3@13.0.1",
     "framer-motion": "12.42.2",
     "i18next": "^26.3.6",

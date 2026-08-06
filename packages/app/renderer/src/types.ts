@@ -136,17 +136,18 @@ export type RunCancelResult =
   | { accepted: false; reason: 'not-running' | 'already-cancelling' | 'stale-run' }
 
 export interface LlmConfig {
-  provider: 'claude' | 'codex'
+  provider: ProviderId
   model?: string
   effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   fastMode?: boolean
+  thinkingOptionId?: string
   providers?: Partial<Record<ProviderId, {
     enabled: boolean
     additionalModels?: Array<{ id: string; label?: string }>
   }>>
 }
 
-export type ProviderId = 'claude' | 'codex'
+export type ProviderId = 'claude' | 'codex' | 'opencode' | 'pi'
 export type ProviderStatus =
   | 'loading'
   | 'available'
@@ -159,19 +160,30 @@ export interface ProviderModel {
   label: string
   description?: string
   source: 'discovered' | 'custom' | 'fallback'
+  thinkingOptions?: Array<{ id: string; label: string }>
+  defaultThinkingOptionId?: string
 }
 
-export interface ProviderEntry {
+export interface ProviderCapabilities {
+  supportsStructuredOutput: boolean
+  supportsFastMode: boolean
+  sessionLifecycle: 'native' | 'app-only'
+}
+
+export interface ProviderSnapshotEntry {
   id: ProviderId
   label: string
   status: ProviderStatus
   enabled: boolean
   isDefault: boolean
   models: ProviderModel[]
+  capabilities: ProviderCapabilities
   fetchedAt?: string
   version?: string
   error?: string
 }
+
+export type ProviderEntry = ProviderSnapshotEntry
 
 export interface ProviderDiagnostic {
   provider: ProviderId
@@ -363,6 +375,20 @@ export type NativeChatEvent =
     }
   | { type: 'tool_activity'; activity: NativeToolActivity }
   | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
+  | { type: 'interaction_request'; request: NativeInteractionRequest }
+
+export interface NativeInteractionRequest {
+  requestId: string
+  kind: 'question'
+  title?: string
+  questions: Array<{
+    id: string
+    label: string
+    options?: string[]
+    multiple?: boolean
+    placeholder?: string
+  }>
+}
 
 export interface NativeToolItemPage {
   available: boolean
@@ -374,6 +400,7 @@ export interface ChatTurnConfig {
   model?: string
   effort: LlmConfig['effort']
   fastMode: boolean
+  thinkingOptionId?: string
 }
 
 export interface GenerationChatThreadSummary {
@@ -417,6 +444,7 @@ export interface NativeChatThreadSummary {
   origin: 'chat' | 'rules'
   provider: ProviderId
   nativeSessionId: string | null
+  nativeSessionHandle: NativeSessionHandle | null
   nativeState: 'starting' | 'ready' | 'resume-failed' | 'deleted'
   status: 'running' | 'ready' | 'failed' | 'interrupted'
   createdAt: string
@@ -441,6 +469,11 @@ export interface NativeChatThreadSummary {
     candidateCount: number
     projectResponses: ProjectGenerationResponse[]
   }
+}
+
+export interface NativeSessionHandle {
+  sessionId: string
+  nativeHandle?: string
 }
 
 export interface NativeSessionReference {

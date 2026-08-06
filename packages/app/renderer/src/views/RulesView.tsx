@@ -79,6 +79,7 @@ import type {
 } from '../types'
 import {
   filterCandidatesByRun,
+  generationProviderEntries,
   parseCandidateEvidence,
   selectableGenerationRuns,
   type CandidateEvidence,
@@ -139,11 +140,6 @@ const generationModes: Array<{
     labelKey: 'generate.modes.full.label',
     descriptionKey: 'generate.modes.full.description',
   },
-]
-
-const generationProviders: Array<{ id: ProviderId; label: string }> = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
 ]
 
 const generationEfforts: LlmConfig['effort'][] = [
@@ -2423,6 +2419,7 @@ function GenerateRulesPage({
   const [model, setModel] = useState<string | null>(null)
   const [effort, setEffort] = useState<LlmConfig['effort']>('medium')
   const [fastMode, setFastMode] = useState(false)
+  const [thinkingOptionId, setThinkingOptionId] = useState('')
 
   useEffect(() => {
     let current = true
@@ -2457,8 +2454,13 @@ function GenerateRulesPage({
         if (!current) return
         setConfig(value)
         setProviderSnapshot(snapshot)
-        setProvider(value.provider)
-        setModel(value.model ?? null)
+        const supported = generationProviderEntries(snapshot.entries)
+          .filter((entry) => entry.enabled)
+        const selected = supported.some((entry) => entry.id === value.provider)
+          ? value.provider
+          : supported[0]?.id ?? 'claude'
+        setProvider(selected)
+        setModel(selected === value.provider ? value.model ?? null : null)
         setEffort(value.effort)
         setFastMode(value.fastMode ?? false)
       })
@@ -2486,10 +2488,18 @@ function GenerateRulesPage({
     }
     return [...byId.values()]
   }, [config, provider, providerSnapshot])
+  const generationProviders = useMemo(
+    () => generationProviderEntries(providerSnapshot.entries).filter((entry) => entry.enabled),
+    [providerSnapshot],
+  )
+  const selectedModelDefinition = availableModels.find((item) => item.id === model)
+  const thinkingOptions = selectedModelDefinition?.thinkingOptions ?? []
 
   function selectProvider(nextProvider: ProviderId): void {
     setProvider(nextProvider)
     setModel(nextProvider === config?.provider ? config.model ?? null : null)
+    setThinkingOptionId('')
+    if (nextProvider === 'opencode') setFastMode(false)
   }
 
   function toggleProject(slug: string): void {
@@ -2513,6 +2523,7 @@ function GenerateRulesPage({
           model,
           effort,
           fastMode,
+          ...(thinkingOptionId ? { thinkingOptionId } : {}),
         } satisfies Partial<GenerationRequest>),
       )
       onStarted(result.chatId)
@@ -2649,9 +2660,7 @@ function GenerateRulesPage({
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          {generationProviders
-                            .filter((item) => config?.providers?.[item.id]?.enabled !== false)
-                            .map((item) => (
+                          {generationProviders.map((item) => (
                               <ListBox.Item id={item.id} key={item.id} textValue={item.label}>
                                 {item.label}
                               </ListBox.Item>
@@ -2665,9 +2674,12 @@ function GenerateRulesPage({
                     <Select
                       aria-label={tr('generate.model')}
                       isDisabled={starting || !config}
-                      onSelectionChange={(key) =>
-                        setModel(String(key) === DEFAULT_MODEL_KEY ? null : String(key))
-                      }
+                      onSelectionChange={(key) => {
+                        const next = String(key) === DEFAULT_MODEL_KEY ? null : String(key)
+                        setModel(next)
+                        const selected = availableModels.find((item) => item.id === next)
+                        setThinkingOptionId(selected?.defaultThinkingOptionId ?? '')
+                      }}
                       selectedKey={model ?? DEFAULT_MODEL_KEY}
                     >
                       <Select.Trigger>
@@ -2691,7 +2703,7 @@ function GenerateRulesPage({
                       </Select.Popover>
                     </Select>
             </div>
-            <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
+            {(provider === 'claude' || provider === 'codex') && <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
               <p className="text-sm font-medium text-foreground">{tr('generate.effort')}</p>
                     <Select
                       aria-label={tr('generate.effort')}
@@ -2719,8 +2731,15 @@ function GenerateRulesPage({
                         </ListBox>
                       </Select.Popover>
                     </Select>
-            </div>
-            <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
+            </div>}
+            {provider === 'opencode' && thinkingOptions.length > 0 && <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
+              <p className="text-sm font-medium text-foreground">{tr('generate.effort')}</p>
+              <Select aria-label={tr('generate.effort')} isDisabled={starting || !config} onSelectionChange={(key) => setThinkingOptionId(String(key))} selectedKey={thinkingOptionId}>
+                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                <Select.Popover><ListBox>{thinkingOptions.map((item) => <ListBox.Item id={item.id} key={item.id}>{item.label}</ListBox.Item>)}</ListBox></Select.Popover>
+              </Select>
+            </div>}
+            {(provider === 'claude' || provider === 'codex') && <div className="grid grid-cols-[minmax(0,1fr)_11rem] items-center gap-3 border-t border-border px-4 py-3">
               <p className="text-sm font-medium text-foreground">{tr('generate.fastMode')}</p>
                     <Switch
                       aria-label={tr('generate.fastMode')}
@@ -2735,7 +2754,7 @@ function GenerateRulesPage({
                         </Switch.Control>
                       </Switch.Content>
                     </Switch>
-            </div>
+            </div>}
             <div
               className="border-t border-border bg-surface-hover/40 p-4"
               data-generation-action="true"

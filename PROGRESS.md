@@ -1,5 +1,24 @@
 # 执行进度
 
+## OpenCode / Pi 原生 Provider（2026-08-06）
+
+- 目标：按 Paseo direct adapter 落地四 Provider 目录；OpenCode 覆盖 Chat/Rules，Pi 覆盖 Chat 且从 Rules 排除。
+- 顺序：合同与兼容层 → OpenCode server/runtime → Pi JSONL runtime → 权限/UI → 真实 smoke → 全量收口。
+- 最大风险：Pi 恢复需要 session file，现有单字符串 nativeSessionId 不足；OpenCode 全局 SSE 必须严格隔离 Session。
+- 数据边界：Tool output 不写 ChatStore；Pi 删除仅删 App Chat；旧 version 2 Claude/Codex Chat 必须继续可读。
+- 任务 0：Core 30 suites / 309 tests、App 34 suites / 216 tests，0 skipped；Core/App build 通过。
+- 当前环境：OpenCode 1.17.11、Pi 0.79.3；目标文件的 OpenCode 1.4.6 已漂移，记录于 BLOCKED.md 但不阻塞。
+- 计划与观察点已写入 `docs/plans/opencode-pi-providers.md`；下一步先写 Provider 合同红测。
+- 契约红测：Core 因缺少 `getProviderCapabilities` 失败；App 因 Pi 不属于 Provider、ChatStore 只接受 string session id、Rules 缺少能力过滤失败。红测证明四个目标边界尚未被旧实现覆盖。
+- Provider 合同已完成：四 Provider 统一 catalog/capability；OpenCode 支持 Chat/Rules，Pi 仅 Chat；Fast Mode 只属于 Claude/Codex；OpenCode variant 与 Pi 七档 thinking 按模型展示。
+- OpenCode 使用共享本地 `opencode serve`、SDK v2 HTTP/SSE、Full Access permission auto-reply、原生 archive/unarchive/delete、question 卡片与 JSON Schema structured output。
+- Pi 使用 `pi --mode rpc` JSONL、session file 恢复、模型/thinking 设置、Tool/Thinking/中断与 `extension_ui_request` 交互；App archive/delete 不触碰原生 JSONL。
+- ChatStore 新增 provider-neutral `nativeSessionHandle`，兼容旧 `nativeSessionId` 字符串；Tool 只持久化安全摘要与 locator，不落 input/output。
+- 真实 OpenCode 三轮均恢复 `ses_02928e684ffeHtkoa27FZTxmIC`，真实 Pi 三轮均恢复 `019fd6d7-9990-7c15-8d21-7ee9dcf4a9ac` 及同一 session file；两者第三轮前均重建 Adapter。
+- 真实能力 smoke：OpenCode/Pi Tool、Thinking、interrupt 通过；OpenCode question 回答 A、结构化 Rules 与原生 archive/unarchive/delete 通过；Pi App archive/delete 前后原生 JSONL 均存在。
+- 最终回归：Core 30 suites / 311 tests、App 36 suites / 224 tests，0 skipped；Core/App production build 与 `git diff --check` 通过。build 仅保留既有 tsdown define、Markstream PURE warning。
+
+
 ## Chat V1 原生 Session 重构（2026-08-01）
 
 - 目标：一次完成冻结计划全部 7 阶段；Phase 1 仅为首个 checkpoint，不是交付终点。

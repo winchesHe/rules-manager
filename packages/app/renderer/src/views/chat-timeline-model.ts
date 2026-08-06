@@ -86,7 +86,7 @@ export function mergeLiveTimeline(
   current: NativeTurnTimelineItem[],
   event: NativeChatEvent,
 ): NativeTurnTimelineItem[] {
-  if (event.type === 'usage') return current
+  if (event.type === 'usage' || event.type === 'interaction_request') return current
   const incoming = timelineItemFromEvent(current, event)
   const index = current.findIndex((item) =>
     item.type === incoming.type && item.itemId === incoming.itemId,
@@ -97,7 +97,7 @@ export function mergeLiveTimeline(
 
 function timelineItemFromEvent(
   current: NativeTurnTimelineItem[],
-  event: Exclude<NativeChatEvent, { type: 'usage' }>,
+  event: Exclude<NativeChatEvent, { type: 'usage' | 'interaction_request' }>,
 ): NativeTurnTimelineItem {
   if (event.type === 'tool_activity') {
     return { type: 'tool', itemId: event.activity.itemId, activity: event.activity }

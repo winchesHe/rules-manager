@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { resolveWorkspace } from './workspace.js'
 
-export type LlmProvider = 'claude' | 'codex'
+export type LlmProvider = 'claude' | 'codex' | 'opencode' | 'pi'
 export type LlmEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export interface CustomProviderModel {
@@ -70,8 +70,8 @@ function normalizeLlmConfig(value: unknown, includeProviderDefaults: boolean): L
   const fastMode = config.fastMode
   const model = config.model
   const providers = normalizeProviders(config.providers, includeProviderDefaults)
-  if (provider !== 'claude' && provider !== 'codex') {
-    throw new Error('config.json provider 只支持 claude 或 codex')
+  if (!isLlmProvider(provider)) {
+    throw new Error('config.json provider 只支持 claude、codex、opencode 或 pi')
   }
   if (!isLlmEffort(effort)) {
     throw new Error('config.json effort 只支持 low、medium、high、xhigh 或 max')
@@ -122,7 +122,7 @@ function normalizeProviders(
 
   const input = (value ?? {}) as Record<string, unknown>
   for (const key of Object.keys(input)) {
-    if (key !== 'claude' && key !== 'codex') {
+    if (!isLlmProvider(key)) {
       throw new Error(`不支持的 provider 配置：${key}`)
     }
   }
@@ -130,7 +130,13 @@ function normalizeProviders(
   return {
     claude: normalizeProviderConfig(input.claude),
     codex: normalizeProviderConfig(input.codex),
+    opencode: normalizeProviderConfig(input.opencode),
+    pi: normalizeProviderConfig(input.pi),
   }
+}
+
+export function isLlmProvider(value: unknown): value is LlmProvider {
+  return value === 'claude' || value === 'codex' || value === 'opencode' || value === 'pi'
 }
 
 function normalizeProviderConfig(value: unknown): LlmProviderConfig {

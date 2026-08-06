@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, screen, shell } from 'electron'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, shutdownNativeChatRuntimes } from './ipc'
 import {
   loadWindowPosition,
   saveWindowPosition,
@@ -9,6 +9,8 @@ import { cleanupStaleEvidenceContexts } from '../../core/src/evidence-context'
 import { clearChatCompletionBadge } from './app-badge'
 
 let mainWindow: BrowserWindow | null = null
+let nativeRuntimesShuttingDown = false
+let nativeRuntimesShutdown = false
 
 function createWindow(): void {
   const positionStatePath = join(app.getPath('userData'), 'window-position.json')
@@ -85,5 +87,15 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()
+  })
+  app.on('before-quit', (event) => {
+    if (nativeRuntimesShutdown) return
+    event.preventDefault()
+    if (nativeRuntimesShuttingDown) return
+    nativeRuntimesShuttingDown = true
+    void shutdownNativeChatRuntimes().finally(() => {
+      nativeRuntimesShutdown = true
+      app.quit()
+    })
   })
 }

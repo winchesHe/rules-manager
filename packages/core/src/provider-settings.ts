@@ -110,6 +110,8 @@ function withProviderDefaults(config: LlmConfig): LlmConfig & {
     providers: {
       claude: config.providers?.claude ?? { enabled: true },
       codex: config.providers?.codex ?? { enabled: true },
+      opencode: config.providers?.opencode ?? { enabled: true },
+      pi: config.providers?.pi ?? { enabled: true },
     },
   }
 }

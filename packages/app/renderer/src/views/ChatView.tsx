@@ -46,6 +46,7 @@ import type {
   GenerationHistoryEntry,
   GenerationStartResult,
   NativeChatEvent,
+  NativeInteractionRequest,
   NativeToolActivity,
   NativeToolItemPage,
   NativeTurnTimelineItem,
@@ -99,6 +100,7 @@ interface QueuedChatTurn {
     model?: string
     effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
     fastMode: boolean
+    thinkingOptionId?: string
   }
   sessionContext?: NativeSessionReference[]
   pastedTextAttachments?: ComposerTextAttachment[]
@@ -136,6 +138,12 @@ export function ChatView({
   const [model, setModel] = useState('')
   const [effort, setEffort] = useState<(typeof CHAT_EFFORTS)[number]>('high')
   const [fastMode, setFastMode] = useState(false)
+  const [thinkingOptionId, setThinkingOptionId] = useState('')
+  const [pendingInteraction, setPendingInteraction] = useState<{
+    chatId: string
+    request: NativeInteractionRequest
+  } | null>(null)
+  const [interactionAnswers, setInteractionAnswers] = useState<Record<string, string[]>>({})
   const [providerSnapshot, setProviderSnapshot] = useState<ProviderSnapshot>({ entries: [], refreshing: false })
   const [skills, setSkills] = useState<ChatSkillOption[]>([])
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
@@ -256,6 +264,7 @@ export function ChatView({
     setModel(thread.defaultTurnConfig.model ?? '')
     setEffort(thread.defaultTurnConfig.effort)
     setFastMode(thread.defaultTurnConfig.fastMode)
+    setThinkingOptionId(thread.defaultTurnConfig.thinkingOptionId ?? '')
     setRenameValue(thread.title)
   }, [thread?.id])
 
@@ -335,6 +344,9 @@ export function ChatView({
       liveChatIdRef.current = envelope.chatId
       if (event.type === 'usage') {
         setLiveUsage(event.contextUsage)
+      } else if (event.type === 'interaction_request') {
+        setPendingInteraction({ chatId: envelope.chatId, request: event.request })
+        setInteractionAnswers({})
       } else {
         setLiveTimeline((current) => mergeLiveTimeline(current, event))
       }
@@ -609,6 +621,7 @@ export function ChatView({
     setModel(source.defaultTurnConfig.model ?? '')
     setEffort(source.defaultTurnConfig.effort)
     setFastMode(source.defaultTurnConfig.fastMode)
+    setThinkingOptionId(source.defaultTurnConfig.thinkingOptionId ?? '')
     setSelectedContext(source.sessionContext.selected.map((reference) => ({ ...reference })))
     setComposer('')
     setPastedTextAttachments([])
@@ -625,7 +638,10 @@ export function ChatView({
     const turn: QueuedChatTurn = {
       message,
       provider: thread?.provider ?? provider,
-      config: { ...(model ? { model } : {}), effort, fastMode },
+      config: {
+        ...(model ? { model } : {}), effort, fastMode,
+        ...(thinkingOptionId ? { thinkingOptionId } : {}),
+      },
       ...(!thread ? { sessionContext: selectedContext.map((reference) => ({ ...reference })) } : {}),
       ...(pastedTextAttachments.length > 0
         ? { pastedTextAttachments: pastedTextAttachments.map((attachment) => ({ ...attachment })) }
@@ -720,6 +736,23 @@ export function ChatView({
       setPastedTextAttachments([])
     }
     setProvider(nextProvider)
+    setModel('')
+    setThinkingOptionId('')
+    if (!providerSnapshot.entries.find((entry) => entry.id === nextProvider)?.capabilities.supportsFastMode) {
+      setFastMode(false)
+    }
+  }
+
+  async function respondToInteraction(cancelled = false): Promise<void> {
+    if (!pendingInteraction) return
+    await window.api.invoke('chat.interaction.respond', {
+      chatId: pendingInteraction.chatId,
+      requestId: pendingInteraction.request.requestId,
+      answers: interactionAnswers,
+      cancelled,
+    })
+    setPendingInteraction(null)
+    setInteractionAnswers({})
   }
 
   async function stopChatTurn(): Promise<void> {
@@ -1047,6 +1080,34 @@ export function ChatView({
 
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
               <div className="bg-gradient-to-t from-background via-background to-transparent px-5 pb-4 pt-3" data-chat-composer>
+                {pendingInteraction && (
+                  <div className="mx-auto mb-3 grid w-full max-w-[51.25rem] gap-3 rounded-2xl border border-primary/40 bg-surface p-4 shadow-lg" data-chat-interaction-card>
+                    <strong className="text-sm text-foreground">{pendingInteraction.request.title ?? t('interactionTitle')}</strong>
+                    {pendingInteraction.request.questions.map((question) => (
+                      <label className="grid gap-2 text-xs text-muted" key={question.id}>
+                        <span>{question.label}</span>
+                        {question.options?.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {question.options.map((option) => {
+                              const selected = interactionAnswers[question.id]?.includes(option) === true
+                              return <Button key={option} onPress={() => setInteractionAnswers((current) => ({
+                                ...current,
+                                [question.id]: question.multiple
+                                  ? selected
+                                    ? (current[question.id] ?? []).filter((item) => item !== option)
+                                    : [...(current[question.id] ?? []), option]
+                                  : [option],
+                              }))} size="sm" variant={selected ? 'primary' : 'ghost'}>{option}</Button>
+                            })}
+                          </div>
+                        ) : (
+                          <input className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground" onChange={(event) => setInteractionAnswers((current) => ({ ...current, [question.id]: [event.target.value] }))} placeholder={question.placeholder} value={interactionAnswers[question.id]?.[0] ?? ''} />
+                        )}
+                      </label>
+                    ))}
+                    <div className="flex justify-end gap-2"><Button onPress={() => void respondToInteraction(true)} size="sm" variant="ghost">{t('cancel')}</Button><Button onPress={() => void respondToInteraction()} size="sm">{t('submitAnswer')}</Button></div>
+                  </div>
+                )}
                 <div className="mx-auto w-full max-w-[51.25rem] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_14px_36px_rgba(0,0,0,0.22)] motion-reduce:transition-none" data-chat-composer-surface>
                   {pastedTextAttachments.length > 0 && (
                     <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto px-3 pt-3" data-composer-pasted-text-attachments>
@@ -1130,23 +1191,27 @@ export function ChatView({
                     <div className="flex h-8 min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-composer-runtime>
                       <Select aria-label={t('agent')} className="w-24 shrink-0" isDisabled={thread?.kind === 'native-chat'} onSelectionChange={(key) => changeProvider(String(key) as ProviderId)} selectedKey={thread?.kind === 'native-chat' ? thread.provider : provider}>
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
-                        <Select.Popover><ListBox><ListBox.Item id="claude">{t('providerClaude')}</ListBox.Item><ListBox.Item id="codex">{t('providerCodex')}</ListBox.Item></ListBox></Select.Popover>
+                        <Select.Popover><ListBox>{providerSnapshot.entries.filter((entry) => entry.enabled).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
-                      <Select aria-label={t('model')} className="w-36 shrink-0" onSelectionChange={(key) => setModel(String(key) === '__default' ? '' : String(key))} selectedKey={model || '__default'}>
+                      <Select aria-label={t('model')} className="w-36 shrink-0" onSelectionChange={(key) => { const next = String(key) === '__default' ? '' : String(key); setModel(next); const selected = providerSnapshot.entries.find((entry) => entry.id === provider)?.models.find((entry) => entry.id === next); setThinkingOptionId(selected?.defaultThinkingOptionId ?? '') }} selectedKey={model || '__default'}>
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox><ListBox.Item id="__default">{t('providerDefaultModel')}</ListBox.Item>{(providerSnapshot.entries.find((entry) => entry.id === provider)?.models ?? []).map((entry) => <ListBox.Item id={entry.id} key={entry.id}>{entry.label}</ListBox.Item>)}</ListBox></Select.Popover>
                       </Select>
-                      <Select aria-label={t('effort')} className="w-24 shrink-0" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
+                      {(provider === 'claude' || provider === 'codex') && <Select aria-label={t('effort')} className="w-24 shrink-0" onSelectionChange={(key) => setEffort(String(key) as typeof effort)} selectedKey={effort}>
                         <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2.5 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
                         <Select.Popover><ListBox>{CHAT_EFFORTS.map((value) => <ListBox.Item id={value} key={value}>{value}</ListBox.Item>)}</ListBox></Select.Popover>
-                      </Select>
-                      <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-2.5 text-[11px] text-foreground shadow-none transition-colors hover:bg-background/60" data-composer-fast-mode>
+                      </Select>}
+                      {(providerSnapshot.entries.find((entry) => entry.id === provider)?.models.find((entry) => entry.id === model)?.thinkingOptions?.length ?? 0) > 0 && <Select aria-label={t('thinking')} className="w-24 shrink-0" onSelectionChange={(key) => setThinkingOptionId(String(key))} selectedKey={thinkingOptionId}>
+                        <Select.Trigger className="h-8 min-h-8 border-0 bg-transparent px-2 text-xs shadow-none hover:bg-background/60"><Select.Value /><Select.Indicator /></Select.Trigger>
+                        <Select.Popover><ListBox>{providerSnapshot.entries.find((entry) => entry.id === provider)?.models.find((entry) => entry.id === model)?.thinkingOptions?.map((option) => <ListBox.Item id={option.id} key={option.id}>{option.label}</ListBox.Item>)}</ListBox></Select.Popover>
+                      </Select>}
+                      {providerSnapshot.entries.find((entry) => entry.id === provider)?.capabilities.supportsFastMode && <label className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-2.5 text-[11px] text-foreground shadow-none transition-colors hover:bg-background/60" data-composer-fast-mode>
                         <Zap aria-hidden="true" className={fastMode ? 'text-success' : 'text-muted'} size={13} />
                         <span>{t('fast')}</span>
                         <Switch aria-label={t('fastMode')} isSelected={fastMode} onChange={setFastMode} size="sm">
                           <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control></Switch.Content>
                         </Switch>
-                      </label>
+                      </label>}
                     </div>
                     <div className="relative z-10 flex h-8 shrink-0 items-center gap-2.5 border-l border-border bg-surface pl-3 pr-0.5" data-composer-actions>
                       <span className="flex items-center gap-1 whitespace-nowrap text-[11px]"><ShieldCheck className="text-success" size={14} />{t('fullAccess')}</span>
@@ -2246,6 +2311,9 @@ function isNativeChatEvent(value: unknown): value is NativeChatEvent {
     if (!event.contextUsage || typeof event.contextUsage !== 'object') return false
     const usage = event.contextUsage as Record<string, unknown>
     return typeof usage.usedTokens === 'number' && typeof usage.maxTokens === 'number'
+  }
+  if (event.type === 'interaction_request') {
+    return Boolean(event.request && typeof event.request === 'object')
   }
   if (event.type !== 'tool_activity' || !event.activity || typeof event.activity !== 'object') {
     return false

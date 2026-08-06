@@ -17,6 +17,7 @@ import type {
   ChatStore,
   NativeChatProvider,
   NativeSessionReference,
+  NativeSessionHandle,
   NativeTurnConfig,
 } from './chat-store.js'
 import type { NativePastedTextAttachment } from './pasted-text-validation.js'
@@ -89,11 +90,13 @@ export class NativeChatController {
     }
     let chatId = request.chatId
     let nativeSessionId: string | null = null
+    let nativeSessionHandle: NativeSessionHandle | null = null
     if (chatId) {
       const thread = this.options.store.readThread(chatId)
       if (!thread || thread.version !== 2) throw new Error('native chat was not found')
       if (thread.provider !== request.provider) throw new Error('chat provider is locked')
       nativeSessionId = thread.nativeSessionId
+      nativeSessionHandle = thread.nativeSessionHandle
     } else {
       chatId = this.createId()
       const createdAt = this.now()
@@ -152,6 +155,7 @@ export class NativeChatController {
             chatId,
             provider: request.provider,
             nativeSessionId,
+            nativeSessionHandle,
             message: preparedInput.message,
             ...(preparedInput.mentions ? { mentions: preparedInput.mentions } : {}),
             workingDirectory: this.options.workingDirectory,
@@ -184,7 +188,11 @@ export class NativeChatController {
           chatId, contextRevision, contextSelected, completedAt,
         )
       }
-      this.options.store.bindNativeSession(chatId, result.nativeSessionId, completedAt)
+      this.options.store.bindNativeSession(
+        chatId,
+        result.nativeSessionHandle ?? result.nativeSessionId,
+        completedAt,
+      )
       if (result.contextUsage) {
         this.options.store.updateContextUsage(chatId, result.contextUsage, completedAt)
       }
@@ -217,6 +225,7 @@ export class NativeChatController {
       ...(request.model ? { model: request.model } : {}),
       effort: request.effort ?? 'medium',
       fastMode: request.fastMode ?? false,
+      ...(request.thinkingOptionId ? { thinkingOptionId: request.thinkingOptionId } : {}),
     }
     this.options.store.createNativeThread({
       id: chatId,
@@ -317,7 +326,11 @@ export class NativeChatController {
             }
           })()
           nativeSessionId = result.nativeSessionId
-          this.options.store.bindNativeSession(input.chatId, result.nativeSessionId, this.now())
+          this.options.store.bindNativeSession(
+            input.chatId,
+            result.nativeSessionHandle ?? result.nativeSessionId,
+            this.now(),
+          )
           this.options.store.markNativeTurnRunning(input.chatId, input.config, this.now())
           if (result.contextUsage) {
             this.options.store.updateContextUsage(input.chatId, result.contextUsage, this.now())
@@ -440,6 +453,7 @@ export class NativeChatController {
       chatId: request.chatId,
       provider: thread.provider,
       nativeSessionId: thread.nativeSessionId,
+      nativeSessionHandle: thread.nativeSessionHandle,
       itemId: request.itemId,
       sourceLocator: located.activity.sourceLocator ?? {
         turnIndex: located.turnIndex,
