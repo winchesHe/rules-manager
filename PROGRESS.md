@@ -714,3 +714,16 @@ npm test -- --runInBand test/unit/rule-candidates-schema.test.ts test/unit/redac
 - 真实 Electron 暗色主题验证 OpenCode 菜单展开及关闭后的聚焦态：文字、箭头和完整内嵌焦点框均可见，
   原白色断裂弧线不再出现。
 - 提交信息：`style: 修复 OpenCode Composer 选择器`。
+
+## Chat Composer 输入法 Enter 修复（2026-08-06）
+
+- 根因是 Composer 只判断 `Enter && !shiftKey`，没有排除输入法组合态；确认中文候选字时产生的 Enter
+  因而会误触 `sendChatMessage()`。
+- 新增 `shouldSubmitComposer` 纯函数并接入 `ChatView`，同时识别标准 `isComposing` 与 Chromium/macOS
+  兼容值 `keyCode === 229`。普通 Enter 发送、Shift+Enter 换行语义保持不变。
+- 红测先因导出不存在得到 TS2305；实现后定向 2 suites / 67 tests 通过。`simplify` 复核无需进一步调整。
+- Core 30 suites / 310 tests、App 41 suites / 247 tests 全绿，App production build 与
+  `git diff --check` 通过；仅保留既有 Markstream PURE warning。
+- 生产 Electron Renderer 事件链验证：组合态 Enter、229 Enter、Shift+Enter 均为
+  `defaultPrevented=false`，普通 Enter 为 `true`；空 Composer 下完成，未创建或发送测试消息。
+- 提交信息：`fix: 阻止输入法 Enter 误发消息`。

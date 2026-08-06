@@ -65,6 +65,7 @@ import {
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
+  shouldSubmitComposer,
   toggleAvailableSessionSelection,
   virtualWindowRange,
   visibleProjectResponses,
@@ -1143,7 +1144,12 @@ export function ChatView({
                       }
                     }}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
+                      if (shouldSubmitComposer({
+                        isComposing: event.nativeEvent.isComposing,
+                        key: event.key,
+                        keyCode: event.nativeEvent.keyCode,
+                        shiftKey: event.shiftKey,
+                      })) {
                         event.preventDefault()
                         sendChatMessage()
                       }

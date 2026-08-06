@@ -2988,3 +2988,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 真实 Electron 暗色主题打开 OpenCode Provider 菜单并按 Escape 返回 Trigger 后，内嵌焦点框连续完整，
   `OpenCode` 和箭头无裁切，原截图中的左右白弧不再出现。
 - 提交信息：`style: 修复 OpenCode Composer 选择器`
+
+## Chat Composer 输入法 Enter 修复（2026-08-06）
+
+- `ChatView` 原 `onKeyDown` 只检查 `event.key === 'Enter' && !event.shiftKey`。IME 确认候选字同样触发
+  Enter keydown，因此会 `preventDefault()` 并调用 `sendChatMessage()`；该问题与 Provider 无关。
+- 新增纯函数 `shouldSubmitComposer`，排除 `nativeEvent.isComposing` 和 Chromium/macOS 的遗留兼容信号
+  `keyCode === 229`，再由 `ChatView` 复用。普通 Enter 与 Shift+Enter 行为不变。
+- 行为测试先因函数未导出得到 TS2305；实现后定向 2 suites / 67 tests 通过，覆盖五类键盘事件。
+- `simplify` 复核确认纯函数边界明确，无需继续抽象。最终 Core 30 suites / 310 tests、App 41 suites /
+  247 tests 全绿，App production build 与 `git diff --check` 通过；只有既有 Markstream PURE warning。
+- 构建后的 Electron Renderer 通过 CDP 直接派发事件：组合态 Enter、229 Enter、Shift+Enter 的
+  `defaultPrevented` 均为 false，普通 Enter 为 true。验证使用空 Composer，未持久化测试 Chat 或消息。
+- 提交信息：`fix: 阻止输入法 Enter 误发消息`

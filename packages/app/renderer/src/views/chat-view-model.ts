@@ -101,6 +101,20 @@ export function shouldFollowStream({
   return scrollHeight - scrollTop - clientHeight <= threshold
 }
 
+export function shouldSubmitComposer({
+  isComposing,
+  key,
+  keyCode,
+  shiftKey,
+}: {
+  isComposing: boolean
+  key: string
+  keyCode: number
+  shiftKey: boolean
+}): boolean {
+  return key === 'Enter' && !shiftKey && !isComposing && keyCode !== 229
+}
+
 export function virtualWindowRange({
   itemCount,
   overscan,

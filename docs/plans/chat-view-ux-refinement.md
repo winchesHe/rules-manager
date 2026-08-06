@@ -28,6 +28,15 @@ Session Context 注入或生命周期语义。
 只修改 Chat View 的桌面布局、Sheet 过渡、阅读宽度、Tool 溢出和 Composer Surface。
 
 - 观察点：宽屏无页面横向滚动，消息与 Composer 左右边界一致；收起 Rail 时中心栏平滑扩展。
+
+## Composer 输入法 Enter 修复（2026-08-06）
+
+- 观察：中文输入法确认候选字也会产生 Enter `keydown`；原 Composer 只判断 Enter 与 Shift，导致组合输入
+  被误判为发送。Chromium/macOS 还可能用 `keyCode === 229` 表示仍处于 IME 处理链。
+- 实现：将发送判定提取为纯函数，同时排除 `nativeEvent.isComposing` 和 `keyCode === 229`；不改变普通 Enter、
+  Shift+Enter、消息队列或 Provider 行为。
+- 验证：行为测试覆盖普通 Enter、Shift+Enter、组合态 Enter、229 兼容事件和非 Enter；生产 Electron
+  Renderer 直接派发对应键盘事件，以 `defaultPrevented` 验证 React 事件链，只允许普通 Enter 进入发送路径。
 - 验证方式：定向测试转绿，并在 1920 / 1440 截图检查对齐线和溢出。
 
 ## Step 3：重组右侧上下文

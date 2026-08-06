@@ -6,6 +6,7 @@ import {
   formatElapsed,
   mergeTimelineActivities,
   shouldFollowStream,
+  shouldSubmitComposer,
   toggleAvailableSessionSelection,
   virtualWindowRange,
   visibleProjectResponses,
@@ -23,6 +24,16 @@ describe('chat view model', () => {
       evidenceRefs: ['session:0'],
     }],
   }]
+
+  it.each([
+    [{ key: 'Enter', shiftKey: false, isComposing: false, keyCode: 13 }, true],
+    [{ key: 'Enter', shiftKey: true, isComposing: false, keyCode: 13 }, false],
+    [{ key: 'Enter', shiftKey: false, isComposing: true, keyCode: 13 }, false],
+    [{ key: 'Enter', shiftKey: false, isComposing: false, keyCode: 229 }, false],
+    [{ key: 'a', shiftKey: false, isComposing: false, keyCode: 65 }, false],
+  ])('Composer 键盘事件 %o 的发送判定为 %s', (event, expected) => {
+    expect(shouldSubmitComposer(event)).toBe(expected)
+  })
 
   it.each([
     'running',
