@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { throwIfAborted } from './abort.js'
 import type {
   CoverageLedger,
   SessionEvidenceMode,
@@ -15,6 +16,7 @@ import type { AgentName } from './types.js'
 
 const CONTEXT_PREFIX = 'memory-manager-live-evidence-'
 const DEFAULT_MAX_CHUNK_BYTES = 512 * 1024
+const DEFAULT_STALE_AGE_MS = 24 * 60 * 60 * 1_000
 
 export interface LiveEvidenceLocator {
   sessionId: string
@@ -50,6 +52,12 @@ export interface LiveEvidenceContextInput {
 export interface LiveEvidenceContextOptions {
   parentDir?: string
   maxChunkBytes?: number
+}
+
+export interface CleanupLiveEvidenceContextsOptions {
+  parentDir?: string
+  now?: number
+  maxAgeMs?: number
 }
 
 export interface LiveEvidenceSessionSource {
@@ -112,6 +120,47 @@ function writePrivateJson(filePath: string, value: unknown): void {
     mode: 0o600,
   })
   fs.chmodSync(filePath, 0o600)
+}
+
+function contextOwnerPid(name: string): number | undefined {
+  const value = name.match(/^memory-manager-live-evidence-(\d+)-/)?.[1]
+  if (!value) return undefined
+  const pid = Number(value)
+  return Number.isInteger(pid) && pid > 0 ? pid : undefined
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function cleanupStaleLiveEvidenceContexts(
+  options: CleanupLiveEvidenceContextsOptions = {},
+): void {
+  const parentDir = options.parentDir ?? os.tmpdir()
+  const now = options.now ?? Date.now()
+  const maxAgeMs = options.maxAgeMs ?? DEFAULT_STALE_AGE_MS
+  if (!Number.isFinite(maxAgeMs) || maxAgeMs < 0) {
+    throw new Error('live evidence stale age must be a non-negative number')
+  }
+  if (!fs.existsSync(parentDir)) return
+  for (const entry of fs.readdirSync(parentDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(CONTEXT_PREFIX)) continue
+    const directory = path.join(parentDir, entry.name)
+    try {
+      const ownerPid = contextOwnerPid(entry.name)
+      const expired = now - fs.statSync(directory).mtimeMs > maxAgeMs
+      if (expired || (ownerPid !== undefined && !isProcessAlive(ownerPid))) {
+        fs.rmSync(directory, { recursive: true, force: true })
+      }
+    } catch {
+      // Another cleanup may have removed the directory concurrently.
+    }
+  }
 }
 
 function renderMessage(
@@ -181,12 +230,8 @@ export function createLiveEvidenceContext(
   fs.mkdirSync(parentDir, { recursive: true })
   const runHash = crypto.createHash('sha256').update(input.runId).digest('hex').slice(0, 12)
   const rootDir = fs.mkdtempSync(path.join(parentDir, `${CONTEXT_PREFIX}${process.pid}-${runHash}-`))
-  fs.chmodSync(rootDir, 0o700)
   const sourcesDir = path.join(rootDir, 'sources')
   const capsulesDir = path.join(rootDir, 'capsules')
-  fs.mkdirSync(sourcesDir, { mode: 0o700 })
-  fs.mkdirSync(capsulesDir, { mode: 0o700 })
-
   const manifestPath = path.join(rootDir, 'manifest.json')
   const coveragePath = path.join(rootDir, 'coverage.json')
   const manifest: LiveEvidenceManifest = {
@@ -202,7 +247,15 @@ export function createLiveEvidenceContext(
       chunks: [],
     })),
   }
-  writePrivateJson(manifestPath, manifest)
+  try {
+    fs.chmodSync(rootDir, 0o700)
+    fs.mkdirSync(sourcesDir, { mode: 0o700 })
+    fs.mkdirSync(capsulesDir, { mode: 0o700 })
+    writePrivateJson(manifestPath, manifest)
+  } catch (error) {
+    fs.rmSync(rootDir, { recursive: true, force: true })
+    throw error
+  }
   const sessionIndexes = new Map(keys.map((key, index) => [key, index]))
 
   let cleaned = false
@@ -294,5 +347,21 @@ export function createLiveEvidenceContext(
     writeCoverage,
     writeCapsule,
     cleanup,
+  }
+}
+
+export async function withLiveEvidenceContext<T>(
+  input: LiveEvidenceContextInput,
+  options: LiveEvidenceContextOptions,
+  task: (context: LiveEvidenceContext) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  throwIfAborted(signal)
+  const context = createLiveEvidenceContext(input, options)
+  try {
+    throwIfAborted(signal)
+    return await task(context)
+  } finally {
+    context.cleanup()
   }
 }

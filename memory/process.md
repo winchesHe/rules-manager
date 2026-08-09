@@ -3075,3 +3075,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 临时 Context/旧 Evidence Context/Reader/Coverage 定向 4 suites / 17 tests 通过；Core 全量 33 suites /
   325 tests、Core build 与 `git diff --check` 通过，build 只保留既有 tsdown `define` warning。
 - 提交信息：`feat: 建立 Live Evidence 临时 Context`
+
+## Live Evidence Context 生命周期清理（2026-08-09）
+
+- Chunk 2.3 新增 `withLiveEvidenceContext`，在 task 成功、Reader/Map 异常或 AbortError 取消时都通过
+  `finally` 调用幂等 cleanup；调用前/Context 建立后均检查 AbortSignal。
+- 新增 `cleanupStaleLiveEvidenceContexts`：只扫描 `memory-manager-live-evidence-*` 目录，owner PID 不存在或
+  mtime 超过默认 24h TTL 即删除；活跃 owner 的新目录和无关目录保持不变。
+- Context 初始 `chmod/mkdir/manifest` 写入也纳入构造期 rollback，调用者尚未拿到 cleanup handle 时失败不会
+  遗留 root；cleanup 同时移除 process exit listener，避免已清理 Context 持续占用监听器。
+- success/failure/cancel 三类 wrapper 前后目录对账、dead owner、TTL、活跃 owner 与无关目录共 5 个行为测试
+  通过；与旧 Context 联合定向 2 suites / 8 tests 通过。
+- Core 全量 33 suites / 329 tests、Core build 与 `git diff --check` 通过；build 只保留既有 tsdown
+  `define` warning。
+- 提交信息：`feat: 完成 Live Evidence Context 清理合同`

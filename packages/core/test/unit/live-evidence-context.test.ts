@@ -7,7 +7,11 @@ import {
   recordProcessingOutcome,
   recordSourceOutcome,
 } from '../../src/evidence-coverage'
-import { createLiveEvidenceContext } from '../../src/live-evidence-context'
+import {
+  cleanupStaleLiveEvidenceContexts,
+  createLiveEvidenceContext,
+  withLiveEvidenceContext,
+} from '../../src/live-evidence-context'
 import type { SessionSourceReadResult } from '../../src/session-source-reader'
 
 describe('LiveEvidenceContext', () => {
@@ -94,6 +98,72 @@ describe('LiveEvidenceContext', () => {
 
       context.cleanup()
       expect(fs.existsSync(context.rootDir)).toBe(false)
+    } finally {
+      fs.rmSync(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['success', false, false],
+    ['failure', true, false],
+    ['cancel', true, true],
+  ] as const)('%s 终态都由 wrapper 清理临时正文', async (name, shouldThrow, aborted) => {
+    const parentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-live-lifecycle-'))
+    const controller = new AbortController()
+    let rootDir = ''
+    try {
+      const operation = withLiveEvidenceContext({
+        runId: `run-${name}`,
+        mode: 'complete',
+        selected: [{ agent: 'codex', id: 'session-1' }],
+      }, { parentDir }, async (context) => {
+        rootDir = context.rootDir
+        expect(fs.existsSync(rootDir)).toBe(true)
+        if (aborted) controller.abort()
+        if (shouldThrow) {
+          throw aborted
+            ? Object.assign(new Error('aborted'), { name: 'AbortError' })
+            : new Error('reader failed')
+        }
+        return 'done'
+      }, controller.signal)
+
+      if (shouldThrow) await expect(operation).rejects.toThrow(aborted ? 'aborted' : 'reader failed')
+      else await expect(operation).resolves.toBe('done')
+      expect(fs.existsSync(rootDir)).toBe(false)
+    } finally {
+      fs.rmSync(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('启动清理删除超 TTL 或 owner PID 消失的目录，并保留活跃与无关目录', () => {
+    const parentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-live-stale-'))
+    try {
+      const staleByAge = fs.mkdtempSync(path.join(
+        parentDir,
+        `memory-manager-live-evidence-${process.pid}-old-`,
+      ))
+      const staleByOwner = fs.mkdtempSync(path.join(
+        parentDir,
+        'memory-manager-live-evidence-2147483647-dead-',
+      ))
+      const active = fs.mkdtempSync(path.join(
+        parentDir,
+        `memory-manager-live-evidence-${process.pid}-active-`,
+      ))
+      const unrelated = fs.mkdtempSync(path.join(parentDir, 'unrelated-'))
+      fs.utimesSync(staleByAge, new Date(0), new Date(0))
+
+      cleanupStaleLiveEvidenceContexts({
+        parentDir,
+        now: Date.parse('2026-08-09T00:00:00Z'),
+        maxAgeMs: 60_000,
+      })
+
+      expect(fs.existsSync(staleByAge)).toBe(false)
+      expect(fs.existsSync(staleByOwner)).toBe(false)
+      expect(fs.existsSync(active)).toBe(true)
+      expect(fs.existsSync(unrelated)).toBe(true)
     } finally {
       fs.rmSync(parentDir, { recursive: true, force: true })
     }
