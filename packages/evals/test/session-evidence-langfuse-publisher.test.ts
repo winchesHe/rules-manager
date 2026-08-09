@@ -5,6 +5,7 @@ import {
   LANGFUSE_PHASES,
   LangfuseSdkPublisher,
   langfuseConfigFromEnv,
+  langfuseDatasetPayload,
   type DatasetInput,
   type LangfuseRuntime,
 } from '../src/session-evidence/reporters/langfuse-sdk-publisher.js'
@@ -77,5 +78,29 @@ describe('Langfuse SDK Publisher', () => {
       publicKey: 'pk-local', secretKey: 'sk-local', baseUrl: 'http://localhost:3000',
     })
     expect(() => langfuseConfigFromEnv({})).toThrow('缺少 LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY')
+  })
+
+  it('Dataset payload 使用字段 allowlist，不包含正文、Prompt 或 Tool output', () => {
+    const localReport = report() as ReturnType<typeof report> & Record<string, unknown>
+    localReport.requestText = 'DO NOT UPLOAD PROMPT'
+    localReport.visibleOutput = 'DO NOT UPLOAD OUTPUT'
+    localReport.toolOutput = 'DO NOT UPLOAD TOOL'
+    const serialized = JSON.stringify(langfuseDatasetPayload(localReport))
+    expect(serialized).not.toContain('DO NOT UPLOAD')
+    expect(JSON.parse(serialized)[0]).toEqual({
+      id: expect.stringMatching(/^[a-f0-9]{64}$/),
+      datasetName: 'memory-manager-session-evidence-v1',
+      input: {
+        caseId: 'single-complete',
+        caseHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        tags: ['scale-1', 'complete'],
+        sessionCount: 1,
+      },
+      expectedOutput: { caseHash: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      metadata: {
+        caseHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        datasetVersion: 'session-evidence-v1',
+      },
+    })
   })
 })

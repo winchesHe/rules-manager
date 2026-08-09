@@ -6,6 +6,12 @@ import { loadSessionEvidenceDataset } from '../src/session-evidence/dataset.js'
 import { buildEvalReport } from '../src/session-evidence/report.js'
 import { LangfuseReporter } from '../src/session-evidence/reporters/langfuse-reporter.js'
 import { NoneReporter } from '../src/session-evidence/reporters/reporter.js'
+import {
+  createReporter,
+  runNamedReporter,
+  runReporter,
+  sanitizeReporterError,
+} from '../src/session-evidence/reporters/reporter-factory.js'
 import { runSessionEvidenceEval } from '../src/session-evidence/runner.js'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -44,5 +50,38 @@ describe('Session Evidence reporters', () => {
     ]))
     expect(corePackage).not.toContain('@langfuse/')
     expect(appPackage).not.toContain('@langfuse/')
+  })
+
+  it('Reporter 失败不改变本地报告并脱敏错误', async () => {
+    const original = structuredClone(report)
+    const reporter = createReporter('langfuse', {
+      publisher: {
+        publish: async () => {
+          throw new Error('authorization=sk-lf-super-secret api-key=pk-lf-public-secret')
+        },
+      },
+    })
+    await expect(runReporter(reporter, report, {
+      LANGFUSE_SECRET_KEY: 'sk-lf-super-secret',
+      LANGFUSE_PUBLIC_KEY: 'pk-lf-public-secret',
+    })).resolves.toEqual({
+      reporter: 'langfuse',
+      status: 'failed',
+      error: 'authorization=[REDACTED] api-key=[REDACTED]',
+    })
+    expect(report).toEqual(original)
+  })
+
+  it('通用错误脱敏不泄漏 key', () => {
+    expect(sanitizeReporterError(new Error('flush pk-lf-abcdef sk-lf-uvwxyz')))
+      .toBe('flush [REDACTED] [REDACTED]')
+  })
+
+  it('Factory 配置失败也转换为 reporter_failed', async () => {
+    await expect(runNamedReporter('langfuse', report, { env: {} })).resolves.toEqual({
+      reporter: 'langfuse',
+      status: 'failed',
+      error: 'Langfuse Reporter 缺少 LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY',
+    })
   })
 })

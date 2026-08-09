@@ -3322,3 +3322,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   Experiment 并仍 shutdown。本地 Docker 与真实 API readback 需要可用实例/凭据，留在 7.2 环境验收明确记录。
 - Evals Publisher 定向测试、全量测试与 `tsc --noEmit` 通过。
 - 提交信息：`feat: 映射 Langfuse Dataset Experiment 与 Score`
+
+## Session Evidence Langfuse payload 与失败隔离（2026-08-09）
+
+- Chunk 6.3 将 `--reporter langfuse` 接入单 Variant CLI；本地 Runner、门禁和可选 `--output` 报告先完成，
+  Reporter 随后执行。Compare 模式要求 reporter=none，避免把四个 Dataset Run 混成一次上报。
+- Dataset、Experiment task、Observation 与 Score 均由显式字段构造；恶意附加 requestText/visibleOutput/toolOutput
+  的测试对象经过 serializer 后不出现在 payload，SDK media upload 也显式关闭。
+- 不可达、鉴权、Dataset hash mismatch 和 flush/shutdown 异常统一转为 `reporter_failed`；本地门禁通过但上报失败
+  时 exit 2，本地门禁失败仍 exit 1。已写本地 JSON 保持不变，不会误称 reported。
+- Reporter 错误会按实际环境 key 和 pk/sk/authorization/api-key 形态双重脱敏；测试验证失败 Publisher 不修改
+  report，且错误中不含 synthetic key。
+- 当前环境 Docker Server 不可用、localhost:3000 不可达且无 Langfuse key，因此未伪造真实 UI/API smoke；
+  可复现命令保留在 plan，实际实例验收在 7.2 明确记为环境跳过或补测。
+- Evals payload/failure 定向测试、全量测试、`tsc --noEmit`、Langfuse 缺凭据 CLI 失败 smoke 与
+  `git diff --check` 通过。
+- 提交信息：`feat: 隔离 Langfuse Reporter payload 与失败`

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { compareSessionEvidenceVariants } from './comparison.js'
 import { loadSessionEvidenceDataset } from './dataset.js'
 import { buildEvalReport } from './report.js'
+import { runNamedReporter, type ReporterName } from './reporters/reporter-factory.js'
 import { runSessionEvidenceEval } from './runner.js'
 import type { EvalVariant } from './types.js'
 import { EVAL_VARIANTS } from './variants.js'
@@ -22,11 +23,12 @@ function writeJson(targetValue: string, value: unknown): string {
 }
 
 const variant = (valueAfter('--variant') ?? 'v3-map-reduce') as EvalVariant
-const reporter = valueAfter('--reporter') ?? 'none'
+const reporter = (valueAfter('--reporter') ?? 'none') as ReporterName
 const output = valueAfter('--output')
 const compare = process.argv.includes('--compare')
 if (!compare && !EVAL_VARIANTS.includes(variant)) throw new Error(`unsupported variant: ${variant}`)
-if (reporter !== 'none') throw new Error(`unsupported reporter: ${reporter}`)
+if (reporter !== 'none' && reporter !== 'langfuse') throw new Error(`unsupported reporter: ${reporter}`)
+if (compare && reporter !== 'none') throw new Error('Langfuse Reporter 需要指定单一 --variant')
 
 if (compare) {
   const comparison = compareSessionEvidenceVariants()
@@ -37,6 +39,11 @@ if (compare) {
   const run = runSessionEvidenceEval(variant)
   const report = buildEvalReport(run, loadSessionEvidenceDataset())
   const reportPath = output ? writeJson(output, report) : undefined
-  console.log(`variant=${run.variant} reporter=${reporter} cases=${run.results.length} case_hashes=stable hard_gates=${run.hardGatesPassed ? 'pass' : 'fail'}${reportPath ? ` report=${reportPath}` : ''}`)
+  const reporterResult = await runNamedReporter(reporter, report)
+  const reporterDetail = reporterResult.status === 'reported'
+    ? ` reporter_run_id=${reporterResult.runId}${reporterResult.url ? ` reporter_url=${reporterResult.url}` : ''}`
+    : reporterResult.status === 'failed' ? ` reporter_failed=${reporterResult.error}` : ''
+  console.log(`variant=${run.variant} reporter=${reporter} cases=${run.results.length} case_hashes=stable hard_gates=${run.hardGatesPassed ? 'pass' : 'fail'}${reportPath ? ` report=${reportPath}` : ''}${reporterDetail}`)
   if (!run.hardGatesPassed) process.exitCode = 1
+  else if (reporterResult.status === 'failed') process.exitCode = 2
 }
