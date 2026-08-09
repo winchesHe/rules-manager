@@ -3,6 +3,8 @@ import { Button, Tooltip } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
   Blocks,
+  Bot,
+  ChevronDown,
   FolderKanban,
   MessageSquareText,
   Moon,
@@ -22,46 +24,50 @@ import type { ThemeMode } from './theme'
 
 type ContentViewId = 'overview' | 'projects' | 'chat' | 'rules'
 type ViewId = ContentViewId | 'settings'
+type RulesNavigationGroupId = 'rules-management' | 'agent-context'
 
-const navigationGroups = [
-  {
-    labelKey: 'workspace',
-    items: [
-      { id: 'overview', labelKey: 'scan', icon: ScanSearch },
-      { id: 'projects', labelKey: 'projects', icon: FolderKanban },
-      { id: 'chat', labelKey: 'chat', icon: MessageSquareText },
-    ],
-  },
-  {
-    labelKey: 'knowledge',
-    items: [
-      { id: 'rules', labelKey: 'rules', icon: ScrollText },
-    ],
-  },
+const workspaceNavigation = [
+  { id: 'overview', labelKey: 'scan', icon: ScanSearch },
+  { id: 'projects', labelKey: 'projects', icon: FolderKanban },
+  { id: 'chat', labelKey: 'chat', icon: MessageSquareText },
 ] satisfies Array<{
+  id: Exclude<ContentViewId, 'rules'>
   labelKey: string
-  items: Array<{ id: ContentViewId; labelKey: string; icon: typeof ScanSearch }>
+  icon: typeof ScanSearch
 }>
 
 const rulesNavigationGroups: Array<{
+  id: RulesNavigationGroupId
   labelKey: string
+  icon: typeof ScrollText
   items: Array<{ id: RulesSection; labelKey: string }>
 }> = [
   {
+    id: 'rules-management',
     labelKey: 'rulesManagement',
+    icon: ScrollText,
     items: [
       { id: 'overview', labelKey: 'rulesOverview' },
       { id: 'generated', labelKey: 'rulesWorkbench' },
     ],
   },
   {
+    id: 'agent-context',
     labelKey: 'agentContext',
+    icon: Bot,
     items: [
       { id: 'agents', labelKey: 'agentInstructions' },
       { id: 'memories', labelKey: 'agentMemory' },
     ],
   },
 ]
+
+const rulesNavigationGroupBySection: Record<RulesSection, RulesNavigationGroupId> = {
+  overview: 'rules-management',
+  generated: 'rules-management',
+  agents: 'agent-context',
+  memories: 'agent-context',
+}
 
 export function App() {
   const { t } = useTranslation('navigation')
@@ -73,8 +79,28 @@ export function App() {
   const [selectedRulesRunId, setSelectedRulesRunId] = useState<string | null>(null)
   const [selectedChatThreadId, setSelectedChatThreadId] = useState<string | null>(null)
   const [activeRulesSection, setActiveRulesSection] = useState<RulesSection>('overview')
+  const [expandedRulesGroups, setExpandedRulesGroups] = useState<Record<RulesNavigationGroupId, boolean>>({
+    'rules-management': true,
+    'agent-context': true,
+  })
   const [rulesViewKey, setRulesViewKey] = useState(0)
   const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme(window.localStorage))
+
+  const selectRulesSection = (section: RulesSection) => {
+    const groupId = rulesNavigationGroupBySection[section]
+    setActiveRulesSection(section)
+    setExpandedRulesGroups((current) => (
+      current[groupId] ? current : { ...current, [groupId]: true }
+    ))
+  }
+
+  const openRulesSection = (section: RulesSection) => {
+    if (activeView === 'rules' && activeRulesSection === section && section === 'overview') {
+      setRulesViewKey((current) => current + 1)
+    }
+    selectRulesSection(section)
+    setActiveView('rules')
+  }
 
   return (
     <>
@@ -97,78 +123,103 @@ export function App() {
             </div>
 
             <nav aria-label={t('mainLabel')} className="min-h-0 overflow-y-auto">
-              {navigationGroups.map((navigationGroup, navigationGroupIndex) => (
-                <div className={navigationGroupIndex === 0 ? '' : 'mt-4'} key={navigationGroup.labelKey}>
-                  <p className="mb-1 px-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted/70">
-                    {t(navigationGroup.labelKey)}
-                  </p>
-                  <div className="grid gap-0.5">
-                    {navigationGroup.items.map(({ id, labelKey, icon: Icon }) => {
-                      const active = activeView === id
-                      return (
-                        <div className="grid gap-0.5" key={id}>
-                          <Button
-                            aria-current={active ? 'page' : undefined}
-                            className={`h-[2.125rem] justify-start gap-2 px-2 text-[13px] ${
-                              active
-                                ? 'bg-surface-hover text-foreground'
-                                : 'text-muted hover:bg-surface-hover hover:text-foreground'
-                            }`}
-                            fullWidth
-                            onPress={() => {
-                              if (id === 'rules' && active) {
-                                setActiveRulesSection('overview')
-                                setRulesViewKey((current) => current + 1)
-                              }
-                              setActiveView(id)
-                            }}
-                            variant="ghost"
-                          >
-                            <Icon aria-hidden="true" size={16} />
-                            <span>{t(labelKey)}</span>
-                          </Button>
-                          {id === 'rules' && active && (
-                            <div aria-label={t('rulesLabel')} className="grid gap-0.5 pb-1 pt-2">
-                              {rulesNavigationGroups.map((group, groupIndex) => (
-                                <div
-                                  aria-label={t(group.labelKey)}
-                                  className="grid gap-0.5"
-                                  key={group.labelKey}
-                                  role="group"
-                                >
-                                  <span
-                                    className={`px-8 text-[9px] font-medium tracking-[0.075em] text-muted/60 ${
-                                      groupIndex === 0 ? '' : 'mt-2.5'
-                                    }`}
-                                  >
-                                    {t(group.labelKey)}
-                                  </span>
-                                  {group.items.map((item) => (
-                                    <Button
-                                      aria-current={activeRulesSection === item.id ? 'page' : undefined}
-                                      className={`h-7 justify-start px-8 text-[11px] ${
-                                        activeRulesSection === item.id
-                                          ? 'text-foreground'
-                                          : 'text-muted hover:bg-surface-hover hover:text-foreground'
-                                      }`}
-                                      fullWidth
-                                      key={item.id}
-                                      onPress={() => setActiveRulesSection(item.id)}
-                                      variant="ghost"
-                                    >
-                                      {t(item.labelKey)}
-                                    </Button>
-                                  ))}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+              <div>
+                <p className="mb-1 px-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted/70">
+                  {t('workspace')}
+                </p>
+                <div className="grid gap-0.5">
+                  {workspaceNavigation.map(({ id, labelKey, icon: Icon }) => {
+                    const active = activeView === id
+                    return (
+                      <Button
+                        aria-current={active ? 'page' : undefined}
+                        className={`h-[2.125rem] justify-start gap-2 px-2 text-[13px] ${
+                          active
+                            ? 'bg-surface-hover text-foreground'
+                            : 'text-muted hover:bg-surface-hover hover:text-foreground'
+                        }`}
+                        fullWidth
+                        key={id}
+                        onPress={() => setActiveView(id)}
+                        variant="ghost"
+                      >
+                        <Icon aria-hidden="true" size={16} />
+                        <span>{t(labelKey)}</span>
+                      </Button>
+                    )
+                  })}
                 </div>
-              ))}
+              </div>
+
+              <div className="mt-4">
+                <p className="mb-1 px-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted/70">
+                  {t('knowledge')}
+                </p>
+                <div aria-label={t('rulesLabel')} className="grid gap-1">
+                  {rulesNavigationGroups.map((group) => {
+                    const expanded = expandedRulesGroups[group.id]
+                    const groupActive = activeView === 'rules'
+                      && group.items.some((item) => item.id === activeRulesSection)
+                    const GroupIcon = group.icon
+
+                    return (
+                      <div className="grid gap-0.5" key={group.id} role="group">
+                        <Button
+                          aria-controls={`${group.id}-items`}
+                          aria-expanded={expanded}
+                          className={`h-[2.125rem] justify-start gap-2 px-2 text-[13px] ${
+                            groupActive
+                              ? 'text-foreground'
+                              : 'text-muted hover:bg-surface-hover hover:text-foreground'
+                          }`}
+                          fullWidth
+                          onPress={() => setExpandedRulesGroups((current) => ({
+                            ...current,
+                            [group.id]: !current[group.id],
+                          }))}
+                          variant="ghost"
+                        >
+                          <GroupIcon aria-hidden="true" size={16} />
+                          <span>{t(group.labelKey)}</span>
+                          <ChevronDown
+                            aria-hidden="true"
+                            className={`ml-auto transition-transform motion-reduce:transition-none ${
+                              expanded ? 'rotate-0' : '-rotate-90'
+                            }`}
+                            size={14}
+                          />
+                        </Button>
+                        {expanded && (
+                          <div
+                            className="ml-[15px] grid gap-0.5 border-l border-border/80 py-0.5 pl-2"
+                            id={`${group.id}-items`}
+                          >
+                            {group.items.map((item) => {
+                              const active = activeView === 'rules' && activeRulesSection === item.id
+                              return (
+                                <Button
+                                  aria-current={active ? 'page' : undefined}
+                                  className={`h-[1.875rem] justify-start rounded-md px-2 text-[12px] ${
+                                    active
+                                      ? 'bg-surface-hover text-foreground'
+                                      : 'text-muted hover:bg-surface-hover hover:text-foreground'
+                                  }`}
+                                  fullWidth
+                                  key={item.id}
+                                  onPress={() => openRulesSection(item.id)}
+                                  variant="ghost"
+                                >
+                                  {t(item.labelKey)}
+                                </Button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </nav>
 
             <div className="mt-auto flex items-center gap-1 border-t border-border pt-3">
@@ -247,13 +298,11 @@ export function App() {
                 }}
                 onGenerateRules={(slug) => {
                   setSelectedRulesProject(slug)
-                  setActiveRulesSection('overview')
-                  setActiveView('rules')
+                  openRulesSection('overview')
                 }}
                 onPublishRules={(slug) => {
                   setSelectedPublishProject(slug)
-                  setActiveRulesSection('generated')
-                  setActiveView('rules')
+                  openRulesSection('generated')
                 }}
               />
             )}
@@ -261,7 +310,7 @@ export function App() {
               <ChatView
                 initialThreadId={selectedChatThreadId}
                 onOpenGeneratedRules={(runId) => {
-                  setActiveRulesSection('generated')
+                  selectRulesSection('generated')
                   setSelectedRulesRunId(runId)
                   setSelectedChatThreadId(null)
                   setActiveView('rules')
@@ -286,7 +335,7 @@ export function App() {
                   setSelectedChatThreadId(threadId)
                   setActiveView('chat')
                 }}
-                onSectionChange={setActiveRulesSection}
+                onSectionChange={selectRulesSection}
                 section={activeRulesSection}
               />
             )}

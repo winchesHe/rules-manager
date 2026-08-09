@@ -14,25 +14,32 @@ function read(relativePath: string): string {
 }
 
 describe('home workflow layout', () => {
-  it('主导航使用 Scan / Projects / Chat / Rules', () => {
+  it('主导航使用 Workspace 三项，并在 Knowledge 直接展示两组规则入口', () => {
     const source = read('App.tsx')
     expect(source).toContain("labelKey: 'scan'")
     expect(source).toContain("labelKey: 'projects'")
     expect(source).toContain("labelKey: 'chat'")
-    expect(source).toContain("labelKey: 'rules'")
+    expect(source).toContain("labelKey: 'rulesManagement'")
+    expect(source).toContain("labelKey: 'agentContext'")
+    expect(source).not.toContain("{ id: 'rules', labelKey: 'rules'")
     expect(source.indexOf("labelKey: 'chat'"))
-      .toBeLessThan(source.indexOf("labelKey: 'rules'"))
+      .toBeLessThan(source.indexOf("labelKey: 'rulesManagement'"))
     expect(source).toContain('<ChatView')
     expect(source).toContain("useTranslation('navigation')")
     expect(source).toContain('overflow-x-hidden')
   })
 
-  it('Rules 二级导航按规则管理和 Agent 上下文分组，并使用整行交互热区', () => {
+  it('Knowledge 使用默认展开的 P2 式可折叠分组，叶子项独立显示选中状态', () => {
     const source = read('App.tsx')
 
-    expect(source).toContain("labelKey: 'rulesManagement'")
-    expect(source).toContain("labelKey: 'agentContext'")
+    expect(source).toContain("type RulesNavigationGroupId = 'rules-management' | 'agent-context'")
+    expect(source).toContain("'rules-management': true")
+    expect(source).toContain("'agent-context': true")
     expect(source).toContain('role="group"')
+    expect(source).toContain('aria-expanded={expanded}')
+    expect(source).toContain('aria-controls={`${group.id}-items`}')
+    expect(source).toContain('<ChevronDown')
+    expect(source).toContain("expanded ? 'rotate-0' : '-rotate-90'")
     expect(source.indexOf("id: 'overview'"))
       .toBeLessThan(source.indexOf("id: 'generated'"))
     expect(source.indexOf("id: 'generated'"))
@@ -40,10 +47,12 @@ describe('home workflow layout', () => {
     expect(source.indexOf("id: 'agents'"))
       .toBeLessThan(source.indexOf("id: 'memories'"))
     expect(source).toContain("{ id: 'generated', labelKey: 'rulesWorkbench' }")
-    expect(source).toContain('className="grid gap-0.5 pb-1 pt-2"')
-    expect(source).toContain("groupIndex === 0 ? '' : 'mt-2.5'")
-    expect(source).toContain('h-7 justify-start px-8 text-[11px]')
-    expect(source).not.toContain('ml-5 grid gap-0.5 border-l border-border pl-2')
+    expect(source).toContain('ml-[15px] grid gap-0.5 border-l border-border/80 py-0.5 pl-2')
+    expect(source).toContain('h-[1.875rem] justify-start rounded-md px-2 text-[12px]')
+    expect(source).toContain("? 'bg-surface-hover text-foreground'")
+    expect(source).toContain('onPress={() => openRulesSection(item.id)}')
+    expect(source).not.toContain("groupIndex === 0 ? '' : 'mt-2.5'")
+    expect(source).not.toContain('h-7 justify-start px-8 text-[11px]')
   })
 
   it('Chat 使用历史 Drawer、Conversation、Context，并提供首次发送才落盘的 Composer', () => {

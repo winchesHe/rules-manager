@@ -3405,3 +3405,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   恢复进入检查时的浅色偏好。
 - App 全量 43 suites / 268 tests、production build、`git diff --check` 通过；`styles.css` 相对迁移前版本无差异。
 - 提交信息：`fix: 恢复主题配色与侧栏切换`
+
+## Agent Dashboard P2 式知识库导航（2026-08-09）
+
+- 移除「规则」父项下再嵌套分组标题与页面入口的三级视觉关系；Knowledge 现在直接展示「规则管理」和
+  「Agent 上下文」两个带图标、箭头的 Disclosure 父级。
+- 两组默认展开，概览、规则工作台、Agent 指令、Agent Memory 四个真实页面无需额外点击即可看到；叶子项使用
+  左侧细竖线表达从属关系，只有当前叶子显示选中底色，父级不显示选中胶囊。
+- 两组可以独立折叠；叶子点击、Projects 生成/发布入口、Chat 产物入口和 Rules 内部 section 切换都会确保目标
+  分组展开，同时保留再次点击概览重置 Rules 默认页的既有行为。
+- 新增 `docs/plans/agent-dashboard-knowledge-navigation.md` 记录范围、观察点和验证方式，并同步 `DESIGN.md` 与
+  App Shell / Rules 导航合同测试；不修改主题 token、Settings、IPC 或业务页面。
+- App 全量 43 suites / 268 tests、production build 与 `git diff --check` 通过；build 仅有既有
+  `markstream-react` PURE comment warning。
+- 使用 Computer Use 在真实 Electron 中复验默认双组展开、规则管理独立折叠、Agent 指令叶子跳转和唯一选中态，
+  并检查炭灰深色与白蓝浅色下的层级对比；检查后恢复原浅色偏好与双组展开状态。
+- 提交信息：`feat: 收敛知识库侧栏导航`

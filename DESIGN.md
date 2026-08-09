@@ -61,6 +61,9 @@
 ```
 
 - 侧边栏固定宽约 `11.125rem`（178px），按 Workspace / Knowledge 分组
+- Workspace 固定展示 Scan / Projects / Chat；Knowledge 直接展示「规则管理」「Agent 上下文」两个
+  默认展开的可折叠父级，四个叶子入口通过细竖线表达从属关系
+- 只有当前知识库叶子显示选中底色；父级只负责展开/收起，不使用选中胶囊
 - 工作区 `flex-1`，同系暗色稍亮背景
 - 侧边栏 Settings 与主题快捷切换贴底（`mt-auto`）；Settings 中同时提供完整主题选择
 
@@ -167,7 +170,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 
 ### Chat 第一版（历史实现）
 
-- 主导航顺序为 Scan / Projects / Chat / Rules。
+- 主导航按 Workspace 的 Scan / Projects / Chat 与 Knowledge 的「规则管理 / Agent 上下文」组织；
+  Rules 内部页面继续由四个知识库叶子入口承载。
 - Rules 负责选择 Evidence scope、审核和发布；生成开始后创建 Chat Thread 并切换到 Chat。
 - Chat 使用 Thread Rail + Conversation + Context 三段布局；窄窗口时 Context 下沉，不产生页面级横向滚动。
 - 用户请求使用右侧轻量气泡，Assistant 使用无气泡正文，Candidate 使用结构化 Artifact。
