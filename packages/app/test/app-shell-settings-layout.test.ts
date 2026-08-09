@@ -30,7 +30,7 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     expect(source).toContain('<Moon aria-hidden="true"')
   })
 
-  it('侧栏可收起为可操作的图标栏，并从边缘按钮恢复', () => {
+  it('侧栏可收起为可操作的图标栏，并从侧栏底部按钮恢复', () => {
     const source = fs.readFileSync(path.join(rendererRoot, 'App.tsx'), 'utf8')
 
     expect(source).toContain('const [sidebarCollapsed, setSidebarCollapsed] = useState(false)')
@@ -40,10 +40,11 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     expect(source).toContain('onPress={() => setSidebarCollapsed((current) => !current)}')
     expect(source).toContain('<PanelLeftOpen aria-hidden="true"')
     expect(source).toContain('<PanelLeftClose aria-hidden="true"')
-    expect(source).toContain('className="sidebar-collapse-toggle"')
+    expect(source).toContain('className="size-[2.125rem] min-w-[2.125rem] shrink-0 text-muted')
     expect(source).toContain('className={`relative min-w-0 max-w-full')
-    expect(source.indexOf('<main'))
-      .toBeLessThan(source.indexOf('className="sidebar-collapse-toggle"'))
+    expect(source.indexOf('aria-label={sidebarCollapsed ? t(\'expandSidebar\')'))
+      .toBeLessThan(source.indexOf('<main'))
+    expect(source).not.toContain('sidebar-collapse-toggle')
     expect(source).toContain("sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-2 px-2'")
     expect(source).toContain('!sidebarCollapsed && expanded && (')
     expect(source).toContain('setSidebarCollapsed(false)')

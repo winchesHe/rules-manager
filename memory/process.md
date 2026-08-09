@@ -3468,3 +3468,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`fix: 修正 Chat 上下文收起热区`
+
+## 全局侧栏按钮与 Chat 历史按钮重叠修正（2026-08-09）
+
+- 用户截图确认：全局侧栏折叠按钮绝对定位在主界面左上角，与 Chat 自有的对话历史按钮占用同一位置，形成视觉与
+  点击热区重叠；该问题与上一轮右侧 Session Context 收起按钮无关。
+- 移除主界面内的 `sidebar-collapse-toggle` 节点与绝对定位样式；全局折叠/恢复按钮改为左侧栏底部操作区的内嵌
+  控件。展开时设置、折叠、主题切换并列，收起后纵向保留三个图标，主题入口和所有导航行为不变。
+- Computer Use 在中间方案中确认按钮移出主界面后，Chat 历史按钮恢复独立且收起/展开可用；随后发现品牌区方案
+  会截断「Agent Dashboard」，因此最终改到底部操作区。最终截图复查时 macOS 已锁屏、Computer Use 无法读取，
+  改用 App Shell / 拖拽 / Chat 三组定向合同、全量测试和 production build 验证最终结构。
+- 新增 `docs/plans/agent-dashboard-sidebar-toggle-chat-overlap.md`，同步 `DESIGN.md`、既有折叠计划与 Shell 计划；
+  合同测试锁定折叠按钮位于 `<main>` 之前，并禁止 `sidebar-collapse-toggle` 样式回归。
+- App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`fix: 避免侧栏按钮与 Chat 顶栏重叠`
