@@ -59,6 +59,29 @@ describe('querySessionContext', () => {
     ])
   })
 
+  it('在 SQL 分页前排除 Host 管理的 Session', () => {
+    const home = seed([
+      session('safe', 'codex', 'alpha', '2026-08-03T00:00:00.000Z'),
+      session('internal', 'codex', 'alpha', '2026-08-02T00:00:00.000Z'),
+      session('rules', 'claude', 'alpha', '2026-08-01T00:00:00.000Z'),
+    ])
+
+    const page = querySessionContext({
+      homeDir: home,
+      limit: 1,
+      exclude: [
+        { agent: 'codex', id: 'internal' },
+        { agent: 'claude', id: 'rules' },
+        ...Array.from({ length: 600 }, (_, index) => ({
+          agent: 'codex', id: `historical-internal-${index}`,
+        })),
+      ],
+    })
+
+    expect(page.items.map((item) => item.id)).toEqual(['safe'])
+    expect(page.nextCursor).toBeNull()
+  })
+
   it('OpenCode 使用权威 SQLite title，其余来源返回稳定可读名称', () => {
     const home = seed([
       session('ses-readable', 'opencode', 'agent-workspace', '2026-07-02T00:00:00.000Z'),

@@ -8,6 +8,8 @@ import { cursorAdapter } from '../../src/adapters/cursor'
 import { runInit } from '../../src/commands/init'
 import { initDatabase } from '../../src/db'
 import { runScan } from '../../src/scanner'
+import { recordInternalSessionExclusion } from '../../src/session-exclusions'
+import { resolveWorkspace } from '../../src/workspace'
 
 function makeTempHome(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mm-session-discovery-'))
@@ -52,6 +54,32 @@ describe('agent session 获取逻辑重构', () => {
     }
     db.close()
     expect(row).toEqual({ id: sessionId, agent: 'claude' })
+  })
+
+  it('二次扫描时不把已登记的内部 Evidence Provider Session 写入索引', async () => {
+    const sessionId = '019f8882-a360-7033-9b02-08100c51ca97'
+    writeJsonl(path.join(
+      home, '.codex', 'sessions', '2026', '08', '09', `rollout-${sessionId}.jsonl`,
+    ), [{
+      type: 'session_meta',
+      payload: { id: sessionId, cwd: '/tmp/project' },
+    }, {
+      type: 'response_item',
+      payload: { type: 'message', role: 'user', content: '[memory-manager:live-evidence-map]' },
+    }])
+    await runInit({ nonInteractive: true, homeDir: home })
+    recordInternalSessionExclusion(
+      resolveWorkspace(home).chatsDir,
+      { agent: 'codex', id: sessionId },
+      '2026-08-09T00:00:00.000Z',
+    )
+
+    const summary = await runScan({ agents: ['codex'], homeDir: home })
+
+    expect(summary).toMatchObject({ total: 0, new: 0, errors: 0 })
+    const db = initDatabase(home)
+    expect(db.prepare('SELECT COUNT(*) AS count FROM sessions').get()).toEqual({ count: 0 })
+    db.close()
   })
 
   it('Claude 扫描项目目录下非 UUID 命名的顶层 JSONL', async () => {

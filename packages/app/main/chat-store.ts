@@ -10,6 +10,10 @@ import type { RunState } from './background-run.js'
 import type { NativeToolActivity, NativeTurnTimelineItem } from './chat-runtime.js'
 import { canonicalReferences } from './session-context-prompt.js'
 import type { SessionEvidenceCoverageSummary } from '../../core/src/live-evidence-engine.js'
+import {
+  collectSessionExclusions,
+  recordInternalSessionExclusion,
+} from '../../core/src/session-exclusions.js'
 
 export type ChatThreadStatus = Exclude<RunState, 'idle'>
 
@@ -160,6 +164,18 @@ const PARTIAL_FILE = 'assistant.partial.json'
 
 export class ChatStore {
   constructor(private readonly chatsDir: string) {}
+
+  recordInternalEvidenceSession(
+    provider: NativeChatProvider,
+    nativeSessionId: string,
+    at: string,
+  ): void {
+    recordInternalSessionExclusion(this.chatsDir, { agent: provider, id: nativeSessionId }, at)
+  }
+
+  sessionEvidenceExclusions(currentThreadId?: string): NativeSessionReference[] {
+    return collectSessionExclusions(this.chatsDir, currentThreadId)
+  }
 
   createGenerationThread(input: CreateGenerationThreadInput): void {
     validateThreadId(input.runId)

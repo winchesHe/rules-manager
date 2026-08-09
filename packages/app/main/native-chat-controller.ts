@@ -131,7 +131,18 @@ export class NativeChatController {
     }
 
     if (request.sessionContext !== undefined) {
-      this.options.store.setNativeSessionContext(chatId, request.sessionContext, this.now())
+      const selected = this.options.enableSessionEvidence
+        ? this.filterSessionEvidenceReferences(chatId, request.sessionContext)
+        : request.sessionContext
+      this.options.store.setNativeSessionContext(chatId, selected, this.now())
+    } else if (this.options.enableSessionEvidence) {
+      const stored = this.options.store.readThread(chatId)
+      if (stored?.version === 2) {
+        const selected = this.filterSessionEvidenceReferences(chatId, stored.sessionContext.selected)
+        if (selected.length !== stored.sessionContext.selected.length) {
+          this.options.store.setNativeSessionContext(chatId, selected, this.now())
+        }
+      }
     }
     const currentThread = this.options.store.readThread(chatId)
     if (!currentThread || currentThread.version !== 2) throw new Error('native chat was not found')
@@ -191,6 +202,13 @@ export class NativeChatController {
             if (event.type === 'usage') this.options.onEvent?.({ chatId, event })
           },
           onReduceResult: (value) => { reduceResult = value },
+          onInternalSession: (value) => {
+            this.options.store.recordInternalEvidenceSession(
+              request.provider,
+              value.nativeSessionId,
+              this.now(),
+            )
+          },
           signal: evidenceAbortController.signal,
         })
         this.activeEvidenceRuns.set(chatId, { abortController: evidenceAbortController, runner })
@@ -524,7 +542,19 @@ export class NativeChatController {
     chatId: string,
     references: NativeSessionReference[],
   ): NativeChatThreadSessionContext {
-    return this.options.store.setNativeSessionContext(chatId, references, this.now())
+    const selected = this.options.enableSessionEvidence
+      ? this.filterSessionEvidenceReferences(chatId, references)
+      : references
+    return this.options.store.setNativeSessionContext(chatId, selected, this.now())
+  }
+
+  private filterSessionEvidenceReferences(
+    chatId: string,
+    references: NativeSessionReference[],
+  ): NativeSessionReference[] {
+    const excluded = new Set(this.options.store.sessionEvidenceExclusions(chatId).map((reference) =>
+      `${reference.agent}\0${reference.id}`))
+    return references.filter((reference) => !excluded.has(`${reference.agent}\0${reference.id}`))
   }
 
   rename(chatId: string, title: string): void {

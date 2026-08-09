@@ -3211,3 +3211,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 36 suites / 356 tests、App 全量 42 suites / 259 tests、App production build 与
   `git diff --check` 通过；build 仅保留既有 Markstream PURE comment warnings。
 - 提交信息：`feat: 完成 Live Evidence 取消语义`
+
+## Live Evidence 防自我回灌（2026-08-09）
+
+- Chunk 4.4 新增本地 `internal-session-exclusions.json` 元数据登记，只保存 Provider、Native Session ID 与
+  recordedAt，不保存 Prompt、对话正文或 Tool output。Map 与中间 Reduce 在 Provider 返回 handle 后立即登记；
+  最终 Reduce 不登记，因为它就是用户当前 Chat。
+- Scanner 在分类、建 FS link 和写 DB 之前排除已登记的内部 Session，并同时从 ChatStore thread metadata 推导
+  Rules Generation Session；完整二次扫描会把历史上已入库的排除项转成 missing 并移除 FS link。
+- Session Context 查询在 SQL 分页前排除全局内部/Rules Session，使用单一 JSON 参数避免大量历史排除项突破
+  SQLite bind 上限；当前 Native Session 由带 chatId 的 Scope 查询和 Controller 提交前 Gate 排除。
+- Controller 对新提交和旧持久化 selection 都重新执行 Scope Gate；因此即使 UI 使用了陈旧列表，当前 Chat、
+  Rules Generation 和内部 Evidence Session 仍不会进入 Query Plan 或退回旧 Prompt 注入链路。
+- 扫描集成测试构造带 Host marker 的 Codex 内部 Session，登记后扫描结果 total/new 均为 0 且 DB 无记录；
+  Controller 测试确认三类排除只留下安全 Session；Query 测试覆盖 602 条排除仍保持正确分页。
+- `simplify` 复核将排除逻辑收敛到 Core registry/collector 与 Controller 单一过滤函数，没有在 6 个 Adapter 中
+  重复解析 Prompt；Host marker 作为运行身份标记，Native ID 元数据作为 Scanner/Scope 的权威排除键。
+- Core 全量 36 suites / 358 tests、App 全量 42 suites / 260 tests、Core/App production build 与
+  `git diff --check` 通过；build 仅保留既有 warnings。
+- 提交信息：`feat: 阻止 Live Evidence Session 自我回灌`

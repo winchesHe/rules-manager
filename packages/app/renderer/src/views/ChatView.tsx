@@ -308,6 +308,7 @@ export function ChatView({
     try {
       const page = await window.api.invoke<SessionContextPage>('chat.context.query', {
         project: contextProject,
+        ...(thread?.kind === 'native-chat' ? { chatId: thread.id } : {}),
         ...(contextFrom ? { from: localDateBoundary(contextFrom, false) } : {}),
         ...(contextTo ? { to: localDateBoundary(contextTo, true) } : {}),
         ...(append && contextCursor ? { cursor: contextCursor } : {}),
@@ -321,7 +322,7 @@ export function ChatView({
     } finally {
       setContextLoading(false)
     }
-  }, [contextCursor, contextFrom, contextProject, contextTo])
+  }, [contextCursor, contextFrom, contextProject, contextTo, thread?.id, thread?.kind])
 
   useEffect(() => {
     void loadContextSessions(false)

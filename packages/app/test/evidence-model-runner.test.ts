@@ -66,12 +66,14 @@ describe('NativeEvidenceModelRunner', () => {
       close: async () => { closed.push(chatId) },
     }))
     const reduceResults: string[] = []
+    const internalSessions: string[] = []
     const runner = new NativeEvidenceModelRunner({
       runtime,
       provider: 'codex',
       workingDirectory: '/workspace',
       config: { effort: 'medium', fastMode: false },
       onReduceResult: (result) => reduceResults.push(result.nativeSessionHandle?.nativeHandle ?? ''),
+      onInternalSession: (result) => internalSessions.push(result.nativeSessionId),
     })
 
     const mapped = await runner.runMap({
@@ -127,6 +129,7 @@ describe('NativeEvidenceModelRunner', () => {
       expect.stringMatching(/^run-1:reduce-batch:[a-f0-9]{16}$/),
     ])
     expect(reduceResults).toEqual(['handle-next'])
+    expect(internalSessions).toEqual(['map-native', 'reduce-batch-native'])
   })
 
   it.each(['claude', 'codex', 'opencode'] as const)(

@@ -17,6 +17,7 @@ import { initDatabase } from './db.js'
 import { linkSession, removeLink } from './fs-writer.js'
 import { resolveWorkspace } from './workspace.js'
 import { isRunCancelledError, throwIfAborted } from './abort.js'
+import { collectScannedSessionExclusionKeys, sessionExclusionKey } from './session-exclusions.js'
 
 // determineScanState 比对所需的最小列契约
 interface ScanCompareRow {
@@ -179,6 +180,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
 
     const scannedAgents = new Set<string>()
     const discoveredIds = new Set<string>()
+    const excludedSessionKeys = collectScannedSessionExclusionKeys(opts.homeDir)
 
     for (const adapter of adapters) {
       throwIfAborted(opts.signal)
@@ -192,13 +194,14 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
     let sessions: DiscoveredSession[]
     try {
       const discovered = await adapter.discover(agentSourceDir)
-      sessions =
+      sessions = (
         cutoff === undefined
           ? discovered
           : discovered.filter((session) => {
               const updatedAt = Date.parse(session.updatedAt)
               return Number.isNaN(updatedAt) || updatedAt >= cutoff
             })
+      ).filter((session) => !excludedSessionKeys.has(sessionExclusionKey(session)))
     } catch (err) {
       summary.errors++
       errorLog.push({

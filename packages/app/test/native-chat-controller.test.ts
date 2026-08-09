@@ -357,6 +357,45 @@ describe('NativeChatController', () => {
     })).rejects.toThrow('provider is locked')
   })
 
+  it('Scope 排除当前 Chat、Rules Generation 与内部 Evidence Session', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-evidence-scope-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const config = { effort: 'medium' as const, fastMode: false }
+    store.createNativeThread({
+      id: 'chat-scope', provider: 'codex', origin: 'chat', title: 'scope',
+      createdAt: '2026-08-09T00:00:00.000Z', defaultTurnConfig: config,
+    })
+    store.bindNativeSession('chat-scope', 'native-current', '2026-08-09T00:00:01.000Z')
+    store.createNativeThread({
+      id: 'rules-scope', provider: 'claude', origin: 'rules', title: 'rules',
+      createdAt: '2026-08-09T00:00:00.000Z', defaultTurnConfig: config,
+      intent: 'rules-generation',
+    })
+    store.bindNativeSession('rules-scope', 'native-rules', '2026-08-09T00:00:01.000Z')
+    store.recordInternalEvidenceSession('opencode', 'native-internal', '2026-08-09T00:00:02.000Z')
+    const controller = new NativeChatController({
+      store,
+      runtime: new ChatRuntimeManager(() => { throw new Error('不应调用 Provider') }),
+      workingDirectory: root,
+      enableSessionEvidence: true,
+    })
+
+    const context = controller.updateSessionContext('chat-scope', [
+      { agent: 'codex', id: 'native-current' },
+      { agent: 'claude', id: 'native-rules' },
+      { agent: 'opencode', id: 'native-internal' },
+      { agent: 'pi', id: 'safe-session' },
+    ])
+
+    expect(context.selected).toEqual([{ agent: 'pi', id: 'safe-session' }])
+    expect(store.sessionEvidenceExclusions('chat-scope')).toEqual(expect.arrayContaining([
+      { agent: 'codex', id: 'native-current' },
+      { agent: 'claude', id: 'native-rules' },
+      { agent: 'opencode', id: 'native-internal' },
+    ]))
+  })
+
   it('只在 Assistant Turn 成功落盘后发送完成通知', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-completion-'))
     roots.push(root)

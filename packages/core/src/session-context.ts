@@ -13,6 +13,7 @@ export interface SessionContextQuery {
   to?: string
   cursor?: string
   limit?: number
+  exclude?: SessionContextReference[]
 }
 
 export interface SessionContextItem {
@@ -87,6 +88,15 @@ export function querySessionContext(input: SessionContextQuery = {}): SessionCon
     conditions.push('(updated_at < @cursorUpdatedAt OR (updated_at = @cursorUpdatedAt AND id < @cursorId))')
     params.cursorUpdatedAt = cursor.updatedAt
     params.cursorId = cursor.id
+  }
+  if (input.exclude && input.exclude.length > 0) {
+    conditions.push(`NOT EXISTS (
+      SELECT 1
+      FROM json_each(@excludedSessions) AS excluded
+      WHERE json_extract(excluded.value, '$.agent') = sessions.agent
+        AND json_extract(excluded.value, '$.id') = sessions.id
+    )`)
+    params.excludedSessions = JSON.stringify(input.exclude)
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
   const db = new Database(getDbPath(input.homeDir), { readonly: true })

@@ -52,6 +52,7 @@ export interface NativeEvidenceModelRunnerOptions {
   config: NativeTurnConfig
   onReduceEvent?: (event: NativeChatEvent) => void
   onReduceResult?: (result: NativeTurnResult) => void
+  onInternalSession?: (result: NativeTurnResult) => void
   signal?: AbortSignal
 }
 
@@ -189,6 +190,7 @@ export class NativeEvidenceModelRunner implements EvidenceModelRunner {
         this.active.delete(input.chatId)
       }
       throwIfAborted(this.options.signal)
+      if (input.stage !== 'reduce') this.options.onInternalSession?.(result)
       try {
         return { value: input.parse(structuredValue(result)), result }
       } catch (error) {

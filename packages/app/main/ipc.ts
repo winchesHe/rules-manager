@@ -231,7 +231,13 @@ export function registerIpcHandlers(): void {
     return nativeChatController.readToolItem(validateNativeChatToolReadRequest(value))
   })
   ipcMain.handle('chat.context.query', (_event, value: unknown) => {
-    return querySessionContext(validateSessionContextQuery(value))
+    const query = validateSessionContextQuery(value)
+    return querySessionContext({
+      ...query,
+      ...(query.chatId
+        ? { exclude: chatStore.sessionEvidenceExclusions(query.chatId) }
+        : { exclude: chatStore.sessionEvidenceExclusions() }),
+    })
   })
   ipcMain.handle('chat.context.update', (_event, value: unknown) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -661,7 +667,7 @@ function validateSessionContextQuery(value: unknown) {
     throw new Error('invalid session context query')
   }
   const query = value as Record<string, unknown>
-  for (const key of ['project', 'from', 'to', 'cursor']) {
+  for (const key of ['project', 'from', 'to', 'cursor', 'chatId']) {
     if (query[key] !== undefined && typeof query[key] !== 'string') {
       throw new Error(`session context ${key} must be a string`)
     }
@@ -675,6 +681,7 @@ function validateSessionContextQuery(value: unknown) {
     ...(typeof query.to === 'string' && query.to ? { to: query.to } : {}),
     ...(typeof query.cursor === 'string' && query.cursor ? { cursor: query.cursor } : {}),
     ...(typeof query.limit === 'number' ? { limit: query.limit } : {}),
+    ...(typeof query.chatId === 'string' && query.chatId ? { chatId: query.chatId } : {}),
   }
 }
 
