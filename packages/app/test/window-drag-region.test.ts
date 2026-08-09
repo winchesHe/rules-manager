@@ -24,6 +24,7 @@ describe('window drag region', () => {
     expect(styles).toMatch(/\.window-titlebar-toggle-region\s*\{[^}]*height:\s*0\.75rem[^}]*-webkit-app-region:\s*no-drag/s)
     expect(styles).toMatch(/\.window-no-drag[\s\S]*-webkit-app-region:\s*no-drag/)
     expect(styles).toMatch(/\.sidebar-collapse-toggle\s*\{[^}]*position:\s*absolute[^}]*-webkit-app-region:\s*no-drag/s)
+    expect(styles).toMatch(/\.sidebar-collapse-toggle\s*\{[^}]*top:\s*0\.5rem[^}]*left:\s*0\.75rem/s)
     expect(ipcSource).toContain("ipcMain.handle('window.toggleMaximize'")
     expect(ipcSource).toContain('BrowserWindow.fromWebContents(event.sender)')
     expect(ipcSource).toContain('toggleWindowMaximize(window)')

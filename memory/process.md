@@ -3439,3 +3439,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Computer Use 复验浅色展开/收起、收起状态 Projects 导航、知识库图标恢复侧栏，以及深色图标栏对比；检查后
   恢复浅色、展开侧栏和扫描页。
 - 提交信息：`feat: 支持收起主侧栏`
+
+## Agent Dashboard 折叠按钮归属修正（2026-08-09）
+
+- 用户明确要求折叠按钮不能跨压侧栏与内容区边界；本次将按钮从 `aside` 边缘移入 `main` 左上角，使其完整归属
+  右侧主界面，展开与收起状态都不再骑在分隔线上。
+- `main` 增加相对定位上下文，`sidebar-collapse-toggle` 改为内容区内的 `top: 0.5rem; left: 0.75rem`，并使用
+  `bg-background` 跟随右侧界面主题；侧栏宽度、折叠逻辑、导航与主题 token 均保持不变。
+- App Shell 合同测试增加按钮位于 `main` 内与定位容器断言，窗口拖拽合同增加内容区坐标断言；同步
+  `DESIGN.md` 和可折叠侧栏计划中的归属、观察点与验收标准。
+- Computer Use 在真实 Electron 中复验扫描、Chat、设置三个不同顶部结构，以及浅色/深色、展开/收起状态；按钮
+  均完整位于右侧界面，未覆盖历史、导航、表单和主题切换控件。检查后恢复浅色、展开侧栏和扫描页。
+- App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`fix: 调整侧栏折叠按钮位置`

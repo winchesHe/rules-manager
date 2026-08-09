@@ -241,8 +241,8 @@ body {
 
 .sidebar-collapse-toggle {
   position: absolute;
-  top: 2.5rem;
-  right: -1rem;
+  top: 0.5rem;
+  left: 0.75rem;
   z-index: 1001;
   -webkit-app-region: no-drag;
 }

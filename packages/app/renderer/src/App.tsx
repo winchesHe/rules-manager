@@ -125,27 +125,6 @@ export function App() {
             sidebarCollapsed ? 'px-2' : 'px-3'
           }`}
         >
-            <div className="sidebar-collapse-toggle">
-              <Tooltip>
-                <Button
-                  aria-label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
-                  className="size-8 min-w-8 rounded-md border border-border bg-sidebar p-0 text-muted shadow-sm hover:bg-surface-hover hover:text-foreground"
-                  isIconOnly
-                  onPress={() => setSidebarCollapsed((current) => !current)}
-                  variant="ghost"
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeftOpen aria-hidden="true" size={15} />
-                  ) : (
-                    <PanelLeftClose aria-hidden="true" size={15} />
-                  )}
-                </Button>
-                <Tooltip.Content>
-                  {sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
-                </Tooltip.Content>
-              </Tooltip>
-            </div>
-
             <div className={`mb-5 flex h-7 items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2.5 px-2'}`}>
               <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                 <Blocks aria-hidden="true" size={16} />
@@ -330,13 +309,34 @@ export function App() {
           </aside>
 
           <main
-            className={`min-w-0 max-w-full overflow-x-hidden bg-background ${
+            className={`relative min-w-0 max-w-full overflow-x-hidden bg-background ${
               activeView === 'chat' || activeView === 'settings'
                 ? 'overflow-y-hidden'
                 : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
             }`}
             key={activeView}
           >
+            <div className="sidebar-collapse-toggle">
+              <Tooltip>
+                <Button
+                  aria-label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
+                  className="size-8 min-w-8 rounded-md border border-border bg-background p-0 text-muted shadow-sm hover:bg-surface-hover hover:text-foreground"
+                  isIconOnly
+                  onPress={() => setSidebarCollapsed((current) => !current)}
+                  variant="ghost"
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeftOpen aria-hidden="true" size={15} />
+                  ) : (
+                    <PanelLeftClose aria-hidden="true" size={15} />
+                  )}
+                </Button>
+                <Tooltip.Content>
+                  {sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
+                </Tooltip.Content>
+              </Tooltip>
+            </div>
+
             {activeView === 'settings' && (
               <SettingsView
                 onThemeChange={(nextTheme) => {
