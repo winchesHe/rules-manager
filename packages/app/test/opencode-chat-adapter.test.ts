@@ -33,6 +33,29 @@ describe('OpenCodeChatAdapter', () => {
     expect(emitted).toContainEqual(expect.objectContaining({ type: 'tool_activity' }))
   })
 
+  it('none 工具策略创建全拒绝 Session，并拒绝兜底权限请求', async () => {
+    const create = jest.fn(async () => ({ data: { id: 'oc-1' } }))
+    const permissionReply = jest.fn(async () => ({ data: true }))
+    const client = fakeClient([
+      { type: 'permission.asked', data: { id: 'permission-none', sessionID: 'oc-1' } },
+      { type: 'session.idle', data: { sessionID: 'oc-1' } },
+    ], { create, permissionReply })
+    const adapter = new OpenCodeChatAdapter({
+      acquireServer: async () => ({ url: 'http://fake', release: async () => undefined }),
+      createClient: () => client as never,
+    })
+
+    await adapter.start({
+      chatId: 'oc-evidence', provider: 'opencode', message: 'map', workingDirectory: '/isolated',
+      config: { effort: 'medium', fastMode: false }, toolPolicy: 'none',
+    })
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      permission: [{ permission: '*', pattern: '*', action: 'deny' }],
+    }))
+    expect(permissionReply).toHaveBeenCalledWith(expect.objectContaining({ reply: 'reject' }))
+  })
+
   it('把 question.asked 暴露为交互请求并回传答案', async () => {
     const questionReply = jest.fn(async () => ({ data: true }))
     const client = fakeClient([

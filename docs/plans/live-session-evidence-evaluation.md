@@ -133,9 +133,9 @@ npm test -w @memory-manager/core -- --runInBand \
 
 | # | 步 | 观察点 | 验证方式 | 状态 | reviewed |
 |---|---|---|---|---|---|
-| 7.1 | 完成 Core/App/evals 全量测试与 production build，修复所有新增回归 | 所有 suite 0 failed、0 skipped，构建无新增 warning | 全量命令 + `git diff --check` | ⏳ | —— |
-| 7.2 | 使用隔离 HOME 做 Electron 完整/部分/变化/取消视觉与生命周期 smoke | UI 与 Coverage 一致，主应用数据不变 | production Electron 实测记录 | ⏳ | —— |
-| 7.3 | 对照 spec 逐项完成 completion audit，更新 `memory/process.md` 和 plan reviewed/决策记录 | spec 每项有代码、测试或实测证据 | 文件/命令/运行结果 Coverage Ledger | ⏳ | —— |
+| 7.1 | 完成 Core/App/evals 全量测试与 production build，修复所有新增回归 | 所有 suite 0 failed、0 skipped，构建无新增 warning | 全量命令 + `git diff --check` | ✅ | 2026-08-09 |
+| 7.2 | 使用隔离 HOME 做 Electron 完整/部分/变化/取消视觉与生命周期 smoke | UI 与 Coverage 一致，主应用数据不变 | production Electron 实测记录 | ✅ | 2026-08-09 |
+| 7.3 | 对照 spec 逐项完成 completion audit，更新 `memory/process.md` 和 plan reviewed/决策记录 | spec 每项有代码、测试或实测证据 | 文件/命令/运行结果 Coverage Ledger | ✅ | 2026-08-09 |
 | 7.4 | 按仓库规则完成最终 commit/push，并确认本地与 `origin/main` SHA 一致 | 工作树干净，远端包含最终提交 | Git SHA 对账 | ⏳ | —— |
 
 **Observability Checkpoint**：
@@ -187,3 +187,28 @@ git diff --check
 ## 决策记录（活更新，Y-only）
 
 每步完成时更新状态和 reviewed 日期；仅在发现会影响后续步骤时追加决策段。
+
+### 2026-08-09 · Completion Audit
+
+审计时发现 Map job 虽有 Prompt 数据边界，但 Provider Adapter 仍继承普通 Chat 的完整工具面。最终修复为：宿主读取私有
+chunk 并把内容作为 JSON 字符串注入 Map Prompt；Map 和中间 Reduce 显式使用 `toolPolicy=none`。Claude 传空 tools，
+OpenCode 创建全拒绝权限 Session 并拒绝兜底请求，Pi 使用 no-tools/no-extensions/no-skills/no-context-files，Codex
+关闭 shell_tool/unified_exec/web search/MCP 配置并使用无网络 read-only sandbox。普通 Chat 默认行为不变。
+
+| 验收项 | 当前证据 | 结论 |
+|---|---|---|
+| 1. Source/Processing 全记账 | Coverage 状态机、10/151/500 fixture；Core 358 tests | 已证明 |
+| 2. 失败不丢失且无虚假完整声明 | Claim Gate 反向 fixture、partial/targeted Controller 与 Renderer 测试 | 已证明 |
+| 3. locator 与 Prompt injection | locator 反查硬门禁；四 Provider `toolPolicy=none` Adapter 合同测试 | 已证明 |
+| 4. JSONL/SQLite 固定水位 | append/data_version 变化 fixture 与 `changedDuringRun` UI smoke | 已证明 |
+| 5. Native Chat 生命周期不回归 | revision/resume/lock/interrupt/Timeline/ChatStore 全量 App 264 tests | 已证明 |
+| 6. Rules/CLI/六 Agent 语义不回归 | Core 全量测试覆盖 Rules、sessions show 与六 Adapter Reader | 已证明 |
+| 7. 持久化与隐私边界 | Core DB 无 schema diff；临时目录清理、ChatStore aggregate、report/payload allowlist 测试 | 已证明 |
+| 8. v3 硬门禁与版本比较 | v3 `hard_gates=pass`；compare `dataset=match v3_thresholds=pass` | 已证明 |
+| 9. Langfuse 可选且失败隔离 | Reporter/Payload 25 eval tests；none 正常；缺凭据/不可达为 reporter_failed | 已证明；当前机器无 Docker daemon/凭据，未执行真实 UI/API readback |
+| 10. 本机与交付验收 | production Electron 隔离 HOME 四状态实测；Core/App/Evals 测试与三 workspace build 完成 | Git 远端对账待 7.4 |
+
+最终回归：Core 36 suites / 358 tests、App 42 suites / 264 tests、Evals 6 suites / 25 tests，均 0 failed、0
+skipped。Core/App/Evals build 全部成功；Core 的 tsdown `define` warning 和 App 的第三方 Markstream PURE comment
+warning 为既有输出，本轮未新增 warning。production Electron 使用隔离 HOME 展示完整、部分失败、读取中变化和已中断四种状态；
+主 `~/.memory-manager` 文件状态摘要在启动前后相同，隔离 fixture 已移入废纸篓。

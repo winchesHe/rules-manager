@@ -30,6 +30,23 @@ describe('PiChatAdapter', () => {
     expect(events).toContainEqual({ type: 'thinking_delta', itemId: 'pi-thinking', text: 'hmm' })
   })
 
+  it('none 工具策略禁用 Pi 内置工具、扩展、Skill 和上下文文件', async () => {
+    const launched: string[][] = []
+    const adapter = new PiChatAdapter((args) => {
+      launched.push(args)
+      return fakePiProcess([])
+    })
+
+    await adapter.start({
+      chatId: 'pi-evidence', provider: 'pi', message: 'map', workingDirectory: '/tmp',
+      config: { effort: 'medium', fastMode: false }, toolPolicy: 'none',
+    })
+
+    expect(launched).toEqual([[
+      '--mode', 'rpc', '--no-tools', '--no-extensions', '--no-skills', '--no-context-files',
+    ]])
+  })
+
   it('恢复时必须使用 session file，extension_ui_request 可回传且删除不碰原生文件', async () => {
     const launched: string[][] = []
     const frames: Array<Record<string, unknown>> = []

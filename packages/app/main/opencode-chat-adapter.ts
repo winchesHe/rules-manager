@@ -25,6 +25,7 @@ interface ActiveTurn {
   sessionId: string
   directory: string
   content: string
+  toolPolicy: NonNullable<NativeTurnRequest['toolPolicy']>
   structuredOutput?: unknown
   contextUsage?: { usedTokens: number; maxTokens: number }
   onEvent?: NativeTurnRequest['onEvent']
@@ -132,7 +133,7 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
     const client = await this.ensureClient(request.workingDirectory)
     const sessionId = resuming
       ? request.nativeSessionId
-      : await this.createSession(client, request.workingDirectory)
+      : await this.createSession(client, request.workingDirectory, request.toolPolicy ?? 'full')
     if (!sessionId) throw new Error('OpenCode session id 不可用')
     await this.ensureEventStream(client)
 
@@ -141,6 +142,7 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
         sessionId,
         directory: request.workingDirectory,
         content: '',
+        toolPolicy: request.toolPolicy ?? 'full',
         ...(request.onEvent ? { onEvent: request.onEvent } : {}),
         resolve,
         reject,
@@ -164,10 +166,16 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
     return completion
   }
 
-  private async createSession(client: OpenCodeClient, directory: string): Promise<string> {
+  private async createSession(
+    client: OpenCodeClient,
+    directory: string,
+    toolPolicy: NonNullable<NativeTurnRequest['toolPolicy']>,
+  ): Promise<string> {
     const response = await client.session.create({
       directory,
-      permission: [{ permission: '*', pattern: '*', action: 'allow' }],
+      permission: [{
+        permission: '*', pattern: '*', action: toolPolicy === 'none' ? 'deny' : 'allow',
+      }],
     })
     if (response.error || !response.data?.id) {
       throw new Error(`OpenCode session.create 失败：${JSON.stringify(response.error)}`)
@@ -221,7 +229,7 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
         void this.client.permission.reply({
           requestID: requestId,
           directory: active.directory,
-          reply: 'always',
+          reply: active.toolPolicy === 'none' ? 'reject' : 'always',
         }).catch((error) => this.failActive(toError(error)))
       }
       return

@@ -91,8 +91,9 @@ export class ClaudeChatAdapter implements ChatProviderAdapter {
     const options: Record<string, unknown> = {
       cwd: request.workingDirectory,
       persistSession: true,
-      permissionMode: 'bypassPermissions',
-      allowDangerouslySkipPermissions: true,
+      ...(request.toolPolicy === 'none'
+        ? { tools: [], permissionMode: 'default', allowDangerouslySkipPermissions: false }
+        : { permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true }),
       includePartialMessages: true,
       effort: request.config.effort,
       settings: { fastMode: request.config.fastMode },

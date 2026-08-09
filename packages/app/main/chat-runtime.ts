@@ -15,6 +15,8 @@ export interface NativeTurnRequest {
   config: NativeTurnConfig
   outputSchema?: Record<string, unknown>
   mentions?: NativeTurnMention[]
+  /** 限制内部 Evidence job 的 Provider 工具面；普通 Chat 默认保持 full。 */
+  toolPolicy?: 'full' | 'none'
   onEvent?: (event: NativeChatEvent) => void
 }
 

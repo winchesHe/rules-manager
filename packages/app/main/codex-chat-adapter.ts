@@ -211,7 +211,18 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         ...(request.config.model ? { model: request.config.model } : {}),
         cwd: request.workingDirectory,
         approvalPolicy: 'never',
-        sandbox: 'danger-full-access',
+        sandbox: request.toolPolicy === 'none' ? 'read-only' : 'danger-full-access',
+        ...(request.toolPolicy === 'none' ? {
+          config: {
+            features: {
+              shell_tool: false,
+              unified_exec: false,
+              standalone_web_search: false,
+            },
+            tools: { web_search: false },
+            mcp_servers: {},
+          },
+        } : {}),
         developerInstructions: HOST_SESSION_POLICY,
       }))
       const threadId = asString(asRecord(response.thread).id)
@@ -249,7 +260,9 @@ export class CodexChatAdapter implements ChatProviderAdapter {
         ],
         cwd: request.workingDirectory,
         approvalPolicy: 'never',
-        sandboxPolicy: { type: 'dangerFullAccess' },
+        sandboxPolicy: request.toolPolicy === 'none'
+          ? { type: 'readOnly', networkAccess: false }
+          : { type: 'dangerFullAccess' },
         ...(request.config.model ? { model: request.config.model } : {}),
         effort: request.config.effort,
         summary: 'auto',

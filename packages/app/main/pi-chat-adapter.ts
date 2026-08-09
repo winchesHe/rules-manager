@@ -112,7 +112,7 @@ export class PiChatAdapter implements ChatProviderAdapter {
     if (resuming && !sessionFile) {
       throw new Error('Pi resume 需要 native session file')
     }
-    await this.ensureProcess(request.workingDirectory, sessionFile)
+    await this.ensureProcess(request.workingDirectory, sessionFile, request.toolPolicy ?? 'full')
     if (this.interruptRequested) throw new Error('Pi turn interrupted')
     if (request.config.model) {
       const model = parseModel(request.config.model)
@@ -135,10 +135,20 @@ export class PiChatAdapter implements ChatProviderAdapter {
     return completion
   }
 
-  private async ensureProcess(cwd: string, sessionFile?: string): Promise<void> {
+  private async ensureProcess(
+    cwd: string,
+    sessionFile?: string,
+    toolPolicy: NonNullable<NativeTurnRequest['toolPolicy']> = 'full',
+  ): Promise<void> {
     if (this.rpc) return
     this.cwd = cwd
-    const args = ['--mode', 'rpc', ...(sessionFile ? ['--session', sessionFile] : [])]
+    const args = [
+      '--mode', 'rpc',
+      ...(toolPolicy === 'none'
+        ? ['--no-tools', '--no-extensions', '--no-skills', '--no-context-files']
+        : []),
+      ...(sessionFile ? ['--session', sessionFile] : []),
+    ]
     const rpc = new JsonlRpcProcess({
       name: 'Pi RPC', command: 'pi', args, cwd,
       spawnProcess: (_command, launchArgs, launchCwd) => this.createProcess(launchArgs, launchCwd),

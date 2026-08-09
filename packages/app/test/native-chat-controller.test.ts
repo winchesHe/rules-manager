@@ -165,10 +165,9 @@ describe('NativeChatController', () => {
       start: async (request) => {
         requests.push({ chatId, message: request.message })
         if (request.message.includes('[memory-manager:live-evidence-map]')) {
-          const chunkPath = request.mentions?.[0]?.path
-          if (!chunkPath) throw new Error('map chunk mention is required')
-          const chunk = fs.readFileSync(chunkPath, 'utf8')
-          const sourceRevision = chunk.match(/"sourceRevision":"([^"]+)"/)?.[1]
+          expect(request.toolPolicy).toBe('none')
+          expect(request.mentions).toBeUndefined()
+          const sourceRevision = request.message.match(/\\"sourceRevision\\":\\"([^\\"]+)\\"/)?.[1]
           if (!sourceRevision) throw new Error('source revision is required')
           return {
             nativeSessionId: 'native-map',

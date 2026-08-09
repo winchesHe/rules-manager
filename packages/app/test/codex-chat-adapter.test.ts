@@ -125,6 +125,34 @@ describe('CodexChatAdapter', () => {
     expect(JSON.stringify(events)).not.toContain('must-not-leak')
   })
 
+  it('none 工具策略使用无网络只读 sandbox', async () => {
+    const server = fakeServer()
+    const adapter = new CodexChatAdapter(() => server.child)
+
+    await adapter.start({
+      chatId: 'codex-evidence', provider: 'codex', message: 'map',
+      workingDirectory: '/isolated', config: { effort: 'medium', fastMode: false },
+      toolPolicy: 'none',
+    })
+
+    expect(server.requests.find((item) => item.method === 'thread/start')?.params)
+      .toMatchObject({
+        sandbox: 'read-only',
+        approvalPolicy: 'never',
+        config: {
+          features: {
+            shell_tool: false,
+            unified_exec: false,
+            standalone_web_search: false,
+          },
+          tools: { web_search: false },
+          mcp_servers: {},
+        },
+      })
+    expect(server.requests.find((item) => item.method === 'turn/start')?.params)
+      .toMatchObject({ sandboxPolicy: { type: 'readOnly', networkAccess: false } })
+  })
+
   it('重启后 resume 原 thread，interrupt 使用当前 turn ID', async () => {
     const server = fakeServer()
     const adapter = new CodexChatAdapter(() => server.child)

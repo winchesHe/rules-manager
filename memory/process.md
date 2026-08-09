@@ -3338,3 +3338,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Evals payload/failure 定向测试、全量测试、`tsc --noEmit`、Langfuse 缺凭据 CLI 失败 smoke 与
   `git diff --check` 通过。
 - 提交信息：`feat: 隔离 Langfuse Reporter payload 与失败`
+
+## Session Evidence 最终验收与 Map 工具隔离（2026-08-09）
+
+- Completion Audit 发现 Map job 原先只通过 Prompt 声明“不要执行”，但四个 Provider Adapter 仍继承普通 Chat 的工具权限；
+  这不足以证明 Prompt injection 不会触发 Shell、Write、网络或业务工具。
+- 新增 `NativeTurnRequest.toolPolicy`，普通 Chat 缺省为 full；Map 和中间 Reduce 显式使用 none。宿主在临时目录内读取
+  chunk 并以 JSON 字符串注入 Prompt，因此模型无需 Read 或 mention 工具。
+- Claude none 使用空 tools 并关闭 bypassPermissions；OpenCode 使用 deny-all Session 且 permission.asked 兜底 reject；
+  Pi 启动时禁用 tools/extensions/skills/context files；Codex 关闭 shell_tool/unified_exec/web search/MCP 配置，并使用
+  networkAccess=false 的 read-only sandbox。四 Provider 均新增合同测试，普通 Chat 原有 Full access 断言保持通过。
+- 最终全量回归：Core 36 suites / 358 tests、App 42 suites / 264 tests、Evals 6 suites / 25 tests，全部 0 failed、
+  0 skipped；Core/App/Evals build、`git diff --check`、v3 `hard_gates=pass`、v0-v3
+  `dataset=match v3_thresholds=pass` 全部通过。
+- production Electron 在隔离 HOME 中复验：完整 10/10、部分 7/8（unavailable/readFailed/processFailed 各 1）、
+  changedDuringRun=1 和已中断状态均正确显示；主 `~/.memory-manager` 文件状态摘要前后一致。隔离 fixture 已移入废纸篓。
+- 当前机器仍无可用 Docker daemon、localhost Langfuse 或凭据，因此真实 Langfuse UI/API readback 未执行；Reporter SDK
+  合同、hash readback、payload allowlist 与不可达/鉴权/flush 失败隔离均由 25 个 Evals 测试覆盖，生产链路默认 none。
+- `simplify` 复核保留单一可选 `toolPolicy`，不为每个 Adapter 发明不同业务接口，也不改变普通 Chat 行为。
+- 提交信息：`feat: 完成 Session Evidence 最终验收`

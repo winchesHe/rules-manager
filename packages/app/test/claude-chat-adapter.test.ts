@@ -111,6 +111,26 @@ describe('ClaudeChatAdapter', () => {
     expect(calls[0]).not.toHaveProperty('systemPrompt')
   })
 
+  it('none 工具策略从 Claude 上下文移除全部工具并关闭绕过权限', async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const adapter = new ClaudeChatAdapter(({ options }) => {
+      calls.push(options as Record<string, unknown>)
+      return (async function* () {
+        yield { type: 'result', subtype: 'success', session_id: 'claude-evidence', result: '{}' }
+      })()
+    })
+
+    await adapter.start({
+      chatId: 'evidence-map', provider: 'claude', message: 'map',
+      workingDirectory: '/isolated', config: { effort: 'medium', fastMode: false },
+      toolPolicy: 'none',
+    })
+
+    expect(calls[0]).toMatchObject({
+      tools: [], permissionMode: 'default', allowDangerouslySkipPermissions: false,
+    })
+  })
+
   it('按 Content Block 顺序区分 Assistant、Thinking 与 Tool', async () => {
     const events: unknown[] = []
     const adapter = new ClaudeChatAdapter(() => (async function* () {
