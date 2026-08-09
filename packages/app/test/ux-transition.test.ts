@@ -44,4 +44,13 @@ describe('Agent Dashboard UX transitions', () => {
     expect(projects).toContain('const deferredSessionQuery = useDeferredValue(sessionQuery)')
     expect(projects).toContain('busy={isSessionFiltering}')
   })
+
+  it('主导航切换不会显示居中的全屏加载转圈', () => {
+    const overview = fs.readFileSync(path.join(rendererRoot, 'views/OverviewView.tsx'), 'utf8')
+    const projects = fs.readFileSync(path.join(rendererRoot, 'views/ProjectsView.tsx'), 'utf8')
+
+    expect(overview).not.toContain("if (loading) return <ViewLoading")
+    expect(projects).not.toContain("if (loading) return <ViewLoading")
+    expect(projects).toContain('aria-label={t(\'loading.projects\')} className="min-h-64"')
+  })
 })

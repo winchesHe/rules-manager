@@ -12,6 +12,8 @@
 - Scan 结果筛选、Projects 搜索与筛选、项目 Session 搜索与筛选使用 140ms 结果过渡。
 - 文本搜索使用 `useDeferredValue`。新条件计算期间保留旧结果并降低透明度，完成后再切换，避免输入阻塞和白屏。
 - Projects 列表显示「当前结果 / 总数」，以 `aria-live` 向辅助技术播报；过渡容器使用 `aria-busy` 标记处理中状态。
+- 主导航进入 Scan / Projects 时立即呈现页面结构，不显示居中的全屏加载转圈；Projects 数据返回前保留空表格
+  容器，避免空白页和错误空状态闪烁。
 - 可点击按钮提供 1px 下沉与 0.99 缩放的按压反馈。
 - `prefers-reduced-motion: reduce` 下页面、筛选和按钮位移动画全部归零。
 
@@ -20,6 +22,7 @@
 | 观察点 | 验证方式 |
 |---|---|
 | 主导航和内部页面切换不再硬切，且不改变原布局尺寸 | UX 合同测试 + Electron 视觉检查 |
+| 切换到 Scan / Projects 不出现居中的全屏 Loading | UX 合同测试 + Electron 快速切页检查 |
 | 快速输入搜索词时输入保持响应，结果更新有忙碌反馈 | 合同测试 + Electron 交互检查 |
 | 筛选结果数量正确，空状态仍保留 | 既有 view-model 测试 + App 全量测试 |
 | reduced motion 不产生位移和时长 | UX 合同测试 |

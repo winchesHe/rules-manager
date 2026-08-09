@@ -3628,3 +3628,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `git diff --check` 通过；Electron renderer 为 3,176.12 kB，未引入动画库体积，build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`feat: 完善页面切换与筛选体验`
+
+## 移除主导航全屏 Loading（2026-08-09）
+
+- 用户指出从侧栏切换到新页面时，内容区中央的蓝色 Spinner 造成明显空白闪屏。本轮仅处理 Scan / Projects
+  主导航首屏，不改变操作按钮、扫描进度、详情读取等局部异步反馈。
+- Scan 不再等待 `scan.status` 后才挂载页面；页面标题、操作和稳定容器先随 180ms 切页动效出现，状态返回后
+  再填充结果。Projects 同样立即显示 Header、搜索、筛选与表格容器，数据返回前隐藏 0 / 0 计数并保留
+  空表格高度，避免中央转圈、错误空状态和布局跳动。
+- 同步 `DESIGN.md` 与 UX 计划，并扩展 UX 合同测试，锁定主导航不得回退到 `ViewLoading` 全屏转圈。
+- Computer Use 在真实 Electron 中重载后快速进入 Projects，首帧直接显示页面结构及数据，没有中央 Spinner；
+  检查后恢复浅色、展开侧栏的最近扫描页。
+- App 全量 45 suites / 275 tests、Core 全量 36 suites / 359 tests、Electron production build 与
+  `git diff --check` 通过；App `typecheck` 仍受既有跨包 `rootDir` / file list 配置错误阻塞，build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`fix: 移除页面切换全屏加载`

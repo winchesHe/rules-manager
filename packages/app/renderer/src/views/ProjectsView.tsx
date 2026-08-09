@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
 import { FilterTransition, PageTransition } from '../components/UxTransition'
-import { EmptyProjects, ViewError, ViewLoading } from '../components/ViewStates'
+import { EmptyProjects, ViewError } from '../components/ViewStates'
 import { currentLocale, i18n } from '../i18n'
 import { formatBytes, formatDateTime } from '../i18n/format'
 import type {
@@ -139,7 +139,6 @@ export function ProjectsView({
     setPage('detail')
   }
 
-  if (loading) return <ViewLoading label={t('loading.projects')} />
   if (error) return <ViewError message={error} title={t('errors.loadProjects')} />
   if (page === 'detail' && selectedProject) {
     return (
@@ -186,9 +185,11 @@ export function ProjectsView({
               </Button>
             ))}
           </div>
-          <span aria-live="polite" className="text-xs tabular-nums text-muted">
-            {t('list.filteredCount', { visible: filteredRows.length, total: rows.length })}
-          </span>
+          {!loading && (
+            <span aria-live="polite" className="text-xs tabular-nums text-muted">
+              {t('list.filteredCount', { visible: filteredRows.length, total: rows.length })}
+            </span>
+          )}
         </div>
       </div>
 
@@ -198,7 +199,9 @@ export function ProjectsView({
       >
         <Card className="min-h-80 border border-border bg-surface shadow-none">
           <Card.Content className="p-0">
-          {projects.length === 0 ? (
+          {loading ? (
+            <div aria-label={t('loading.projects')} className="min-h-64" />
+          ) : projects.length === 0 ? (
             <EmptyProjects />
           ) : filteredRows.length === 0 ? (
             <div className="grid min-h-64 place-items-center text-sm text-muted">
