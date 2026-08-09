@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
 import { FilterTransition, PageTransition } from '../components/UxTransition'
-import { ViewError } from '../components/ViewStates'
+import { TablePageSkeleton, ViewError } from '../components/ViewStates'
 import { formatDateTime } from '../i18n/format'
 import { currentLocale, i18n } from '../i18n'
 import type {
@@ -39,6 +39,7 @@ export function OverviewView({
   const [selectedAgents, setSelectedAgents] = useState<AgentName[]>(agents)
   const [scanRange, setScanRange] = useState<ScanRange>('full')
   const [scanDays, setScanDays] = useState('7')
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [scanState, setScanState] = useState<RunState>('idle')
@@ -114,6 +115,7 @@ export function OverviewView({
     window.api.onEvent('scan.cancelled', onCancelled)
     window.api.onEvent('scan.failed', onFailed)
 
+    setLoading(true)
     setError(null)
     void afterNextPaint(() => window.api.invoke<ScanStatus>('scan.status'))
       .then((status) => {
@@ -140,6 +142,9 @@ export function OverviewView({
       })
       .catch((reason: unknown) => {
         if (current) setError(reason instanceof Error ? reason.message : String(reason))
+      })
+      .finally(() => {
+        if (current) setLoading(false)
       })
     return () => {
       current = false
@@ -554,7 +559,13 @@ export function OverviewView({
         </div>
       )}
 
-      {scanning && agentStates ? (
+      {loading ? (
+        <Card className="overflow-hidden border border-border bg-surface shadow-none">
+          <Card.Content className="p-0">
+            <TablePageSkeleton columns={6} label={t('loading.scan')} rows={9} />
+          </Card.Content>
+        </Card>
+      ) : scanning && agentStates ? (
         <ScanProgressPanel
           agentStates={agentStates}
           onCancel={() => void cancelScan()}

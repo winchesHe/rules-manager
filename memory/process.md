@@ -3643,3 +3643,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `git diff --check` 通过；App `typecheck` 仍受既有跨包 `rootDir` / file list 配置错误阻塞，build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`fix: 移除页面切换全屏加载`
+
+## 主导航首屏改为表格骨架（2026-08-09）
+
+- 用户进一步明确：不要用空内容容器替代 Spinner，而要展示骨架屏。新增共享 `TablePageSkeleton`，直接复用
+  HeroUI `Skeleton` 的 shimmer 动画，按最终表格列宽、表头和 3.55rem 行高占位。
+- Projects 使用 5 列 / 8 行骨架，Scan 使用 6 列 / 9 行骨架；标题、搜索和筛选先正常呈现，数据返回后只替换
+  表格内容，避免中央转圈、大块空白和高度跳变。局部操作 Spinner 行为保持不变。
+- 同步 `DESIGN.md` 与 UX 计划，UX 合同测试增加 Skeleton、shimmer 以及 Scan / Projects 接入断言。
+- Computer Use 重载 Electron 后切换 Scan / Projects，确认最终页面结构、表格和侧栏状态无回归，验收后恢复
+  浅色、展开侧栏的最近扫描页。
+- App 全量 45 suites / 275 tests、Core 全量 36 suites / 359 tests、Electron production build 与
+  `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 使用骨架屏展示页面加载`
