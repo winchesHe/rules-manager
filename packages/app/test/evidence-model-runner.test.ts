@@ -1,7 +1,10 @@
 import { describe, expect, it } from '@jest/globals'
 import type { CoverageLedger } from '../../core/src/evidence-coverage.js'
 import type { SessionCapsule } from '../../core/src/live-evidence-context.js'
-import { NativeEvidenceModelRunner } from '../main/evidence-model-runner.js'
+import {
+  EvidenceStructuredOutputError,
+  NativeEvidenceModelRunner,
+} from '../main/evidence-model-runner.js'
 import {
   ChatRuntimeManager,
   type ChatProviderAdapter,
@@ -124,5 +127,138 @@ describe('NativeEvidenceModelRunner', () => {
       expect.stringMatching(/^run-1:reduce-batch:[a-f0-9]{16}$/),
     ])
     expect(reduceResults).toEqual(['handle-next'])
+  })
+
+  it.each(['claude', 'codex', 'opencode'] as const)(
+    '%s 使用原生 outputSchema 且不做文本重试',
+    async (provider) => {
+      const requests: NativeTurnRequest[] = []
+      const runtime = new ChatRuntimeManager((): ChatProviderAdapter => ({
+        start: async (request) => {
+          requests.push(request)
+          return {
+            nativeSessionId: `${provider}-native`,
+            content: '',
+            structuredOutput: {
+              sessionId: 'session-native', agent: 'codex', chunkIndex: 0, chunkCount: 1,
+              summary: 'summary', facts: [], relevant: false,
+            },
+          }
+        },
+        resume: async () => { throw new Error('不应 resume') },
+        interrupt: async () => undefined,
+        readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+        archive: async () => undefined,
+        unarchive: async () => undefined,
+        delete: async () => undefined,
+        close: async () => undefined,
+      }))
+      const runner = new NativeEvidenceModelRunner({
+        runtime, provider, workingDirectory: '/workspace',
+        config: { effort: 'medium', fastMode: false },
+      })
+
+      await runner.runMap({
+        runId: `run-${provider}`, question: 'question', sessionId: 'session-native',
+        agent: 'codex', chunkIndex: 0, chunkCount: 1, chunkPath: '/tmp/chunk.md',
+        sourceRevision: 'revision-1',
+      })
+
+      expect(requests).toHaveLength(1)
+      expect(requests[0].outputSchema).toMatchObject({ type: 'object' })
+      expect(requests[0].message).toContain('证据文件：/tmp/chunk.md')
+      expect(requests[0].message).not.toContain('Pi 结构化输出要求')
+    },
+  )
+
+  it('Pi 严格 JSON 首次失败后用新 Native handle resume，并在第二次通过 Zod', async () => {
+    const requests: NativeTurnRequest[] = []
+    const runtime = new ChatRuntimeManager((): ChatProviderAdapter => ({
+      start: async (request) => {
+        requests.push(request)
+        return {
+          nativeSessionId: 'pi-map',
+          nativeSessionHandle: { sessionId: 'pi-map', nativeHandle: '/tmp/pi-map.jsonl' },
+          content: 'not json',
+        }
+      },
+      resume: async (request) => {
+        requests.push(request)
+        return {
+          nativeSessionId: 'pi-map',
+          nativeSessionHandle: { sessionId: 'pi-map', nativeHandle: '/tmp/pi-map.jsonl' },
+          content: JSON.stringify({
+            sessionId: 'session-pi', agent: 'pi', chunkIndex: 0, chunkCount: 1,
+            summary: 'summary', facts: [], relevant: false,
+          }),
+        }
+      },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }))
+    const runner = new NativeEvidenceModelRunner({
+      runtime, provider: 'pi', workingDirectory: '/workspace',
+      config: { effort: 'medium', fastMode: false },
+    })
+
+    await expect(runner.runMap({
+      runId: 'run-pi', question: 'question', sessionId: 'session-pi', agent: 'pi',
+      chunkIndex: 0, chunkCount: 1, chunkPath: '/tmp/chunk.md', sourceRevision: 'revision-1',
+    })).resolves.toMatchObject({ sessionId: 'session-pi', agent: 'pi' })
+
+    expect(requests).toHaveLength(2)
+    expect(requests[0].message).toContain('Pi 结构化输出要求')
+    expect(requests[0].message).toContain('JSON Schema')
+    expect(requests[0].message).toContain('证据文件：/tmp/chunk.md')
+    expect(requests[1]).toMatchObject({
+      nativeSessionId: 'pi-map',
+      nativeSessionHandle: { sessionId: 'pi-map', nativeHandle: '/tmp/pi-map.jsonl' },
+    })
+    expect(requests[1].message).toContain('第 2 次尝试')
+  })
+
+  it.each([
+    { provider: 'claude' as const, attempts: 1 },
+    { provider: 'pi' as const, attempts: 2 },
+  ])('$provider 非法输出使用统一错误合同', async ({ provider, attempts }) => {
+    let calls = 0
+    const runtime = new ChatRuntimeManager((): ChatProviderAdapter => ({
+      start: async () => {
+        calls += 1
+        return { nativeSessionId: 'invalid-native', content: 'invalid' }
+      },
+      resume: async () => {
+        calls += 1
+        return { nativeSessionId: 'invalid-native', content: 'still invalid' }
+      },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => undefined,
+    }))
+    const runner = new NativeEvidenceModelRunner({
+      runtime, provider, workingDirectory: '/workspace',
+      config: { effort: 'medium', fastMode: false },
+    })
+
+    const promise = runner.runMap({
+      runId: `run-invalid-${provider}`, question: 'question', sessionId: 'session-invalid',
+      agent: 'codex', chunkIndex: 0, chunkCount: 1, chunkPath: '/tmp/chunk.md',
+      sourceRevision: 'revision-1',
+    })
+    await expect(promise).rejects.toMatchObject({
+      name: EvidenceStructuredOutputError.name,
+      code: 'EVIDENCE_STRUCTURED_OUTPUT_INVALID',
+      provider,
+      stage: 'map',
+      attempts,
+    })
+    expect(calls).toBe(attempts)
   })
 })

@@ -3125,3 +3125,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 定向 3 suites / 14 tests、App 定向 2 suites / 3 tests、Core 全量 34 suites / 332 tests、App 全量
   42 suites / 248 tests、Core/App production build 与 `git diff --check` 通过；build 仅保留既有 warnings。
 - 提交信息：`feat: 支持 Live Evidence 并发与分层 Reduce`
+
+## Live Evidence 四 Provider 结构化输出合同（2026-08-09）
+
+- Chunk 3.3 在 App Runner 收敛 `runStructured`：Claude、Codex、OpenCode 继续使用各 Adapter 已支持的原生
+  `outputSchema`，只尝试一次；解析统一经过 Core Zod Schema。
+- Pi 使用相同 JSON Schema 生成严格 JSON 指令，不接受 Markdown fence 或解释文本；首次 JSON/Zod 失败后使用
+  Provider 返回的新 `nativeSessionId/nativeHandle` resume，最多尝试 2 次，避免创建无界重试或丢失上下文。
+- 四 Provider 的结构无效统一抛出 `EvidenceStructuredOutputError`，稳定 code 为
+  `EVIDENCE_STRUCTURED_OUTPUT_INVALID`，并携带 provider、map/reduce-batch/reduce stage 与 attempts，不把原始
+  模型正文放入错误消息。
+- Map Prompt 明确包含私有 chunk 路径和只读约束；Codex 同时保留 mention，Claude/OpenCode/Pi 可通过路径读取
+  临时证据，不再出现只有 Codex 真正拿到 chunk 的 Provider 差异。
+- `simplify` 复核保留一个通用结构化执行循环，未为三个阶段复制 retry/parse 逻辑。
+- Evidence Runner + Claude/Codex/OpenCode/Pi Adapter 定向 5 suites / 35 tests、App 全量 42 suites /
+  254 tests、App production build 与 `git diff --check` 通过；build 只保留既有 Markstream warnings。
+- 提交信息：`feat: 统一 Evidence Provider 结构化输出`
