@@ -36,7 +36,7 @@ describe('home workflow layout', () => {
     expect(source).toContain("'rules-management': true")
     expect(source).toContain("'agent-context': true")
     expect(source).toContain('role="group"')
-    expect(source).toContain('aria-expanded={expanded}')
+    expect(source).toContain('aria-expanded={!sidebarCollapsed && expanded}')
     expect(source).toContain('aria-controls={`${group.id}-items`}')
     expect(source).toContain('<ChevronDown')
     expect(source).toContain("expanded ? 'rotate-0' : '-rotate-90'")

@@ -17,6 +17,8 @@
   "agentInstructions": "Agent instructions",
   "agentMemory": "Agent Memory",
   "generationHistory": "Generation history",
+  "collapseSidebar": "Collapse sidebar",
+  "expandSidebar": "Expand sidebar",
   "switchLight": "Switch to light theme",
   "switchDark": "Switch to dark theme"
 }

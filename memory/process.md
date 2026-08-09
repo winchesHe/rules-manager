@@ -3421,3 +3421,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 使用 Computer Use 在真实 Electron 中复验默认双组展开、规则管理独立折叠、Agent 指令叶子跳转和唯一选中态，
   并检查炭灰深色与白蓝浅色下的层级对比；检查后恢复原浅色偏好与双组展开状态。
 - 提交信息：`feat: 收敛知识库侧栏导航`
+
+## Agent Dashboard 可折叠侧栏（2026-08-09）
+
+- App Shell 新增运行时 `sidebarCollapsed` 状态：默认保持 11.125rem 展开侧栏，收起后切换为 3.5rem 图标栏，
+  主工作区通过 `grid-template-columns` 过渡自动扩展，并遵循 reduced motion。
+- 收起状态保留品牌图标、Scan / Projects / Chat、规则管理 / Agent 上下文、Settings 与主题按钮；Workspace 与
+  Settings 继续直接操作，点击知识库父级图标会先恢复侧栏并确保该组展开，避免隐藏叶子后形成导航死路。
+- 边缘按钮使用 PanelLeftClose / PanelLeftOpen、双语辅助文案和 Tooltip；收起时导航图标补充 `aria-label` 与
+  原生提示。折叠状态仅在当前 App 运行期间保留，本轮不新增持久化设置。
+- 新增 `sidebar-collapse-toggle` 作为独立 `no-drag` 定位层。Computer Use 首轮发现复用 `window-no-drag` 会因其
+  `position: relative` 覆盖绝对定位、导致按钮压住品牌图标；拆出专用绝对定位类后，按钮稳定贴在侧栏分隔线上。
+- 新增 `docs/plans/agent-dashboard-collapsible-sidebar.md`，同步 `DESIGN.md`、App Shell、拖拽、导航和 i18n 合同；
+  不修改既有主题 token、Settings、Rules 页面或 IPC。
+- App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
+  `markstream-react` PURE comment warning。
+- Computer Use 复验浅色展开/收起、收起状态 Projects 导航、知识库图标恢复侧栏，以及深色图标栏对比；检查后
+  恢复浅色、展开侧栏和扫描页。
+- 提交信息：`feat: 支持收起主侧栏`

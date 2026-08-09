@@ -8,6 +8,8 @@ import {
   FolderKanban,
   MessageSquareText,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   ScanSearch,
   ScrollText,
   Settings,
@@ -85,6 +87,7 @@ export function App() {
   })
   const [rulesViewKey, setRulesViewKey] = useState(0)
   const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme(window.localStorage))
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const selectRulesSection = (section: RulesSection) => {
     const groupId = rulesNavigationGroupBySection[section]
@@ -110,30 +113,68 @@ export function App() {
           onDoubleClick={() => { void window.api.invoke('window.toggleMaximize') }}
         />
       </div>
-      <div className="grid h-screen w-screen max-w-full grid-cols-[11.125rem_minmax(0,1fr)] overflow-hidden bg-background text-foreground max-[980px]:grid-cols-[10.25rem_minmax(0,1fr)]">
-        <aside className="flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 pb-3 pt-11">
-            <div className="mb-5 flex items-center gap-2.5 px-2">
+      <div
+        className={`grid h-screen w-screen max-w-full overflow-hidden bg-background text-foreground transition-[grid-template-columns] duration-200 motion-reduce:transition-none ${
+          sidebarCollapsed
+            ? 'grid-cols-[3.5rem_minmax(0,1fr)]'
+            : 'grid-cols-[11.125rem_minmax(0,1fr)] max-[980px]:grid-cols-[10.25rem_minmax(0,1fr)]'
+        }`}
+      >
+        <aside
+          className={`relative flex h-screen min-h-0 flex-col border-r border-border bg-sidebar pb-3 pt-11 ${
+            sidebarCollapsed ? 'px-2' : 'px-3'
+          }`}
+        >
+            <div className="sidebar-collapse-toggle">
+              <Tooltip>
+                <Button
+                  aria-label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
+                  className="size-8 min-w-8 rounded-md border border-border bg-sidebar p-0 text-muted shadow-sm hover:bg-surface-hover hover:text-foreground"
+                  isIconOnly
+                  onPress={() => setSidebarCollapsed((current) => !current)}
+                  variant="ghost"
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeftOpen aria-hidden="true" size={15} />
+                  ) : (
+                    <PanelLeftClose aria-hidden="true" size={15} />
+                  )}
+                </Button>
+                <Tooltip.Content>
+                  {sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
+                </Tooltip.Content>
+              </Tooltip>
+            </div>
+
+            <div className={`mb-5 flex h-7 items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2.5 px-2'}`}>
               <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                 <Blocks aria-hidden="true" size={16} />
               </div>
-              <div className="grid min-w-0 gap-0.5">
-                <strong className="whitespace-nowrap text-xs font-medium tracking-[-0.02em] text-foreground">Agent Dashboard</strong>
-                <span className="truncate text-[10px] text-muted">{t('localIntelligence')}</span>
-              </div>
+              {!sidebarCollapsed && (
+                <div className="grid min-w-0 gap-0.5">
+                  <strong className="whitespace-nowrap text-xs font-medium tracking-[-0.02em] text-foreground">Agent Dashboard</strong>
+                  <span className="truncate text-[10px] text-muted">{t('localIntelligence')}</span>
+                </div>
+              )}
             </div>
 
-            <nav aria-label={t('mainLabel')} className="min-h-0 overflow-y-auto">
+            <nav aria-label={t('mainLabel')} className="min-h-0 overflow-x-hidden overflow-y-auto">
               <div>
-                <p className="mb-1 px-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted/70">
-                  {t('workspace')}
-                </p>
-                <div className="grid gap-0.5">
+                {!sidebarCollapsed && (
+                  <p className="mb-1 px-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted/70">
+                    {t('workspace')}
+                  </p>
+                )}
+                <div aria-label={t('workspace')} className="grid gap-0.5">
                   {workspaceNavigation.map(({ id, labelKey, icon: Icon }) => {
                     const active = activeView === id
                     return (
                       <Button
+                        aria-label={sidebarCollapsed ? t(labelKey) : undefined}
                         aria-current={active ? 'page' : undefined}
-                        className={`h-[2.125rem] justify-start gap-2 px-2 text-[13px] ${
+                        className={`h-[2.125rem] text-[13px] ${
+                          sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-2 px-2'
+                        } ${
                           active
                             ? 'bg-surface-hover text-foreground'
                             : 'text-muted hover:bg-surface-hover hover:text-foreground'
@@ -141,20 +182,23 @@ export function App() {
                         fullWidth
                         key={id}
                         onPress={() => setActiveView(id)}
+                        title={sidebarCollapsed ? t(labelKey) : undefined}
                         variant="ghost"
                       >
                         <Icon aria-hidden="true" size={16} />
-                        <span>{t(labelKey)}</span>
+                        {!sidebarCollapsed && <span>{t(labelKey)}</span>}
                       </Button>
                     )
                   })}
                 </div>
               </div>
 
-              <div className="mt-4">
-                <p className="mb-1 px-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted/70">
-                  {t('knowledge')}
-                </p>
+              <div className={sidebarCollapsed ? 'mt-3 border-t border-border pt-3' : 'mt-4'}>
+                {!sidebarCollapsed && (
+                  <p className="mb-1 px-2 text-[9px] font-medium uppercase tracking-[0.1em] text-muted/70">
+                    {t('knowledge')}
+                  </p>
+                )}
                 <div aria-label={t('rulesLabel')} className="grid gap-1">
                   {rulesNavigationGroups.map((group) => {
                     const expanded = expandedRulesGroups[group.id]
@@ -166,30 +210,45 @@ export function App() {
                       <div className="grid gap-0.5" key={group.id} role="group">
                         <Button
                           aria-controls={`${group.id}-items`}
-                          aria-expanded={expanded}
-                          className={`h-[2.125rem] justify-start gap-2 px-2 text-[13px] ${
+                          aria-expanded={!sidebarCollapsed && expanded}
+                          aria-label={sidebarCollapsed ? t(group.labelKey) : undefined}
+                          className={`h-[2.125rem] text-[13px] ${
+                            sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-2 px-2'
+                          } ${
                             groupActive
                               ? 'text-foreground'
                               : 'text-muted hover:bg-surface-hover hover:text-foreground'
                           }`}
                           fullWidth
-                          onPress={() => setExpandedRulesGroups((current) => ({
-                            ...current,
-                            [group.id]: !current[group.id],
-                          }))}
+                          onPress={() => {
+                            if (sidebarCollapsed) {
+                              setSidebarCollapsed(false)
+                              setExpandedRulesGroups((current) => ({ ...current, [group.id]: true }))
+                              return
+                            }
+                            setExpandedRulesGroups((current) => ({
+                              ...current,
+                              [group.id]: !current[group.id],
+                            }))
+                          }}
+                          title={sidebarCollapsed ? t(group.labelKey) : undefined}
                           variant="ghost"
                         >
                           <GroupIcon aria-hidden="true" size={16} />
-                          <span>{t(group.labelKey)}</span>
-                          <ChevronDown
-                            aria-hidden="true"
-                            className={`ml-auto transition-transform motion-reduce:transition-none ${
-                              expanded ? 'rotate-0' : '-rotate-90'
-                            }`}
-                            size={14}
-                          />
+                          {!sidebarCollapsed && (
+                            <>
+                              <span>{t(group.labelKey)}</span>
+                              <ChevronDown
+                                aria-hidden="true"
+                                className={`ml-auto transition-transform motion-reduce:transition-none ${
+                                  expanded ? 'rotate-0' : '-rotate-90'
+                                }`}
+                                size={14}
+                              />
+                            </>
+                          )}
                         </Button>
-                        {expanded && (
+                        {!sidebarCollapsed && expanded && (
                           <div
                             className="ml-[15px] grid gap-0.5 border-l border-border/80 py-0.5 pl-2"
                             id={`${group.id}-items`}
@@ -222,20 +281,28 @@ export function App() {
               </div>
             </nav>
 
-            <div className="mt-auto flex items-center gap-1 border-t border-border pt-3">
+            <div className={`mt-auto gap-1 border-t border-border pt-3 ${
+              sidebarCollapsed ? 'grid justify-items-center' : 'flex items-center'
+            }`}>
               <Button
+                aria-label={sidebarCollapsed ? t('settings') : undefined}
                 aria-current={activeView === 'settings' ? 'page' : undefined}
-                className={`h-[2.125rem] min-w-0 flex-1 justify-start gap-2 px-2 text-[13px] ${
+                className={`h-[2.125rem] min-w-0 text-[13px] ${
+                  sidebarCollapsed
+                    ? 'w-[2.125rem] justify-center px-0'
+                    : 'flex-1 justify-start gap-2 px-2'
+                } ${
                   activeView === 'settings'
                     ? 'bg-surface-hover text-foreground'
                     : 'text-muted hover:bg-surface-hover hover:text-foreground'
                 }`}
                 fullWidth
                 onPress={() => setActiveView('settings')}
+                title={sidebarCollapsed ? t('settings') : undefined}
                 variant="ghost"
               >
                 <Settings aria-hidden="true" size={16} />
-                <span>{t('settings')}</span>
+                {!sidebarCollapsed && <span>{t('settings')}</span>}
               </Button>
               <Tooltip>
                 <Button

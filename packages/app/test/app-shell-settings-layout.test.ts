@@ -30,6 +30,23 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     expect(source).toContain('<Moon aria-hidden="true"')
   })
 
+  it('侧栏可收起为可操作的图标栏，并从边缘按钮恢复', () => {
+    const source = fs.readFileSync(path.join(rendererRoot, 'App.tsx'), 'utf8')
+
+    expect(source).toContain('const [sidebarCollapsed, setSidebarCollapsed] = useState(false)')
+    expect(source).toContain("? 'grid-cols-[3.5rem_minmax(0,1fr)]'")
+    expect(source).toContain("'grid-cols-[11.125rem_minmax(0,1fr)] max-[980px]:grid-cols-[10.25rem_minmax(0,1fr)]'")
+    expect(source).toContain("sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')")
+    expect(source).toContain('onPress={() => setSidebarCollapsed((current) => !current)}')
+    expect(source).toContain('<PanelLeftOpen aria-hidden="true"')
+    expect(source).toContain('<PanelLeftClose aria-hidden="true"')
+    expect(source).toContain('className="sidebar-collapse-toggle"')
+    expect(source).toContain("sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-2 px-2'")
+    expect(source).toContain('!sidebarCollapsed && expanded && (')
+    expect(source).toContain('setSidebarCollapsed(false)')
+    expect(source).toContain("sidebarCollapsed ? 'grid justify-items-center' : 'flex items-center'")
+  })
+
   it('设置使用内嵌分区与行式控件，并承接真实主题配置', () => {
     const source = fs.readFileSync(
       path.join(rendererRoot, 'views/SettingsView.tsx'),
