@@ -3001,3 +3001,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 构建后的 Electron Renderer 通过 CDP 直接派发事件：组合态 Enter、229 Enter、Shift+Enter 的
   `defaultPrevented` 均为 false，普通 Enter 为 true。验证使用空 Composer，未持久化测试 Chat 或消息。
 - 提交信息：`fix: 阻止输入法 Enter 误发消息`
+
+## Live Session Evidence Coverage 状态机（2026-08-09）
+
+- `docs/specs/live-session-evidence-evaluation.md` 已明示对齐，并建立独立执行节奏
+  `docs/plans/live-session-evidence-evaluation.md`；4 指标判定为步骤数 Y、Core/App 双子项目 Y、schema N、
+  熟悉度提问 N，因此需要 plan。
+- Chunk 1.1 新增 Provider-neutral 的不可变 Coverage 状态机，分别约束 selected、源读取与模型处理；complete
+  模式禁止跳过 readable Session，targeted 必须显式记录 `not_required`，重复或越序状态转换直接失败。
+- 首个 JSONL 场景已走通 `selected → readable → processed → complete`；empty、unavailable、read failure、
+  process failure、targeted skip、重复结果和未访问完成均有行为测试。
+- 红测首先因 `evidence-coverage` 模块不存在得到 `TS2307`，实现后定向 1 suite / 6 tests 与 Core build 通过；
+  `simplify` 复核移除了状态汇总中的嵌套三元和类型强转，未改变行为。
+- 定向 1 suite / 6 tests、Core 全量 31 suites / 316 tests、Core build 与 `git diff --check` 全部通过；build
+  只保留既有 tsdown `define` warning。
+- 提交信息：`feat: 建立 Session Evidence Coverage 状态机`

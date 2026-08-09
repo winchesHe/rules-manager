@@ -44,7 +44,7 @@ npm test -w @memory-manager/core -- --runInBand \
 
 | # | 步 | 观察点 | 验证方式 | 状态 | reviewed |
 |---|---|---|---|---|---|
-| 1.1 | 新增 Provider-neutral 读取结果和 Coverage 纯状态机，并让一个 JSONL Session 走通 selected → readable → processed → complete | 测试输出包含完整 Ledger，计数公式一致 | 新增 `evidence-coverage.test.ts`，先红后绿 | ⏳ | —— |
+| 1.1 | 新增 Provider-neutral 读取结果和 Coverage 纯状态机，并让一个 JSONL Session 走通 selected → readable → processed → complete | 测试输出包含完整 Ledger，计数公式一致 | 新增 `evidence-coverage.test.ts`，先红后绿 | ✅ | 2026-08-09 |
 | 1.2 | 把现有 6 Agent 回源逻辑收敛为逐 Session Reader 结果，错误不再只能打印后丢失 | missing、empty、格式错误均有稳定错误码和唯一终态 | 扩展 `evidence.test.ts` 与 `sessions` 定向测试 | ⏳ | —— |
 | 1.3 | 让旧 `extractEvidence` 通过兼容适配复用 Reader，同时保持 Rules Generation 的 Bundle、locator 和过滤语义 | 旧 Evidence 测试全绿，失败呈现边界明确 | Core Evidence/Rules 定向测试 + `git diff --check` | ⏳ | —— |
 
