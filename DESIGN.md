@@ -61,9 +61,9 @@
 ```
 
 - 侧边栏固定宽约 `11.125rem`（178px），按 Workspace / Knowledge 分组
-- 侧栏通过主界面 Header 的 leading control 收起为 `3.5rem` 图标栏；按钮、竖分隔线与当前页面标题属于同一个
-  Header 布局流，不允许通过绝对定位形成独立按钮轨道。普通页面由 `PageHeader` 承载，Chat 由会话 Header 承载，
-  Settings 由设置分区导航 Header 承载。Chat 的 History 开关不占用同一位置：
+- 侧栏通过自身控制区收起为 `3.5rem` 图标栏，按钮始终完整属于侧栏：展开状态的收起按钮位于侧栏顶部，
+  收起状态的展开按钮位于侧栏底部、设置与主题操作区上方。页面 Header 不承载全局侧栏控件，Scan、Chat、
+  Settings 等页面共享同一套位置规则。Chat 的 History 开关不占用同一位置：
   展开时位于下方「对话历史」标题行，收起后在 Chat 内容区左上角恢复；
   收起后保留主导航、知识库父级、Settings 与主题按钮，
   知识库叶子暂时隐藏并在点击父级图标后恢复展开侧栏
@@ -136,8 +136,7 @@ Don’t：为了填满屏幕把普通页面拉成 `fluid`，或在同一页并�
 ### 页面级 Primitives
 
 - `PageShell`：唯一拥有页面原型、宽度、密度、页面滚动和顶层对齐线。
-- `PageHeader`：唯一 H1、单行描述和最多一个 Primary Action；桌面 App Shell 的侧栏开关固定作为 leading control，
-  与标题共享一行并通过竖分隔线建立层级。
+- `PageHeader`：唯一 H1、单行描述和最多一个 Primary Action；不承载 App Shell 的全局侧栏控件。
 - `SupportingPaneLayout`：唯一拥有主辅 Grid、语义栏宽和折叠顺序。
 - `MetricStrip`：最多 4 个 KPI，统一分隔与两列降级。
 - `PageSection`：统一 section title、description 与一个次级 action。

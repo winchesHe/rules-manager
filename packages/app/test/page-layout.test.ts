@@ -28,13 +28,7 @@ function loadComponent(fileName: string, exportName: string): Component {
   }).outputText
   const loaded = { exports: {} as Record<string, Component> }
   const evaluate = new Function('require', 'module', 'exports', output)
-  const componentRequire = (specifier: string) => {
-    if (specifier === './SidebarToggle') {
-      return { SidebarToggle: () => createElement('span', { 'data-sidebar-toggle-leading': true }) }
-    }
-    return require(specifier)
-  }
-  evaluate(componentRequire, loaded, loaded.exports)
+  evaluate(require, loaded, loaded.exports)
   return loaded.exports[exportName]
 }
 
@@ -146,7 +140,7 @@ describe('page layout primitives', () => {
     )
 
     expect(html).toContain('data-page-header="true"')
-    expect(html).toContain('data-sidebar-toggle-leading="true"')
+    expect(html).not.toContain('data-sidebar-toggle-leading')
     expect(html).toContain('min-w-0 flex-1')
     expect(html).toContain('<h1')
     expect(html).toContain('data-page-section="true"')

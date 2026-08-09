@@ -192,7 +192,7 @@ describe('home workflow layout', () => {
     expect(source).toContain('data-chat-history-toggle')
     expect(source).toContain('data-chat-history-reopen')
     expect(source).toContain('border-b border-border px-3')
-    expect(source).toContain('<SidebarToggle />')
+    expect(source).not.toContain('<SidebarToggle')
     expect(source).toContain('data-chat-current-title')
     expect(source).toContain('data-chat-context-close')
     expect(source).toContain('data-chat-context-reopen')

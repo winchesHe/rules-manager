@@ -3528,3 +3528,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check` 通过；
   App 独立 typecheck 仍被仓库既有跨包 `rootDir` / `include` 配置及既有类型错误阻塞，production build 无新增错误。
 - 提交信息：`fix: 将侧栏开关并入页面 Header`
+
+## 状态式侧栏开关归位（2026-08-09）
+
+- 用户明确修正上一轮方案：全局侧栏开关不应进入任何页面 Header，两种状态都必须完整位于主侧栏；展开状态的
+  收起按钮放在侧栏顶部，收起状态的展开按钮放在侧栏最下方。
+- `SidebarToggle` 从 Context/Provider 驱动简化为显式 `collapsed` / `onToggle` 属性；App Shell 在两个互斥分支中
+  渲染控件。展开态顶部按钮先于品牌区，收起态底部按钮位于设置与主题操作区的分隔线上方。
+- `PageHeader`、Chat Header、Settings 分区导航 Header 移除侧栏开关及为其增加的间距；页面内容区不再重复
+  全局控件，Chat History 与 Session Context 的独立开关保持不变。
+- 新增 `docs/plans/agent-dashboard-stateful-sidebar-toggle.md`，删除已过时的 Header leading control 计划，并同步
+  `DESIGN.md`、折叠侧栏、Chat History 与 Shell 计划；合同测试锁定两个状态的互斥位置和 DOM 顺序。
+- Computer Use 在真实 Electron 中复验 Scan、Chat、Settings，覆盖浅色/深色和展开/收起：展开态顶部只有收起
+  按钮，收起态底部只有展开按钮且位于设置、主题上方；检查后恢复浅色、展开侧栏和扫描页。
+- App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check` 通过；
+  build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 按状态将侧栏开关归位`

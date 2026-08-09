@@ -19,7 +19,7 @@ import { ChatView } from './views/ChatView'
 import { RulesView } from './views/RulesView'
 import type { RulesSection } from './views/RulesView'
 import { SettingsView } from './views/SettingsView'
-import { SidebarToggleProvider } from './components/SidebarToggle'
+import { SidebarToggle } from './components/SidebarToggle'
 import { changeAppTheme, readStoredTheme } from './theme'
 import type { ThemeMode } from './theme'
 
@@ -124,6 +124,14 @@ export function App() {
             sidebarCollapsed ? 'px-2' : 'px-3'
           }`}
         >
+          {!sidebarCollapsed && (
+            <div className="mb-2 flex justify-end px-1" data-sidebar-toggle-top>
+              <SidebarToggle
+                collapsed={false}
+                onToggle={() => setSidebarCollapsed(true)}
+              />
+            </div>
+          )}
             <div className={`mb-5 flex h-7 items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2.5 px-2'}`}>
               <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                 <Blocks aria-hidden="true" size={16} />
@@ -259,66 +267,72 @@ export function App() {
               </div>
             </nav>
 
-            <div className={`mt-auto gap-1 border-t border-border pt-3 ${
-              sidebarCollapsed ? 'grid justify-items-center' : 'flex items-center'
-            }`}>
-              <Button
-                aria-label={sidebarCollapsed ? t('settings') : undefined}
-                aria-current={activeView === 'settings' ? 'page' : undefined}
-                className={`h-[2.125rem] min-w-0 text-[13px] ${
-                  sidebarCollapsed
-                    ? 'w-[2.125rem] justify-center px-0'
-                    : 'flex-1 justify-start gap-2 px-2'
-                } ${
-                  activeView === 'settings'
-                    ? 'bg-surface-hover text-foreground'
-                    : 'text-muted hover:bg-surface-hover hover:text-foreground'
-                }`}
-                fullWidth
-                onPress={() => setActiveView('settings')}
-                title={sidebarCollapsed ? t('settings') : undefined}
-                variant="ghost"
-              >
-                <Settings aria-hidden="true" size={16} />
-                {!sidebarCollapsed && <span>{t('settings')}</span>}
-              </Button>
-              <Tooltip>
+            <div className="mt-auto">
+              {sidebarCollapsed && (
+                <div className="mb-2 grid justify-items-center" data-sidebar-toggle-bottom>
+                  <SidebarToggle
+                    collapsed
+                    onToggle={() => setSidebarCollapsed(false)}
+                  />
+                </div>
+              )}
+              <div className={`gap-1 border-t border-border pt-3 ${
+                sidebarCollapsed ? 'grid justify-items-center' : 'flex items-center'
+              }`}>
                 <Button
-                  aria-label={theme === 'dark' ? t('switchLight') : t('switchDark')}
-                  className="size-[2.125rem] min-w-[2.125rem] shrink-0 text-muted hover:bg-surface-hover hover:text-foreground"
-                  isIconOnly
-                  onPress={() => {
-                    const nextTheme = theme === 'dark' ? 'light' : 'dark'
-                    changeAppTheme(nextTheme)
-                    setTheme(nextTheme)
-                  }}
+                  aria-label={sidebarCollapsed ? t('settings') : undefined}
+                  aria-current={activeView === 'settings' ? 'page' : undefined}
+                  className={`h-[2.125rem] min-w-0 text-[13px] ${
+                    sidebarCollapsed
+                      ? 'w-[2.125rem] justify-center px-0'
+                      : 'flex-1 justify-start gap-2 px-2'
+                  } ${
+                    activeView === 'settings'
+                      ? 'bg-surface-hover text-foreground'
+                      : 'text-muted hover:bg-surface-hover hover:text-foreground'
+                  }`}
+                  fullWidth
+                  onPress={() => setActiveView('settings')}
+                  title={sidebarCollapsed ? t('settings') : undefined}
                   variant="ghost"
                 >
-                  {theme === 'dark' ? (
-                    <Sun aria-hidden="true" size={16} />
-                  ) : (
-                    <Moon aria-hidden="true" size={16} />
-                  )}
+                  <Settings aria-hidden="true" size={16} />
+                  {!sidebarCollapsed && <span>{t('settings')}</span>}
                 </Button>
-                <Tooltip.Content>
-                  {theme === 'dark' ? t('switchLight') : t('switchDark')}
-                </Tooltip.Content>
-              </Tooltip>
+                <Tooltip>
+                  <Button
+                    aria-label={theme === 'dark' ? t('switchLight') : t('switchDark')}
+                    className="size-[2.125rem] min-w-[2.125rem] shrink-0 text-muted hover:bg-surface-hover hover:text-foreground"
+                    isIconOnly
+                    onPress={() => {
+                      const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                      changeAppTheme(nextTheme)
+                      setTheme(nextTheme)
+                    }}
+                    variant="ghost"
+                  >
+                    {theme === 'dark' ? (
+                      <Sun aria-hidden="true" size={16} />
+                    ) : (
+                      <Moon aria-hidden="true" size={16} />
+                    )}
+                  </Button>
+                  <Tooltip.Content>
+                    {theme === 'dark' ? t('switchLight') : t('switchDark')}
+                  </Tooltip.Content>
+                </Tooltip>
+              </div>
             </div>
           </aside>
 
-          <SidebarToggleProvider
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((current) => !current)}
-          >
-            <main
-              className={`min-w-0 max-w-full overflow-x-hidden bg-background ${
-                activeView === 'chat' || activeView === 'settings'
-                  ? 'overflow-y-hidden'
-                  : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
-              }`}
-              key={activeView}
-            >
+        <main
+          className={`min-w-0 max-w-full overflow-x-hidden bg-background ${
+            activeView === 'chat' || activeView === 'settings'
+              ? 'overflow-y-hidden'
+              : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
+          }`}
+          key={activeView}
+        >
               {activeView === 'settings' && (
                 <SettingsView
                   onThemeChange={(nextTheme) => {
@@ -388,9 +402,8 @@ export function App() {
                   section={activeRulesSection}
                 />
               )}
-            </main>
-          </SidebarToggleProvider>
-        </div>
+        </main>
+      </div>
     </>
   )
 }
