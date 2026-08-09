@@ -1,6 +1,6 @@
 import { Button, Tooltip } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
-import { PanelLeft, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 export function SidebarToggle({
   collapsed,
@@ -24,7 +24,7 @@ export function SidebarToggle({
         {collapsed ? (
           <PanelLeftOpen aria-hidden="true" size={16} />
         ) : (
-          <PanelLeft aria-hidden="true" size={16} />
+          <PanelLeftClose aria-hidden="true" size={16} />
         )}
       </Button>
       <Tooltip.Content>{label}</Tooltip.Content>

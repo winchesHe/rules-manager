@@ -3589,3 +3589,13 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 44 suites / 271 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check`
   通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 让窗口交通灯保持常亮`
+
+## 恢复侧栏左向收起图标（2026-08-09）
+
+- 用户以截图明确要求将展开态标题栏侧栏按钮恢复为此前带左向收起标识的图标；本轮只调整图标，不改变按钮
+  坐标、尺寸、热区、折叠行为、收起态底部展开图标或常亮交通灯。
+- 展开态图标由 `PanelLeft` 恢复为 `PanelLeftClose`，同步 `DESIGN.md`、可折叠侧栏计划、状态式侧栏计划与
+  App Shell 合同测试。
+- 定向 App Shell / 窗口拖拽合同 2 suites / 6 tests、production build 与 `git diff --check` 通过；build 仅有
+  既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 恢复侧栏收起图标`
