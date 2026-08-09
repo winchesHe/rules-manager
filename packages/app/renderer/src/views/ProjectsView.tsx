@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
 import { Button, Card, Chip, Input, Spinner, Table, TextField } from '@heroui/react'
 import { ChevronRight, FileSearch, FolderOpen, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
+import { FilterTransition, PageTransition } from '../components/UxTransition'
 import { EmptyProjects, ViewError, ViewLoading } from '../components/ViewStates'
 import { currentLocale, i18n } from '../i18n'
 import { formatBytes, formatDateTime } from '../i18n/format'
@@ -65,6 +66,7 @@ export function ProjectsView({
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ProjectFilter>('all')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const deferredQuery = useDeferredValue(query)
 
   useEffect(() => {
     let current = true
@@ -127,9 +129,10 @@ export function ProjectsView({
   }, [drafts, projects, scanStatus])
 
   const filteredRows = useMemo(
-    () => filterProjectRows(rows, query, filter),
-    [filter, query, rows],
+    () => filterProjectRows(rows, deferredQuery, filter),
+    [deferredQuery, filter, rows],
   )
+  const isFiltering = deferredQuery !== query
 
   function openProject(project: Project): void {
     setSelectedProject(project)
@@ -140,18 +143,20 @@ export function ProjectsView({
   if (error) return <ViewError message={error} title={t('errors.loadProjects')} />
   if (page === 'detail' && selectedProject) {
     return (
-      <ProjectDetails
-        initialTab={initialProjectTab}
-        onGenerateRules={() => onGenerateRules?.(selectedProject.slug)}
-        onPublishRules={() => onPublishRules?.(selectedProject.slug)}
-        onBack={() => setPage('list')}
-        project={selectedProject}
-      />
+      <PageTransition transitionKey={`project:${selectedProject.slug}`}>
+        <ProjectDetails
+          initialTab={initialProjectTab}
+          onGenerateRules={() => onGenerateRules?.(selectedProject.slug)}
+          onPublishRules={() => onPublishRules?.(selectedProject.slug)}
+          onBack={() => setPage('list')}
+          project={selectedProject}
+        />
+      </PageTransition>
     )
   }
 
   return (
-    <>
+    <PageTransition transitionKey="projects:list">
       <PageHeader
         description={t('description')}
         title={t('title')}
@@ -167,23 +172,32 @@ export function ProjectsView({
             <Input className="pl-10" fullWidth placeholder={t('list.search')} />
           </div>
         </TextField>
-        <div aria-label={t('filters.label')} className="flex flex-wrap gap-2">
-          {projectFilters.map((item) => (
-            <Button
-              aria-pressed={filter === item.value}
-              key={item.value}
-              onPress={() => setFilter(item.value)}
-              size="sm"
-              variant={filter === item.value ? 'primary' : 'ghost'}
-            >
-              {t(item.labelKey)}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div aria-label={t('filters.label')} className="flex flex-wrap gap-2">
+            {projectFilters.map((item) => (
+              <Button
+                aria-pressed={filter === item.value}
+                key={item.value}
+                onPress={() => setFilter(item.value)}
+                size="sm"
+                variant={filter === item.value ? 'primary' : 'ghost'}
+              >
+                {t(item.labelKey)}
+              </Button>
+            ))}
+          </div>
+          <span aria-live="polite" className="text-xs tabular-nums text-muted">
+            {t('list.filteredCount', { visible: filteredRows.length, total: rows.length })}
+          </span>
         </div>
       </div>
 
-      <Card className="min-h-80 border border-border bg-surface shadow-none">
-        <Card.Content className="p-0">
+      <FilterTransition
+        busy={isFiltering}
+        transitionKey={`projects:${filter}:${deferredQuery}`}
+      >
+        <Card className="min-h-80 border border-border bg-surface shadow-none">
+          <Card.Content className="p-0">
           {projects.length === 0 ? (
             <EmptyProjects />
           ) : filteredRows.length === 0 ? (
@@ -245,9 +259,10 @@ export function ProjectsView({
               </Table.ScrollContainer>
             </Table>
           )}
-        </Card.Content>
-      </Card>
-    </>
+          </Card.Content>
+        </Card>
+      </FilterTransition>
+    </PageTransition>
   )
 }
 
@@ -272,6 +287,7 @@ function ProjectDetails({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sessionQuery, setSessionQuery] = useState('')
+  const deferredSessionQuery = useDeferredValue(sessionQuery)
   const [sessionAgent, setSessionAgent] = useState('all')
   const [sessionStatus, setSessionStatus] = useState('all')
   const [sessionScrollTop, setSessionScrollTop] = useState(0)
@@ -326,12 +342,13 @@ function ProjectDetails({
   const filteredSessions = useMemo(
     () => filterProjectSessions(
       sessions,
-      sessionQuery,
+      deferredSessionQuery,
       sessionAgent,
       sessionStatus,
     ),
-    [sessionAgent, sessionQuery, sessions, sessionStatus],
+    [deferredSessionQuery, sessionAgent, sessions, sessionStatus],
   )
+  const isSessionFiltering = deferredSessionQuery !== sessionQuery
 
   if (selectedSession) {
     return (
@@ -460,8 +477,12 @@ function ProjectDetails({
           </span>
         </div>
       )}
-      <Card className="min-h-80 border border-border bg-surface shadow-none">
-        <Card.Content className="p-0">
+      <FilterTransition
+        busy={isSessionFiltering}
+        transitionKey={`${tab}:${rulesView}:${sessionAgent}:${sessionStatus}:${deferredSessionQuery}`}
+      >
+        <Card className="min-h-80 border border-border bg-surface shadow-none">
+          <Card.Content className="p-0">
           {loading ? (
             <ViewLoading label={t('loading.project', { project: project.slug })} />
           ) : error ? (
@@ -483,8 +504,9 @@ function ProjectDetails({
               projectSlug={project.slug}
             />
           )}
-        </Card.Content>
-      </Card>
+          </Card.Content>
+        </Card>
+      </FilterTransition>
     </>
   )
 }

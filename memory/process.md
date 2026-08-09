@@ -3612,3 +3612,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 定向 App Shell / 窗口拖拽合同 2 suites / 6 tests、production build 与 `git diff --check` 通过；build 仅有
   既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 调整侧栏展开与收起宽度`
+
+## 页面动效与筛选反馈收口（2026-08-09）
+
+- 用户将最后一轮目标明确为 UX，指出页面切换没有动画、筛选缺少可感知反馈。审计确认 Scan、Projects 和项目
+  Session 已有筛选能力，但结果瞬时替换且没有 busy / 结果数量反馈；主导航和内部页面同样硬切。
+- 新增共享 `PageTransition` / `FilterTransition`，使用原生 CSS keyframes 提供 180ms 页面过渡和 140ms 筛选
+  过渡，统一覆盖主导航、Rules 分区、Scan 内部页面、Projects 列表 / 详情及主要筛选结果；未引入新的运行时依赖。
+- Projects 与项目 Session 搜索改用 `useDeferredValue`，输入期间保留旧结果并以 `aria-busy` 标记；项目列表新增
+  当前结果 / 总数的 `aria-live` 反馈。按钮增加轻微按压反馈，所有位移动效遵循 reduced motion。
+- 新增 `docs/plans/agent-dashboard-ux-motion-filter-feedback.md` 和 UX 合同测试，并同步 `DESIGN.md`。
+- Computer Use 在真实 Electron 中连续切换 Scan、Projects、Chat，验证项目搜索 `rules-manager` 将 125 条结果
+  收敛为 2 条、筛选计数同步、Chat 加载后固定高度和 Composer 均未回归；验收后恢复浅色展开的最近扫描页。
+- App 全量 45 suites / 274 tests、Core 全量 36 suites / 359 tests、Core / Electron production build 与
+  `git diff --check` 通过；Electron renderer 为 3,176.12 kB，未引入动画库体积，build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`feat: 完善页面切换与筛选体验`

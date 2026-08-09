@@ -24,6 +24,7 @@
   },
   "list": {
     "search": "Search projects",
+    "filteredCount": "Showing {{visible}} of {{total}}",
     "emptyFilter": "No projects match this search and filter.",
     "tableLabel": "Projects",
     "openProject": "Open project {{project}}",

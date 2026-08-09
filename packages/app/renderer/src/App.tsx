@@ -21,6 +21,7 @@ import type { RulesSection } from './views/RulesView'
 import { SettingsView } from './views/SettingsView'
 import { SidebarToggle } from './components/SidebarToggle'
 import { WindowControls } from './components/WindowControls'
+import { PageTransition } from './components/UxTransition'
 import { changeAppTheme, readStoredTheme } from './theme'
 import type { ThemeMode } from './theme'
 
@@ -333,8 +334,11 @@ export function App() {
               ? 'overflow-y-hidden'
               : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
           }`}
-          key={activeView}
         >
+          <PageTransition
+            className="h-full min-h-0"
+            transitionKey={`${activeView}:${activeView === 'rules' ? activeRulesSection : 'root'}`}
+          >
               {activeView === 'settings' && (
                 <SettingsView
                   onThemeChange={(nextTheme) => {
@@ -404,6 +408,7 @@ export function App() {
                   section={activeRulesSection}
                 />
               )}
+          </PageTransition>
         </main>
       </div>
     </>

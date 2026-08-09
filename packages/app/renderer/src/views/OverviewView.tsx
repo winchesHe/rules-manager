@@ -4,6 +4,7 @@ import { ArrowLeft, History as HistoryIcon, ScanLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
+import { FilterTransition, PageTransition } from '../components/UxTransition'
 import { ViewError, ViewLoading } from '../components/ViewStates'
 import { formatDateTime } from '../i18n/format'
 import { currentLocale, i18n } from '../i18n'
@@ -288,7 +289,7 @@ export function OverviewView({
 
   if (page === 'history') {
     return (
-      <>
+      <PageTransition transitionKey="scan:history">
         <Button
           className="mb-5 gap-2 text-muted"
           onPress={() => {
@@ -385,13 +386,13 @@ export function OverviewView({
             )}
           </Card.Content>
         </Card>
-      </>
+      </PageTransition>
     )
   }
 
   if (page === 'create') {
     return (
-      <>
+      <PageTransition transitionKey="scan:create">
         <Button className="mb-5 gap-2 text-muted" onPress={() => setPage('latest')} variant="ghost">
           <ArrowLeft aria-hidden="true" size={17} />
           {t('create.back')}
@@ -491,12 +492,12 @@ export function OverviewView({
             </div>
           </Card.Content>
         </Card>
-      </>
+      </PageTransition>
     )
   }
 
   return (
-    <>
+    <PageTransition transitionKey={`scan:latest:${selectedHistory?.id ?? 'current'}`}>
       <PageHeader
         actions={
           <div className="flex items-center gap-2">
@@ -610,8 +611,9 @@ export function OverviewView({
               </div>
             </div>
           </div>
-          <Card className="border border-border bg-surface shadow-none">
-            <Card.Content className="p-0">
+          <FilterTransition transitionKey={`scan-changes:${filter}`}>
+            <Card className="border border-border bg-surface shadow-none">
+              <Card.Content className="p-0">
               {changes.length === 0 ? (
                 <div className="grid min-h-52 place-items-center text-sm text-muted">
                   {t('latest.emptyFilter')}
@@ -662,8 +664,9 @@ export function OverviewView({
                   </Table.ScrollContainer>
                 </Table>
               )}
-            </Card.Content>
-          </Card>
+              </Card.Content>
+            </Card>
+          </FilterTransition>
         </>
       ) : (
         <Card className="border border-border bg-surface shadow-none">
@@ -684,7 +687,7 @@ export function OverviewView({
           </Card.Content>
         </Card>
       )}
-    </>
+    </PageTransition>
   )
 }
 

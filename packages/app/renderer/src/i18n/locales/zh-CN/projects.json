@@ -24,6 +24,7 @@
   },
   "list": {
     "search": "搜索项目",
+    "filteredCount": "显示 {{visible}} / {{total}}",
     "emptyFilter": "没有符合搜索和筛选条件的项目。",
     "tableLabel": "项目",
     "openProject": "打开项目 {{project}}",
