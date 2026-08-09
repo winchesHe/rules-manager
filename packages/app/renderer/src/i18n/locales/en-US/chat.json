@@ -135,6 +135,7 @@
   "noSelectedSessions": "No Sessions selected",
   "sessionFilters": "Filters",
   "availableSessions": "Available Sessions",
+  "sessionSelectionSummary": "{{selected}} selected / {{total}} total",
   "selectAll": "Select all",
   "deselectAll": "Deselect all",
   "removeSession": "Remove Session",

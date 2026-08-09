@@ -517,6 +517,7 @@ export interface SessionContextItem extends NativeSessionReference {
 export interface SessionContextPage {
   items: SessionContextItem[]
   nextCursor: string | null
+  references: NativeSessionReference[]
 }
 
 export interface NativeChatThread extends NativeChatThreadSummary {

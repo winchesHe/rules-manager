@@ -215,6 +215,8 @@ describe('home workflow layout', () => {
     const source = read('views/ChatView.tsx')
 
     expect(source).toContain('toggleAvailableSessionSelection')
+    expect(source).toContain('toggleAvailableSessionSelection(selected, references)')
+    expect(source).toContain("t('sessionSelectionSummary', { selected: selectedInScope, total })")
     expect(source).toContain("allItemsSelected ? t('deselectAll') : t('selectAll')")
     expect(source).toContain('data-session-context-select-all')
   })

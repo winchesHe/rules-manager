@@ -29,6 +29,7 @@ export interface SessionContextItem {
 export interface SessionContextPage {
   items: SessionContextItem[]
   nextCursor: string | null
+  references: SessionContextReference[]
 }
 
 export interface SessionContextReference {
@@ -58,7 +59,9 @@ interface DecodedCursor {
 }
 
 export function querySessionContext(input: SessionContextQuery = {}): SessionContextPage {
-  if (!isDatabaseReady(input.homeDir)) return { items: [], nextCursor: null }
+  if (!isDatabaseReady(input.homeDir)) {
+    return { items: [], nextCursor: null, references: [] }
+  }
   const project = input.project ?? 'all'
   if (!project.trim()) throw new Error('session context project is required')
   const from = optionalIso(input.from, 'from')
@@ -84,11 +87,6 @@ export function querySessionContext(input: SessionContextQuery = {}): SessionCon
     conditions.push('updated_at <= @to')
     params.to = to
   }
-  if (cursor) {
-    conditions.push('(updated_at < @cursorUpdatedAt OR (updated_at = @cursorUpdatedAt AND id < @cursorId))')
-    params.cursorUpdatedAt = cursor.updatedAt
-    params.cursorId = cursor.id
-  }
   if (input.exclude && input.exclude.length > 0) {
     conditions.push(`NOT EXISTS (
       SELECT 1
@@ -98,9 +96,23 @@ export function querySessionContext(input: SessionContextQuery = {}): SessionCon
     )`)
     params.excludedSessions = JSON.stringify(input.exclude)
   }
+  const scopeConditions = [...conditions]
+  const scopeParams = { ...params }
+  if (cursor) {
+    conditions.push('(updated_at < @cursorUpdatedAt OR (updated_at = @cursorUpdatedAt AND id < @cursorId))')
+    params.cursorUpdatedAt = cursor.updatedAt
+    params.cursorId = cursor.id
+  }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const scopeWhere = scopeConditions.length > 0 ? `WHERE ${scopeConditions.join(' AND ')}` : ''
   const db = new Database(getDbPath(input.homeDir), { readonly: true })
   try {
+    const references = db.prepare(`
+      SELECT id, agent
+      FROM sessions
+      ${scopeWhere}
+      ORDER BY updated_at DESC, id DESC
+    `).all(scopeParams) as SessionContextReference[]
     const rows = db.prepare(`
       SELECT id, agent, source_path, slug, updated_at, status
       FROM sessions
@@ -116,6 +128,7 @@ export function querySessionContext(input: SessionContextQuery = {}): SessionCon
       nextCursor: hasMore && last
         ? encodeCursor({ updatedAt: last.updated_at, id: last.id })
         : null,
+      references,
     }
   } finally {
     db.close()
@@ -127,17 +140,17 @@ export function resolveSessionContextItems(
   homeDir?: string,
 ): SessionContextItem[] {
   if (references.length === 0) return []
-  if (references.length > 500) throw new Error('too many session context references')
   if (!isDatabaseReady(homeDir)) return references.map(missingReference)
-  const ids = [...new Set(references.map((reference) => reference.id))]
-  const placeholders = ids.map(() => '?').join(', ')
   const db = new Database(getDbPath(homeDir), { readonly: true })
   try {
     const rows = db.prepare(`
       SELECT id, agent, source_path, slug, updated_at, status
       FROM sessions
-      WHERE id IN (${placeholders})
-    `).all(...ids) as SessionContextRow[]
+      WHERE id IN (
+        SELECT json_extract(requested.value, '$.id')
+        FROM json_each(@references) AS requested
+      )
+    `).all({ references: JSON.stringify(references) }) as SessionContextRow[]
     const byKey = new Map(mapRows(rows).map((item) => [`${item.agent}\0${item.id}`, item]))
     return references.map((reference) => {
       return byKey.get(`${reference.agent}\0${reference.id}`) ?? missingReference(reference)

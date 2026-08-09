@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals'
 import {
   assistantTurnStartedAt,
   canRegenerate,
+  countSelectedSessionReferences,
   createProviderSnapshotSync,
   formatElapsed,
   mergeTimelineActivities,
@@ -184,6 +185,20 @@ describe('chat view model', () => {
 
     expect(selected).toEqual([outside, available[0], available[1]])
     expect(toggleAvailableSessionSelection(selected, available)).toEqual([outside])
+  })
+
+  it('已选数量只统计当前完整筛选范围，不受分页或范围外选择干扰', () => {
+    const scope = [
+      { agent: 'codex', id: 'one' },
+      { agent: 'opencode', id: 'two' },
+      { agent: 'claude', id: 'three' },
+    ]
+
+    expect(countSelectedSessionReferences([
+      scope[0],
+      scope[2],
+      { agent: 'pi', id: 'outside' },
+    ], scope)).toBe(2)
   })
 
   it('同一 Activity 的 running / completed 更新合并为一行', () => {

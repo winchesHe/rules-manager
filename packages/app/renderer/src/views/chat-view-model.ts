@@ -152,6 +152,18 @@ export function toggleAvailableSessionSelection(
   return [...merged.values()]
 }
 
+export function countSelectedSessionReferences(
+  selected: NativeSessionReference[],
+  scope: NativeSessionReference[],
+): number {
+  const selectedKeys = new Set(selected.map(sessionReferenceKey))
+  let count = 0
+  for (const reference of scope) {
+    if (selectedKeys.has(sessionReferenceKey(reference))) count++
+  }
+  return count
+}
+
 function sessionReferenceKey(reference: NativeSessionReference): string {
   return `${reference.agent}\0${reference.id}`
 }

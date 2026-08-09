@@ -38,6 +38,13 @@ describe('querySessionContext', () => {
     })
     expect(second.items.map((item) => item.id)).toEqual(['s-2'])
     expect(second.nextCursor).toBeNull()
+    expect(first.references).toHaveLength(2)
+    expect(second.references).toHaveLength(2)
+    expect(first.references).toEqual([
+      { id: 's-3', agent: 'codex' },
+      { id: 's-2', agent: 'claude' },
+    ])
+    expect(second.references).toEqual(first.references)
   })
 
   it('all 包含 default 与 missing，且返回来源可用状态', () => {
@@ -80,6 +87,7 @@ describe('querySessionContext', () => {
 
     expect(page.items.map((item) => item.id)).toEqual(['safe'])
     expect(page.nextCursor).toBeNull()
+    expect(page.references).toEqual([{ id: 'safe', agent: 'codex' }])
   })
 
   it('OpenCode 使用权威 SQLite title，其余来源返回稳定可读名称', () => {
@@ -103,6 +111,20 @@ describe('querySessionContext', () => {
         { id: 'ses-readable', displayName: '修复 Chat Context 布局' },
         { id: 'codex-readable', displayName: 'rules-manager · codex' },
       ])
+  })
+
+  it('全选超过 500 条时仍能解析全部引用', () => {
+    const sessions = Array.from({ length: 501 }, (_, index) => session(
+      `session-${index}`,
+      index % 2 === 0 ? 'codex' : 'claude',
+      'large-scope',
+      new Date(Date.UTC(2026, 6, 1, 0, 0, index)).toISOString(),
+    ))
+    const home = seed(sessions)
+    const page = querySessionContext({ homeDir: home, project: 'large-scope', limit: 100 })
+
+    expect(page.references).toHaveLength(501)
+    expect(resolveSessionContextItems(page.references, home)).toHaveLength(501)
   })
 
   it('按需读取 Claude、Codex、Copilot 与 JSONL Agent 的原生会话名称', () => {

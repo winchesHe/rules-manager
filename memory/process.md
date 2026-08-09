@@ -3357,3 +3357,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   合同、hash readback、payload allowlist 与不可达/鉴权/flush 失败隔离均由 25 个 Evals 测试覆盖，生产链路默认 none。
 - `simplify` 复核保留单一可选 `toolPolicy`，不为每个 Adapter 发明不同业务接口，也不改变普通 Chat 行为。
 - 提交信息：`feat: 完成 Session Evidence 最终验收`
+
+## Session Context 全量统计与筛选范围全选（2026-08-09）
+
+- Session Context 查询页在保留 100 条详情游标分页的同时，返回当前项目、日期和 Host 排除条件下的完整轻量引用集合；
+  引用只含 agent/id，不会为了统计或全选一次读取全部 Session 正文或标题。
+- 可选列表头改为“已选 X / 共 Y”；统计只计算当前筛选范围，顶部 Chip 继续表示跨筛选条件的总选择数。
+- 全选/取消全选基于完整筛选引用集合，不再只作用于已加载的 100 条；切换时保留其他筛选范围中的已有选择，分页只影响浏览。
+- 已选详情解析移除旧的 500 条上限，改用单个 JSON 参数查询，避免全选大范围后因 SQLite bind 参数数量导致显示退化。
+- Core 查询测试覆盖稳定分页下完整范围不变、Host 排除后的总范围及 501 条解析；Renderer 模型与布局测试覆盖范围内计数、
+  范围外选择保留及按钮使用完整引用集合。
+- Core 全量 36 suites / 359 tests、App 全量 42 suites / 265 tests、Core/App production build 与
+  `git diff --check` 通过；App 独立 `tsc --noEmit` 仍受仓库既有跨 workspace rootDir/file-list 配置和既有
+  sessionEvidenceMode 类型错误影响，本次使用 production build 作为有效类型/打包验证。
+- 提交信息：`fix: 修正 Session Context 全选与统计`

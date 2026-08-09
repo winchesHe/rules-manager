@@ -63,6 +63,7 @@ import type {
 import {
   assistantTurnStartedAt,
   canRegenerate,
+  countSelectedSessionReferences,
   createProviderSnapshotSync,
   formatElapsed,
   mergeTimelineActivities,
@@ -161,6 +162,7 @@ export function ChatView({
   const [contextFrom, setContextFrom] = useState('')
   const [contextTo, setContextTo] = useState('')
   const [contextItems, setContextItems] = useState<SessionContextItem[]>([])
+  const [contextReferences, setContextReferences] = useState<NativeSessionReference[]>([])
   const [contextCursor, setContextCursor] = useState<string | null>(null)
   const [contextLoading, setContextLoading] = useState(false)
   const [selectedContext, setSelectedContext] = useState<NativeSessionReference[]>([])
@@ -316,8 +318,12 @@ export function ChatView({
       })
       setContextItems((current) => append ? mergeSessionContextItems(current, page.items) : page.items)
       setContextCursor(page.nextCursor)
+      setContextReferences(page.references)
     } catch {
-      if (!append) setContextItems([])
+      if (!append) {
+        setContextItems([])
+        setContextReferences([])
+      }
       setContextCursor(null)
     } finally {
       setContextLoading(false)
@@ -1304,6 +1310,7 @@ export function ChatView({
                 onSelectedChange={(next) => void updateSelectedContext(next)}
                 project={contextProject}
                 projects={projects}
+                references={contextReferences}
                 selected={selectedContext}
                 selectedItems={selectedContextItems}
                 to={contextTo}
@@ -2093,6 +2100,7 @@ function SessionContextPicker({
   onSelectedChange,
   project,
   projects,
+  references,
   selected,
   selectedItems,
   to,
@@ -2108,6 +2116,7 @@ function SessionContextPicker({
   onSelectedChange: (selected: NativeSessionReference[]) => void
   project: string
   projects: Project[]
+  references: NativeSessionReference[]
   selected: NativeSessionReference[]
   selectedItems: SessionContextItem[]
   to: string
@@ -2127,8 +2136,9 @@ function SessionContextPicker({
   })
   const visibleItems = items.slice(start, end)
   const selectedKeys = new Set(selected.map(sessionReferenceKey))
-  const allItemsSelected = items.length > 0
-    && items.every((item) => selectedKeys.has(sessionReferenceKey(item)))
+  const selectedInScope = countSelectedSessionReferences(selected, references)
+  const total = references.length
+  const allItemsSelected = total > 0 && selectedInScope === total
   const knownItems = new Map(selectedItems.map((item) => [sessionReferenceKey(item), item]))
   const projectOptions = ['default', ...projects.map((item) => item.slug)]
     .filter((value, index, values) => values.indexOf(value) === index)
@@ -2207,12 +2217,12 @@ function SessionContextPicker({
         <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted">
           <span>{t('availableSessions')}</span>
           <div className="flex items-center gap-1">
-            <span>{items.length}</span>
+            <span>{t('sessionSelectionSummary', { selected: selectedInScope, total })}</span>
             <Button
               className="h-6 min-h-6 px-2 text-[10px]"
               data-session-context-select-all
-              isDisabled={items.length === 0}
-              onPress={() => onSelectedChange(toggleAvailableSessionSelection(selected, items))}
+              isDisabled={total === 0}
+              onPress={() => onSelectedChange(toggleAvailableSessionSelection(selected, references))}
               size="sm"
               variant="ghost"
             >

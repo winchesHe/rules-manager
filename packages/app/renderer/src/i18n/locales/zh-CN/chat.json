@@ -135,6 +135,7 @@
   "noSelectedSessions": "尚未选择 Session",
   "sessionFilters": "筛选",
   "availableSessions": "可选 Session",
+  "sessionSelectionSummary": "已选 {{selected}} / 共 {{total}}",
   "selectAll": "全选",
   "deselectAll": "取消全选",
   "removeSession": "移除 Session",
