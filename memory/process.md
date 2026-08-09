@@ -3698,3 +3698,11 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 45 suites / 276 tests、Core 全量 36 suites / 359 tests、Electron production build 与
   `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`feat: 扩展页面错峰入场动效`
+
+## 页面动效设计规范归档（2026-08-10）
+
+- 按用户要求将 TokenTracker 式错峰入场优化总结到 `DESIGN.md`，新增独立「页面切换与模块入场」章节。
+- 章节覆盖设计目标、350ms / 12px / easing 基础参数、各页面编排、筛选与异步刷新边界、transform 冲突处理、
+  reduced motion 以及跨页面验收清单；原布局段只保留入口，避免两处规范长期漂移。
+- 本轮仅修改文档，不改变运行时代码；使用 `git diff --check` 和文档结构检查作为替代验证。
+- 提交信息：`docs: 总结页面错峰入场规范`
