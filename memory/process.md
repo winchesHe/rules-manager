@@ -3030,3 +3030,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 32 suites / 321 tests、Core build 与 `git diff --check` 通过；build 只保留既有 tsdown
   `define` warning。
 - 提交信息：`feat: 收敛六类 Session Source Reader`
+
+## Evidence 兼容接入 Source Reader（2026-08-09）
+
+- Chunk 1.3 删除 `evidence.ts` 内 JSONL、Copilot CLI stdout 截获和 OpenCode SQLite 三套重复读取实现；
+  `extractEvidence`、Session Preview 与 Evidence Context 统一复用 `readSessionSources`。
+- `extractEvidence` 一次批量读取已筛选 rows，Reader 的 `onVisit` 保留原逐 Session 进度。旧 API 继续返回
+  `EvidenceBundle[]`：JSONL empty 沿用旧行为跳过，Copilot/OpenCode empty 沿用旧行为保留空 source session。
+- 兼容层对 unavailable/failed 输出 `[稳定错误码]` 后继续处理其他 Session；新测试以损坏 JSONL + 后续有效
+  Session 锁定 `SOURCE_FORMAT_INVALID` 可见且有效 Evidence 不丢失。
+- `simplify` 复核将预期失败从 try/catch 控制流改为显式 `undefined` 分支，并把循环索引命名展开；行为不变。
+- Evidence、Context、Reader 和四组 Rules Generation/Publish 定向 7 suites / 58 tests 通过；Core 全量
+  32 suites / 322 tests、Core build 与 `git diff --check` 通过，build 只保留既有 tsdown `define` warning。
+- 提交信息：`refactor: Evidence 统一复用 Source Reader`

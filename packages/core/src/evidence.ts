@@ -1,12 +1,13 @@
 import Database from 'better-sqlite3'
 import fs from 'node:fs'
-import readline from 'node:readline'
-import { runSessionsShow } from './commands/sessions.js'
-import { collectFilesRecursive } from './adapters/shared.js'
 import { redactSecrets } from './redaction.js'
 import { resolveWorkspace } from './workspace.js'
 import { throwIfAborted } from './abort.js'
 import { resolveSessionDisplayNames } from './session-context.js'
+import {
+  readSessionSources,
+  type SessionSourceReadResult,
+} from './session-source-reader.js'
 import type { AgentName } from './types.js'
 
 export interface RawEvidenceMessage {
@@ -338,144 +339,14 @@ export function buildEvidenceBundle(
   }
 }
 
-function normalizeMessage(value: unknown): RawEvidenceMessage | undefined {
-  const record = asRecord(value)
-  if (!record) return undefined
-  const nested = asRecord(record.message) ?? asRecord(record.payload) ?? asRecord(record.info)
-  const eventType = typeof record.type === 'string' ? record.type : ''
-  const nestedType = typeof nested?.type === 'string' ? nested.type : ''
-  let inferredRole: 'user' | 'assistant' | undefined
-  if (eventType.startsWith('user.')) {
-    inferredRole = 'user'
-  } else if (eventType.startsWith('assistant.') || ['tool_use', 'tool_result', 'function_call'].includes(nestedType || eventType)) {
-    inferredRole = 'assistant'
-  }
-  const role = nested?.role ?? record.role ?? inferredRole
-  const content = ['tool_use', 'tool_result', 'function_call'].includes(nestedType)
-    ? nested
-    : nested?.content ?? record.content ?? record.parts ?? record.text
-  const timestamp = nested?.timestamp ?? record.timestamp ?? nested?.time ?? record.time
-  if (role !== 'user' && role !== 'assistant') return undefined
-  return { role, content, timestamp }
-}
-
-function messagesFromShown(value: unknown): RawEvidenceMessage[] {
-  const shown = asRecord(value)
-  if (!shown) return []
-  if (Array.isArray(shown.turns)) {
-    return shown.turns.flatMap((turn) => {
-      const row = asRecord(turn)
-      if (!row) return []
-      return [
-        { role: 'user', content: row.user_message, timestamp: row.timestamp },
-        { role: 'assistant', content: row.assistant_response, timestamp: row.timestamp },
-      ]
-    })
-  }
-  const values = Array.isArray(shown.records)
-    ? shown.records
-    : Array.isArray(shown.messages) ? shown.messages : []
-  return values.map(normalizeMessage).filter((message): message is RawEvidenceMessage => message !== undefined)
-}
-
 const JSONL_AGENTS = new Set(['claude', 'codex', 'cursor', 'pi'])
 
-async function readJsonlSessionDirect(
-  sourcePath: string,
-  agent: string,
-): Promise<RawEvidenceMessage[]> {
-  if (!fs.existsSync(sourcePath)) throw new Error(`${agent} session 源不存在：${sourcePath}`)
-  const stat = fs.statSync(sourcePath)
-  const files = stat.isDirectory()
-    ? collectFilesRecursive(sourcePath, (filePath) => filePath.endsWith('.jsonl'))
-    : [sourcePath]
-  if (files.length === 0) throw new Error(`${agent} session 没有 JSONL 文件：${sourcePath}`)
-
-  const messages: RawEvidenceMessage[] = []
-  for (const filePath of files) {
-    const lines = readline.createInterface({
-      input: fs.createReadStream(filePath, { encoding: 'utf8' }),
-      crlfDelay: Number.POSITIVE_INFINITY,
-    })
-    let lineNumber = 0
-    for await (const rawLine of lines) {
-      lineNumber++
-      const line = lineNumber === 1 ? rawLine.replace(/^\uFEFF/, '') : rawLine
-      if (!line.trim()) continue
-      let record: unknown
-      try {
-        record = JSON.parse(line)
-      } catch {
-        throw new Error(`${agent} JSONL 解析失败：${filePath}:${lineNumber}`)
-      }
-      const message = normalizeMessage(record)
-      if (message) messages.push(message)
-    }
-  }
-  if (messages.length === 0) {
-    throw new Error(`${agent} session 没有用户或 assistant 消息：${sourcePath}`)
-  }
-  return messages
-}
-
-async function readSessionMessages(
-  sessionId: string,
-  agent: string,
-  sourcePath: string,
-  homeDir?: string,
-): Promise<RawEvidenceMessage[]> {
-  if (JSONL_AGENTS.has(agent)) {
-    return readJsonlSessionDirect(sourcePath, agent)
-  }
-  const output: string[] = []
-  const originalLog = console.log
-  console.log = (...args: unknown[]) => output.push(args.map(String).join(' '))
-  try {
-    await runSessionsShow(sessionId, { homeDir })
-  } finally {
-    console.log = originalLog
-  }
-  if (output.length !== 1) throw new Error(`session ${sessionId} 原文输出格式异常`)
-  return messagesFromShown(JSON.parse(output[0]))
-}
-
-interface OpenCodeMessageRow {
-  msg_data: string
-  part_data: string
-}
-
-function readOpenCodeSessionDirect(dbPath: string, sessionId: string): RawEvidenceMessage[] {
-  const db = new Database(dbPath, { readonly: true, fileMustExist: true })
-  try {
-    const rows = db.prepare(`
-      SELECT m.data AS msg_data, p.data AS part_data
-      FROM message m
-      JOIN part p ON p.message_id = m.id
-      WHERE m.session_id = ?
-      ORDER BY m.time_created, p.id
-    `).all(sessionId) as OpenCodeMessageRow[]
-
-    const messages: RawEvidenceMessage[] = []
-    for (const row of rows) {
-      let msgMeta: Record<string, unknown> = {}
-      let partContent: Record<string, unknown> = {}
-      try { msgMeta = JSON.parse(row.msg_data) } catch { /* ignore */ }
-      try { partContent = JSON.parse(row.part_data) } catch { /* ignore */ }
-
-      const role = msgMeta.role as string | undefined
-      if (role !== 'user' && role !== 'assistant') continue
-
-      const text = partContent.text ?? partContent.content
-      if (typeof text !== 'string' || !text.trim()) continue
-
-      const time = msgMeta.time as Record<string, unknown> | undefined
-      const timestamp = time?.created ? String(time.created) : undefined
-      messages.push({ role, content: text, timestamp })
-    }
-    return messages
-  } finally {
-    db.close()
-  }
+function legacyEvidenceMessages(
+  result: SessionSourceReadResult,
+): RawEvidenceMessage[] | undefined {
+  if (result.status === 'readable') return result.messages
+  if (result.status === 'empty' && !JSONL_AGENTS.has(result.agent)) return []
+  return undefined
 }
 
 async function loadStoredSessionMessages(
@@ -503,9 +374,14 @@ async function loadStoredSessionMessages(
   }
   if (!session) throw new Error(`session ${sessionId} 不存在`)
 
-  const rawMessages = session.agent === 'opencode'
-    ? readOpenCodeSessionDirect(session.source_path, session.id)
-    : await readSessionMessages(session.id, session.agent, session.source_path, homeDir)
+  const [readResult] = await readSessionSources(
+    [{ agent: session.agent, id: session.id }],
+    { homeDir },
+  )
+  const rawMessages = legacyEvidenceMessages(readResult)
+  if (!rawMessages) {
+    throw new Error(readResult.errorMessage ?? `session ${readResult.sessionId} 无法读取`)
+  }
   return { session, rawMessages }
 }
 
@@ -670,26 +546,25 @@ export async function extractEvidence(opts: EvidenceOptions = {}): Promise<Evide
 
   const grouped = new Map<string, RawEvidenceSession[]>()
   const total = rows.length
-  for (let i = 0; i < rows.length; i++) {
-    throwIfAborted(opts.signal)
-    const row = rows[i]
-    process.stderr.write(`\r⏳ 读取 session ${i + 1}/${total}（${row.agent}）`)
-    let messages: RawEvidenceMessage[]
-    try {
-      if (row.agent === 'opencode') {
-        messages = readOpenCodeSessionDirect(row.source_path, row.id)
-      } else {
-        messages = await readSessionMessages(
-          row.id,
-          row.agent,
-          row.source_path,
-          opts.homeDir,
-        )
-      }
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
+  const readResults = await readSessionSources(
+    rows.map((row) => ({ agent: row.agent, id: row.id })),
+    {
+      homeDir: opts.homeDir,
+      signal: opts.signal,
+      onVisit: (reference, index) => {
+        process.stderr.write(`\r⏳ 读取 session ${index + 1}/${total}（${reference.agent}）`)
+      },
+    },
+  )
+  for (const [index, row] of rows.entries()) {
+    const readResult = readResults[index]
+    const messages = legacyEvidenceMessages(readResult)
+    if (!messages) {
+      const reason = readResult.errorMessage ?? `session ${readResult.sessionId} 无法读取`
       process.stderr.write('\n')
-      console.error(`⚠ 跳过 session ${row.id}（${row.agent}）：${reason}`)
+      console.error(
+        `⚠ 跳过 session ${row.id}（${row.agent}）[${readResult.errorCode ?? 'SOURCE_READ_FAILED'}]：${reason}`,
+      )
       continue
     }
     throwIfAborted(opts.signal)

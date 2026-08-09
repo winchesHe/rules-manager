@@ -15,6 +15,7 @@ export interface SessionSourceMessage {
   role: 'user' | 'assistant'
   content: unknown
   timestamp?: unknown
+  [key: string]: unknown
 }
 
 export type SessionSourceErrorCode =
@@ -40,6 +41,7 @@ export interface SessionSourceReadResult {
 export interface SessionSourceReaderOptions {
   homeDir?: string
   signal?: AbortSignal
+  onVisit?: (reference: SessionEvidenceReference, index: number, total: number) => void
 }
 
 interface StoredSessionRow {
@@ -297,8 +299,9 @@ export async function readSessionSources(
 ): Promise<SessionSourceReadResult[]> {
   const sessions = loadSessions(references, options.homeDir)
   const results: SessionSourceReadResult[] = []
-  for (const reference of references) {
+  for (const [index, reference] of references.entries()) {
     throwIfAborted(options.signal)
+    options.onVisit?.(reference, index, references.length)
     const session = sessions.get(reference.id)
     if (!session) {
       results.push(result(reference, 'unavailable', [], {

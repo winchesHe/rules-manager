@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import Database from 'better-sqlite3'
+import { jest } from '@jest/globals'
 import {
   buildEvidenceBundle,
   extractEvidence,
@@ -224,6 +225,41 @@ describe('extractEvidence session 路由', () => {
       expect(bundle.excerpts.some((excerpt) => excerpt.tools.some((tool) => tool.tool === 'shell'))).toBe(true)
       expect(JSON.stringify(bundle)).not.toContain('password=secret')
     } finally {
+      fs.rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('Reader 失败由兼容层用稳定错误码呈现，并继续提取其他 Session', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-evidence-reader-failure-'))
+    const workspace = resolveWorkspace(home)
+    fs.mkdirSync(workspace.workspaceDir, { recursive: true })
+    const invalidPath = path.join(home, 'invalid.jsonl')
+    const validPath = path.join(home, 'valid.jsonl')
+    fs.writeFileSync(invalidPath, 'not-json\n')
+    fs.writeFileSync(validPath, `${JSON.stringify({
+      role: 'user',
+      content: '必须继续处理后续 Session',
+    })}\n`)
+    const db = initDatabase(home)
+    const insert = db.prepare(`
+      INSERT INTO sessions (
+        id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+        status, first_seen_at, last_seen_at
+      ) VALUES (?, 'claude', ?, ?, 'demo', ?, '2026-08-09', 'updated', '2026-08-09', '2026-08-09')
+    `)
+    insert.run('invalid', invalidPath, '/tmp/invalid', 'invalid-hash')
+    insert.run('valid', validPath, '/tmp/valid', 'valid-hash')
+    db.close()
+    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const [bundle] = await extractEvidence({ homeDir: home, projectSlug: 'demo', full: true })
+
+      expect(bundle.sourceSessions).toEqual(['valid'])
+      expect(bundle.excerpts.map((excerpt) => excerpt.text)).toContain('必须继续处理后续 Session')
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('[SOURCE_FORMAT_INVALID]'))
+    } finally {
+      error.mockRestore()
       fs.rmSync(home, { recursive: true, force: true })
     }
   })
