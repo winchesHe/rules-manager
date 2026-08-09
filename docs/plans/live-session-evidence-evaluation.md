@@ -73,7 +73,7 @@ npm test -w @memory-manager/core -- --runInBand \
 
 | # | 步 | 观察点 | 验证方式 | 状态 | reviewed |
 |---|---|---|---|---|---|
-| 3.1 | 打通单 Session 单 chunk 的 Map → Capsule → 当前 Chat Reduce → Claim Gate 端到端骨架 | 最终回答引用可解析 locator，Native handle 可继续 resume | Core/App 可控 Runner 集成测试 | ⏳ | —— |
+| 3.1 | 打通单 Session 单 chunk 的 Map → Capsule → 当前 Chat Reduce → Claim Gate 端到端骨架 | 最终回答引用可解析 locator，Native handle 可继续 resume | Core/App 可控 Runner 集成测试 | ✅ | 2026-08-09 |
 | 3.2 | 增加多 Session、多 chunk、分层 Reduce、有界并发和逐 Session processing accounting | 每个 readable Session 都 processed 或 processFailed | 10/151 Session 并发与失败注入测试 | ⏳ | —— |
 | 3.3 | 对齐 Claude、Codex、OpenCode 原生 Schema 与 Pi JSON+Zod fallback | 四 Provider 返回同一 Capsule/Reduce 错误合同 | 四个 Adapter 定向测试 | ⏳ | —— |
 | 3.4 | 完成 false-complete、未知 fact 引用、限制缺失和 secret leak Gate | partial/targeted 永远不出现完整声明 | Claim Gate 反向测试 + secret fixture | ⏳ | —— |

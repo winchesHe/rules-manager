@@ -3089,3 +3089,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 33 suites / 329 tests、Core build 与 `git diff --check` 通过；build 只保留既有 tsdown
   `define` warning。
 - 提交信息：`feat: 完成 Live Evidence Context 清理合同`
+
+## Live Evidence Map Reduce 端到端骨架（2026-08-09）
+
+- Chunk 3.1 新增 `runLiveSessionEvidence` 编排入口：按计划读取权威 Session Source、写入私有临时 Context、
+  对单 Session 的每个 chunk 执行 Map、校验并落盘 Capsule，再由当前 Chat 执行 Reduce，最后经过 Claim Gate
+  生成可展示回答。
+- Map job 使用独立 Native Chat `start`，内部 chatId 只包含 runId 与 Session/chunk 组合的短哈希，结束后主动
+  close；Reduce 复用当前 Chat 的 `nativeSessionId/nativeHandle`，并允许调用方接收更新后的 handle 继续 resume。
+- Map/Reduce 都要求 Zod 结构化输出；Map 通过私有 chunk 文件 mention 读取正文，Reduce 只接收 Capsules 与
+  Coverage 脱敏白名单，不传本地 source path 或底层 errorMessage。
+- 初版 Claim Gate 已拒绝未知 EvidenceFact 引用、非 complete 状态下的“全部读取”声明，以及 partial 缺失
+  limitations；输出统一经过 secret redaction。更严格的 locator/revision/重复 fact 校验留在计划 3.4 完成。
+- `simplify` 复核仅调整 import 顺序，未改变执行行为。Core 全量 34 suites / 330 tests、App 全量 42 suites /
+  248 tests、Core/App production build 与 `git diff --check` 全部通过；build 仅保留既有 tsdown `define` 与
+  Markstream PURE comment warnings。
+- App `tsc --noEmit` 已尝试但仍被既有跨 Core import 的 TS6059/TS6307 和 Renderer 类型错误阻断；本段采用
+  production build 与全量测试作为验收，未把该基线问题误记为通过。
+- 提交信息：`feat: 建立 Live Evidence Map Reduce 骨架`
