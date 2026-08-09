@@ -3280,3 +3280,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Evals 3 suites / 13 tests、`tsc --noEmit`、v3 JSON report smoke 与 `git diff --check` 通过；smoke 验证
   cases=[1,10,151,500]、hard=true、Latency P50=10/P95=498。
 - 提交信息：`feat: 输出 Session Evidence 质量效率报告`
+
+## Session Evidence v0-v3 固定基线比较（2026-08-09）
+
+- Chunk 5.4 固化 baseline-v1：包含 datasetVersion、4 个 caseHash、v3 四项最低质量阈值，以及 v0-v3 的
+  hard gate、质量宏指标和效率摘要；baseline 不含任何 Session 正文或模型输出。
+- 新增 `--compare` 模式，同一进程对四个 Variant 运行相同 Dataset，逐一验证 caseId/caseHash，并输出当前质量与
+  baseline 的 delta、效率与 baseline 的 delta，以及每个 case 的门禁终态，便于以后定位具体回归。
+- Compare 的成功条件不是“所有旧 Variant 都通过”：v0/v1 的门禁失败作为真实基线保留；命令只在 Dataset hash
+  匹配、v3 全部硬门禁通过且 recall/precision/fact recall >=0.95、support precision=1 时 exit 0。
+- 当前 v0 → v3 显示 Coverage/Map-Reduce 的质量梯度：v0 relevant recall 0.5625，v2 gold fact recall
+  0.7083，v3 四项均为 1；同时明确显示 v3 664 次离线 recorded calls 的效率代价，不用单分数遮蔽权衡。
+- `simplify` 复核把阈值判断与 quality/efficiency delta 拆成纯函数；CLI 复用同一原子 JSON writer。
+- Evals 4 suites / 15 tests、`tsc --noEmit`、`--compare --reporter none` smoke 与 `git diff --check` 通过；
+  smoke 输出 `compare=v0-v3 cases=4 dataset=match v3_thresholds=pass`。
+- 提交信息：`feat: 固化 Session Evidence v0-v3 基线`

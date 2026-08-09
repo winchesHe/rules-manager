@@ -1,0 +1,38 @@
+{
+  "baselineVersion": 1,
+  "datasetVersion": "session-evidence-v1",
+  "caseHashes": {
+    "single-complete": "953fcc7309778c5cf00023b9a4e3eecc0c055b93e6df2cbd6a054620e34a96f5",
+    "mixed-ten": "01bb13d4afbb1165cb4e7e9f375a8c92557b06138be9dc2a03213a2b4db19930",
+    "scale-151-targeted": "7a58f82e04b2a37f39ba3f4c16e8e51e88b1a91db5ca8e6c248c63e6a0f6439f",
+    "scale-500-partial": "34845f8ee6b817db3b9645411b9564d3b92b209445e5ff1da7ddfb030b2ced15"
+  },
+  "v3MinimumQuality": {
+    "relevantSessionRecall": 0.95,
+    "relevantSessionPrecision": 0.95,
+    "goldFactRecall": 0.95,
+    "evidenceSupportPrecision": 1
+  },
+  "variants": {
+    "v0-prompt-only": {
+      "hardGatesPassed": false,
+      "qualityMacro": { "relevantSessionRecall": 0.5625, "relevantSessionPrecision": 0.6666666666666666, "goldFactRecall": 0.7083333333333333, "evidenceSupportPrecision": 1 },
+      "efficiency": { "latencyMs": { "p50": 8, "p95": 8 }, "calls": 4, "inputTokens": 342, "outputTokens": 140, "readBytes": 1367, "retries": 0 }
+    },
+    "v1-strict-prompt": {
+      "hardGatesPassed": false,
+      "qualityMacro": { "relevantSessionRecall": 0.8541666666666666, "relevantSessionPrecision": 0.7916666666666666, "goldFactRecall": 0.7083333333333333, "evidenceSupportPrecision": 1 },
+      "efficiency": { "latencyMs": { "p50": 9, "p95": 449 }, "calls": 4, "inputTokens": 8734, "outputTokens": 140, "readBytes": 34928, "retries": 0 }
+    },
+    "v2-live-read": {
+      "hardGatesPassed": true,
+      "qualityMacro": { "relevantSessionRecall": 1, "relevantSessionPrecision": 1, "goldFactRecall": 0.7083333333333333, "evidenceSupportPrecision": 1 },
+      "efficiency": { "latencyMs": { "p50": 10, "p95": 498 }, "calls": 4, "inputTokens": 9694, "outputTokens": 140, "readBytes": 38768, "retries": 0 }
+    },
+    "v3-map-reduce": {
+      "hardGatesPassed": true,
+      "qualityMacro": { "relevantSessionRecall": 1, "relevantSessionPrecision": 1, "goldFactRecall": 1, "evidenceSupportPrecision": 1 },
+      "efficiency": { "latencyMs": { "p50": 10, "p95": 498 }, "calls": 664, "inputTokens": 9694, "outputTokens": 220, "readBytes": 38768, "retries": 0 }
+    }
+  }
+}
