@@ -3295,3 +3295,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Evals 4 suites / 15 tests、`tsc --noEmit`、`--compare --reporter none` smoke 与 `git diff --check` 通过；
   smoke 输出 `compare=v0-v3 cases=4 dataset=match v3_thresholds=pass`。
 - 提交信息：`feat: 固化 Session Evidence v0-v3 基线`
+
+## Session Evidence Reporter 边界（2026-08-09）
+
+- Chunk 6.1 新增 EvalReporter/ReporterResult 合同、NoneReporter 和委托 LangfusePublisher 的 LangfuseReporter；
+  Reporter 只接收本地 allowlist JSON report，本地 Runner 继续是真理来源。
+- Langfuse 使用当前官方 JS/TS v5 scoped packages：`@langfuse/client`、`@langfuse/tracing`、`@langfuse/otel`
+  和 `@opentelemetry/sdk-node`，固定为 5.10.0/0.221.0；未使用 legacy unscoped `langfuse` 包。
+- SDK 依赖仅加入 `@memory-manager/evals`；测试直接检查 Core/App package 不含 `@langfuse/`，生产 bundle 不形成
+  Reporter 依赖。None 与 Langfuse 都通过同一结果合同返回 skipped/reported 和可选 runId/url。
+- `npm install` 后仓库审计报告 3 个既有/传递 vulnerabilities（1 low、2 high）；本段未执行自动 audit fix。
+- Evals Reporter 定向测试与全量类型检查通过；Langfuse SDK Publisher、Dataset/Experiment 映射在 6.2 接续。
+- 提交信息：`feat: 建立可选 Langfuse Reporter 边界`

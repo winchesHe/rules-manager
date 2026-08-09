@@ -15,5 +15,11 @@
     "ts-jest": "^29.3.4",
     "tsx": "^4.23.1",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@langfuse/client": "^5.10.0",
+    "@langfuse/otel": "^5.10.0",
+    "@langfuse/tracing": "^5.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0"
   }
 }
