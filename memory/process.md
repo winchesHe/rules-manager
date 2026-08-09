@@ -3107,3 +3107,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App `tsc --noEmit` 已尝试但仍被既有跨 Core import 的 TS6059/TS6307 和 Renderer 类型错误阻断；本段采用
   production build 与全量测试作为验收，未把该基线问题误记为通过。
 - 提交信息：`feat: 建立 Live Evidence Map Reduce 骨架`
+
+## Live Evidence 并发 Map 与分层 Reduce（2026-08-09）
+
+- Chunk 3.2 将 Map 扩展为全局 chunk job 队列，由 Host 按 `maxConcurrency` 启动固定数量 worker；结果仍按
+  原始 job 顺序归集，单个 job 失败不会让其他 Session 从 Coverage 消失。
+- Processing 采用 Session 原子语义：一个 readable Session 的所有 chunk 均成功才写 `processed` 并进入最终
+  Capsules；任一 chunk 失败则整条 Session 写 `MAP_FAILED/processFailed`，已成功的同 Session Capsule 不进入 Reduce。
+- Capsule 序列超过 `batchByteBudget` 时按 byte 分批执行隔离中间 Reduce；中间结果只保留压缩摘要和原始
+  EvidenceFact ID，Host 校验 ID 必须来自输入，随后递归收敛并交给当前 Chat 最终 Reduce。
+- App Runner 为中间 Reduce 使用哈希内部 chatId、原生结构 Schema 和 finally close；最终 Reduce 继续复用当前
+  Native handle。Map 与中间 Reduce 都不会进入可见用户 Timeline。
+- 10 Session / 多 chunk fixture 验证并发峰值为 3、分层 Reduce 被调用、单个注入失败得到 9 processed +
+  1 processFailed；151 Session fixture 验证并发峰值为 5 且 151 条 processing 终态全部为 processed。
+- `simplify` 复核将无必要的 Session Map 改为有序数组，并让测试 locator 从实际 chunk 中读取原始 messageIndex；
+  行为和并发边界不变。
+- Core 定向 3 suites / 14 tests、App 定向 2 suites / 3 tests、Core 全量 34 suites / 332 tests、App 全量
+  42 suites / 248 tests、Core/App production build 与 `git diff --check` 通过；build 仅保留既有 warnings。
+- 提交信息：`feat: 支持 Live Evidence 并发与分层 Reduce`

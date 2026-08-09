@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isRunCancelledError, throwIfAborted } from './abort.js'
 import {
   createCoverageState,
   finalizeCoverage,
@@ -14,7 +15,10 @@ import {
   type SessionCapsule,
 } from './live-evidence-context.js'
 import { containsSecret, redactSecrets } from './redaction.js'
-import { readSessionSources } from './session-source-reader.js'
+import {
+  readSessionSources,
+  type SessionSourceReadResult,
+} from './session-source-reader.js'
 import type { AgentName } from './types.js'
 
 export interface SessionEvidencePlan {
@@ -53,9 +57,27 @@ export interface EvidenceReduceInput {
   question: string
   mode: SessionEvidenceMode
   currentChat: CurrentNativeChat
-  capsules: SessionCapsule[]
+  evidence: EvidenceReduceMaterial[]
   coverage: CoverageLedger
 }
+
+export interface EvidenceReduceBatchInput {
+  runId: string
+  question: string
+  level: number
+  batchIndex: number
+  batchCount: number
+  evidence: EvidenceReduceMaterial[]
+}
+
+export interface EvidenceReduceBatchResult {
+  summary: string
+  evidenceFactIds: string[]
+}
+
+export type EvidenceReduceMaterial =
+  | { kind: 'capsule'; capsule: SessionCapsule }
+  | { kind: 'batch'; batch: EvidenceReduceBatchResult }
 
 export interface SessionEvidenceSynthesis {
   answerMarkdown: string
@@ -68,6 +90,7 @@ export interface SessionEvidenceSynthesis {
 
 export interface EvidenceModelRunner {
   runMap(input: EvidenceMapInput): Promise<SessionCapsule>
+  runReduceBatch(input: EvidenceReduceBatchInput): Promise<EvidenceReduceBatchResult>
   runReduce(input: EvidenceReduceInput): Promise<SessionEvidenceSynthesis>
 }
 
@@ -131,6 +154,10 @@ const synthesisSchema = z.object({
   })),
   limitations: z.array(z.string()),
 })
+const reduceBatchSchema = z.object({
+  summary: z.string(),
+  evidenceFactIds: z.array(z.string().min(1)),
+})
 
 function outputSchema(schema: z.ZodType): Record<string, unknown> {
   const { $schema: _schema, ...portable } = z.toJSONSchema(schema) as Record<string, unknown>
@@ -145,12 +172,20 @@ export function sessionEvidenceSynthesisOutputSchema(): Record<string, unknown> 
   return outputSchema(synthesisSchema)
 }
 
+export function evidenceReduceBatchOutputSchema(): Record<string, unknown> {
+  return outputSchema(reduceBatchSchema)
+}
+
 export function parseSessionCapsule(value: unknown): SessionCapsule {
   return capsuleSchema.parse(value) as SessionCapsule
 }
 
 export function parseSessionEvidenceSynthesis(value: unknown): SessionEvidenceSynthesis {
   return synthesisSchema.parse(value)
+}
+
+export function parseEvidenceReduceBatch(value: unknown): EvidenceReduceBatchResult {
+  return reduceBatchSchema.parse(value)
 }
 
 function validatePlan(plan: SessionEvidencePlan): void {
@@ -175,6 +210,110 @@ function validateCapsule(
   ) {
     throw new Error(`map capsule identity does not match session ${input.sessionId}`)
   }
+}
+
+function materialFactIds(material: EvidenceReduceMaterial): string[] {
+  return material.kind === 'capsule'
+    ? material.capsule.facts.map((fact) => fact.id)
+    : material.batch.evidenceFactIds
+}
+
+function validateReducedBatch(
+  batch: EvidenceReduceBatchResult,
+  input: EvidenceReduceBatchInput,
+): void {
+  const available = new Set(input.evidence.flatMap(materialFactIds))
+  if (batch.evidenceFactIds.some((factId) => !available.has(factId))) {
+    throw new Error('reduce batch contains an unknown evidence fact id')
+  }
+}
+
+async function runWithConcurrency<T, R>(
+  values: T[],
+  maxConcurrency: number,
+  task: (value: T) => Promise<R>,
+  signal?: AbortSignal,
+): Promise<Array<PromiseSettledResult<R>>> {
+  const results = new Array<PromiseSettledResult<R>>(values.length)
+  let nextIndex = 0
+  async function worker(): Promise<void> {
+    while (nextIndex < values.length) {
+      throwIfAborted(signal)
+      const index = nextIndex
+      nextIndex += 1
+      try {
+        results[index] = { status: 'fulfilled', value: await task(values[index]) }
+      } catch (error) {
+        if (isRunCancelledError(error)) throw error
+        results[index] = { status: 'rejected', reason: error }
+      }
+    }
+  }
+  await Promise.all(Array.from(
+    { length: Math.min(maxConcurrency, values.length) },
+    () => worker(),
+  ))
+  return results
+}
+
+function partitionReduceMaterials(
+  materials: EvidenceReduceMaterial[],
+  byteBudget: number,
+): EvidenceReduceMaterial[][] {
+  const batches: EvidenceReduceMaterial[][] = []
+  let batch: EvidenceReduceMaterial[] = []
+  let batchBytes = 0
+  for (const material of materials) {
+    const bytes = Buffer.byteLength(JSON.stringify(material), 'utf8')
+    if (batch.length > 0 && batchBytes + bytes > byteBudget) {
+      batches.push(batch)
+      batch = []
+      batchBytes = 0
+    }
+    batch.push(material)
+    batchBytes += bytes
+  }
+  if (batch.length > 0) batches.push(batch)
+  return batches
+}
+
+async function reduceEvidenceLayers(
+  plan: SessionEvidencePlan,
+  question: string,
+  capsules: SessionCapsule[],
+  runner: EvidenceModelRunner,
+  signal?: AbortSignal,
+): Promise<EvidenceReduceMaterial[]> {
+  let evidence: EvidenceReduceMaterial[] = capsules.map((capsule) => ({ kind: 'capsule', capsule }))
+  let level = 0
+  while (evidence.length > 1) {
+    const batches = partitionReduceMaterials(evidence, plan.batchByteBudget)
+    if (batches.length <= 1 || batches.length === evidence.length) break
+    const reduced = await runWithConcurrency(
+      batches,
+      plan.maxConcurrency,
+      async (batchEvidence) => {
+        const batchIndex = batches.indexOf(batchEvidence)
+        const input: EvidenceReduceBatchInput = {
+          runId: plan.runId,
+          question,
+          level,
+          batchIndex,
+          batchCount: batches.length,
+          evidence: batchEvidence,
+        }
+        const batch = await runner.runReduceBatch(input)
+        validateReducedBatch(batch, input)
+        return { kind: 'batch', batch } satisfies EvidenceReduceMaterial
+      },
+      signal,
+    )
+    const failed = reduced.find((result) => result.status === 'rejected')
+    if (failed?.status === 'rejected') throw failed.reason
+    evidence = reduced.map((result) => (result as PromiseFulfilledResult<EvidenceReduceMaterial>).value)
+    level += 1
+  }
+  return evidence
 }
 
 export function applyClaimGate(
@@ -263,13 +402,17 @@ export async function runLiveSessionEvidence(
     maxChunkBytes: plan.batchByteBudget,
   }, async (context) => {
     const capsules: SessionCapsule[] = []
+    const sessions: Array<{
+      source: SessionSourceReadResult
+      jobs: EvidenceMapInput[]
+    }> = []
     for (const source of sourceResults) {
       if (source.status !== 'readable') continue
       try {
         const sessionSource = context.writeSessionChunks(source)
-        const sessionCapsules: SessionCapsule[] = []
-        for (const [chunkIndex, chunkPath] of sessionSource.chunkPaths.entries()) {
-          const mapInput: EvidenceMapInput = {
+        sessions.push({
+          source,
+          jobs: sessionSource.chunkPaths.map((chunkPath, chunkIndex) => ({
             runId: plan.runId,
             question: query.question,
             sessionId: source.sessionId,
@@ -278,20 +421,10 @@ export async function runLiveSessionEvidence(
             chunkCount: sessionSource.chunkCount,
             chunkPath,
             sourceRevision: source.sourceRevision!.fingerprint,
-          }
-          const capsule = await runner.runMap(mapInput)
-          validateCapsule(capsule, mapInput)
-          context.writeCapsule(capsule)
-          sessionCapsules.push(capsule)
-        }
-        capsules.push(...sessionCapsules)
-        coverageState = recordProcessingOutcome(coverageState, {
-          id: source.sessionId,
-          agent: source.agent,
-          status: 'processed',
-          relevant: sessionCapsules.some((capsule) => capsule.relevant),
+          })),
         })
       } catch (error) {
+        if (isRunCancelledError(error)) throw error
         coverageState = recordProcessingOutcome(coverageState, {
           id: source.sessionId,
           agent: source.agent,
@@ -303,14 +436,62 @@ export async function runLiveSessionEvidence(
       }
     }
 
+    const jobs = sessions.flatMap((session) => session.jobs)
+    const mapResults = await runWithConcurrency(
+      jobs,
+      plan.maxConcurrency,
+      async (mapInput) => {
+        const capsule = await runner.runMap(mapInput)
+        validateCapsule(capsule, mapInput)
+        context.writeCapsule(capsule)
+        return capsule
+      },
+      options.signal,
+    )
+    const resultByJob = new Map(jobs.map((job, index) => [job, mapResults[index]]))
+    for (const { source, jobs: sessionJobs } of sessions) {
+      const sessionResults = sessionJobs.map((job) => resultByJob.get(job)!)
+      const failure = sessionResults.find((result) => result.status === 'rejected')
+      if (failure?.status === 'rejected') {
+        coverageState = recordProcessingOutcome(coverageState, {
+          id: source.sessionId,
+          agent: source.agent,
+          status: 'failed',
+          relevant: false,
+          errorCode: 'MAP_FAILED',
+          errorMessage: failure.reason instanceof Error
+            ? failure.reason.message
+            : String(failure.reason),
+        })
+        continue
+      }
+      const sessionCapsules = sessionResults.map((result) =>
+        (result as PromiseFulfilledResult<SessionCapsule>).value)
+      capsules.push(...sessionCapsules)
+      coverageState = recordProcessingOutcome(coverageState, {
+        id: source.sessionId,
+        agent: source.agent,
+        status: 'processed',
+        relevant: sessionCapsules.some((capsule) => capsule.relevant),
+      })
+    }
+
     const coverage = finalizeCoverage(coverageState)
     context.writeCoverage(coverage)
+    const evidence = await reduceEvidenceLayers(
+      plan,
+      query.question,
+      capsules,
+      runner,
+      options.signal,
+    )
+    throwIfAborted(options.signal)
     const synthesis = await runner.runReduce({
       runId: plan.runId,
       question: query.question,
       mode: plan.mode,
       currentChat: query.currentChat,
-      capsules,
+      evidence,
       coverage,
     })
     const claimGate = applyClaimGate(synthesis, capsules, coverage)
