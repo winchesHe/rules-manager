@@ -923,15 +923,16 @@ export function ChatView({
     >
       <div className="grid gap-2.5 border-b border-border-soft p-3" data-chat-history-head>
         <div className="flex items-center gap-2">
-          <strong className="text-[12px] font-[650] leading-[normal] text-pane-foreground">{t('threadRail')}</strong>
           <button
             aria-label={t('closeHistory')}
-            className="ml-auto inline-grid size-[30px] place-items-center rounded-lg border-0 bg-transparent p-0 text-pane-muted hover:bg-pane-hover hover:text-pane-foreground"
+            className="inline-grid size-[30px] shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0 text-pane-muted hover:bg-pane-hover hover:text-pane-foreground"
+            data-chat-history-toggle
             onClick={() => setHistoryPaneOpen(false)}
             type="button"
           >
-            <X aria-hidden="true" size={14} />
+            <History aria-hidden="true" size={16} />
           </button>
+          <strong className="text-[12px] font-[650] leading-[normal] text-pane-foreground">{t('threadRail')}</strong>
         </div>
         <button
           className="flex h-[34px] w-full items-center justify-center gap-[7px] rounded-[9px] border border-pane-border bg-pane-surface p-0 text-[11px] font-[620] leading-[normal] text-pane-foreground hover:bg-surface-raised"
@@ -987,21 +988,7 @@ export function ChatView({
         data-chat-workspace
       >
         <main aria-label={t('conversation')} className="grid min-h-0 min-w-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden bg-background">
-          <header className="window-no-drag flex min-w-0 items-center gap-1 border-b border-border px-3" data-chat-header>
-            <Button
-              aria-label={historyPaneOpen ? t('closeHistory') : t('openHistory')}
-              className={`size-8 min-w-8 shrink-0 p-0 ${historyPaneOpen ? 'bg-surface-hover' : ''}`}
-              data-chat-history-toggle
-              isIconOnly
-              onPress={() => {
-                setCompactContextOpen(false)
-                setHistoryPaneOpen((open) => !open)
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <History aria-hidden="true" size={16} />
-            </Button>
+          <header className="window-no-drag flex min-w-0 items-center gap-1 border-b border-border pl-14 pr-3" data-chat-header>
             <div className="flex min-w-0 items-baseline gap-2 px-1" data-chat-current-title>
               <strong className="min-w-0 truncate text-sm font-semibold text-foreground">{currentTitle}</strong>
               <span className="shrink-0 text-xs font-normal text-muted">{currentSubtitle}</span>
@@ -1070,9 +1057,25 @@ export function ChatView({
           )}
 
           <div
-            className={`grid min-h-0 min-w-0 overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${historyPaneOpen ? 'grid-cols-[18rem_minmax(0,1fr)]' : 'grid-cols-[0rem_minmax(0,1fr)]'} max-[1279px]:grid-cols-1`}
+            className={`relative grid min-h-0 min-w-0 overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${historyPaneOpen ? 'grid-cols-[18rem_minmax(0,1fr)]' : 'grid-cols-[0rem_minmax(0,1fr)]'} max-[1279px]:grid-cols-1`}
             data-chat-body
           >
+            {!historyPaneOpen && (
+              <Button
+                aria-label={t('openHistory')}
+                className="absolute left-3 top-3 z-30 size-8 min-w-8 bg-surface p-0 shadow-sm"
+                data-chat-history-reopen
+                isIconOnly
+                onPress={() => {
+                  setCompactContextOpen(false)
+                  setHistoryPaneOpen(true)
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <History aria-hidden="true" size={16} />
+              </Button>
+            )}
             {historyPane}
             <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden">
             <section

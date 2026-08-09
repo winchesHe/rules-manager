@@ -285,24 +285,6 @@ export function App() {
               </Button>
               <Tooltip>
                 <Button
-                  aria-label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
-                  className="size-[2.125rem] min-w-[2.125rem] shrink-0 text-muted hover:bg-surface-hover hover:text-foreground"
-                  isIconOnly
-                  onPress={() => setSidebarCollapsed((current) => !current)}
-                  variant="ghost"
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeftOpen aria-hidden="true" size={16} />
-                  ) : (
-                    <PanelLeftClose aria-hidden="true" size={16} />
-                  )}
-                </Button>
-                <Tooltip.Content>
-                  {sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
-                </Tooltip.Content>
-              </Tooltip>
-              <Tooltip>
-                <Button
                   aria-label={theme === 'dark' ? t('switchLight') : t('switchDark')}
                   className="size-[2.125rem] min-w-[2.125rem] shrink-0 text-muted hover:bg-surface-hover hover:text-foreground"
                   isIconOnly
@@ -334,6 +316,27 @@ export function App() {
             }`}
             key={activeView}
           >
+            <div className="sidebar-collapse-toggle">
+              <Tooltip>
+                <Button
+                  aria-label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
+                  className="size-8 min-w-8 rounded-md border border-border bg-background p-0 text-muted shadow-sm hover:bg-surface-hover hover:text-foreground"
+                  isIconOnly
+                  onPress={() => setSidebarCollapsed((current) => !current)}
+                  variant="ghost"
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeftOpen aria-hidden="true" size={15} />
+                  ) : (
+                    <PanelLeftClose aria-hidden="true" size={15} />
+                  )}
+                </Button>
+                <Tooltip.Content>
+                  {sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
+                </Tooltip.Content>
+              </Tooltip>
+            </div>
+
             {activeView === 'settings' && (
               <SettingsView
                 onThemeChange={(nextTheme) => {

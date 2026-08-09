@@ -239,6 +239,14 @@ body {
   -webkit-app-region: no-drag;
 }
 
+.sidebar-collapse-toggle {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.75rem;
+  z-index: 1001;
+  -webkit-app-region: no-drag;
+}
+
 button,
 a,
 input,

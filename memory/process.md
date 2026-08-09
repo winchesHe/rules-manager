@@ -3483,3 +3483,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`fix: 避免侧栏按钮与 Chat 顶栏重叠`
+
+## Chat History 开关下移（2026-08-09）
+
+- 用户指出无需移动全局侧栏按钮，直接把 Chat History 开关下移到「对话历史」区域即可；本轮替代上一轮把全局
+  按钮移到底部的方案，恢复其在右侧主界面左上角的位置。
+- Chat 顶栏移除 History 开关并增加左侧预留，只承载当前标题与对话操作；History 展开时，开关位于历史 Pane
+  标题左侧并替代原 X 关闭入口。History 收起后，在 Chat 内容区左上角显示独立恢复按钮，避免隐藏后无法打开。
+- 新增 `docs/plans/agent-dashboard-chat-history-toggle-placement.md` 并删除上一轮已过时的重叠方案计划；同步
+  `DESIGN.md`、可折叠侧栏计划、Shell 计划及 App Shell / 拖拽 / Chat 布局合同。
+- Computer Use 在真实 Electron 中复验 History 展开、关闭、内容区恢复，以及全局侧栏展开/收起：全局按钮始终
+  位于第一行，History 按钮始终位于第二行或历史 Pane 内，两个热区不再重叠；检查后恢复展开侧栏和 History。
+- App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`fix: 下移 Chat History 开关`

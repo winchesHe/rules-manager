@@ -21,7 +21,7 @@
 | 观察点 | 验证方式 |
 |---|---|
 | 所有主页面共享同一侧栏，进入设置不会换壳 | App Shell 源码合同测试 + Electron 视觉检查 |
-| 侧栏可收起为保留高频入口的图标栏，并从侧栏底部内嵌按钮恢复 | App Shell 源码合同测试 + Electron 交互检查 |
+| 侧栏可收起为保留高频入口的图标栏，并从右侧主界面按钮恢复；Chat History 开关下移 | App Shell 源码合同测试 + Electron 交互检查 |
 | 侧栏导航仍指向现有四个模块；Knowledge 使用两组默认展开的 P2 式导航承载 Rules 页面 | App Shell 源码合同测试 + App 全量测试 |
 | 设置页拥有固定 viewport，高度内独立滚动 | 布局合同测试 + Electron 视觉检查 |
 | 主题、语言、Provider 与生成默认项交互不变 | 既有 theme/i18n/provider 测试 + App 全量测试 |

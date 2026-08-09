@@ -166,7 +166,11 @@ describe('home workflow layout', () => {
     expect(source).toContain('data-chat-history-head')
     expect(source).toContain('grid gap-2.5 border-b border-border-soft p-3')
     expect(source).toContain('text-[12px] font-[650] leading-[normal] text-pane-foreground')
-    expect(source).toContain('inline-grid size-[30px] place-items-center rounded-lg')
+    expect(source).toContain('inline-grid size-[30px] shrink-0 place-items-center rounded-lg')
+    expect(source.indexOf('data-chat-history-toggle'))
+      .toBeLessThan(source.indexOf("{t('threadRail')}</strong>"))
+    expect(source).toContain('data-chat-history-reopen')
+    expect(source).toContain('absolute left-3 top-3 z-30 size-8 min-w-8 bg-surface')
     expect(source).toContain('h-[34px] w-full items-center justify-center gap-[7px] rounded-[9px]')
     expect(source).toContain('bg-pane-surface p-0 text-[11px] font-[620] leading-[normal]')
     expect(source).toContain('data-chat-history-tabs')
@@ -178,7 +182,7 @@ describe('home workflow layout', () => {
     expect(source).not.toContain('grid grid-cols-2 gap-1 rounded-lg bg-background/45 p-1')
   })
 
-  it('Chat Header 分离历史入口与当前标题，Context 在右栏内关闭并从 Header 恢复', () => {
+  it('Chat Header 只保留当前标题，History 在下方 Pane 内关闭并从内容区恢复', () => {
     const source = read('views/ChatView.tsx')
 
     expect(source).not.toContain('<h1 className="text-xl')
@@ -186,6 +190,8 @@ describe('home workflow layout', () => {
     expect(source).not.toContain("<h2 className=\"text-sm font-semibold text-foreground\">{t('context')}</h2>")
     expect(source).toContain('data-chat-management-trigger')
     expect(source).toContain('data-chat-history-toggle')
+    expect(source).toContain('data-chat-history-reopen')
+    expect(source).toContain('border-b border-border pl-14 pr-3')
     expect(source).toContain('data-chat-current-title')
     expect(source).toContain('data-chat-context-close')
     expect(source).toContain('data-chat-context-reopen')

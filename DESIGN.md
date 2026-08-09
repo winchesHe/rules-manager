@@ -61,8 +61,8 @@
 ```
 
 - 侧边栏固定宽约 `11.125rem`（178px），按 Workspace / Knowledge 分组
-- 侧栏通过底部操作区的内嵌按钮收起为 `3.5rem` 图标栏；展开时设置、收起、主题切换并列，收起后纵向保留
-  三个图标。按钮不跨压侧栏边框，不压缩品牌信息，也不占用 Scan、Chat、Settings 等主界面的标题栏空间；
+- 侧栏通过右侧主界面左上角的按钮收起为 `3.5rem` 图标栏；按钮完整位于内容区，不跨压侧栏边框。Chat 的
+  History 开关不占用同一顶栏位置：展开时位于下方「对话历史」标题行，收起后在 Chat 内容区左上角恢复；
   收起后保留主导航、知识库父级、Settings 与主题按钮，
   知识库叶子暂时隐藏并在点击父级图标后恢复展开侧栏
 - Workspace 固定展示 Scan / Projects / Chat；Knowledge 直接展示「规则管理」「Agent 上下文」两个
@@ -190,8 +190,9 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 
 - Chat 继续使用 `workspace + fluid`：14rem 产品导航是唯一常驻左栏，Chat 内部由 Conversation
   与可收起的 22rem Session Context 组成，不再常驻 Thread Rail，也不使用页面外层 Card。
-- Chat Header 使用独立历史按钮控制 18rem 历史栏，当前标题不承担导航；桌面端历史栏默认展开并
-  重排 Conversation，1279px 及以下才转为覆盖式 Drawer。Session Context 保持独立开关与收起入口。
+- Chat Header 为全局侧栏按钮预留左侧空间，只承载当前标题与对话操作；桌面端 18rem 历史栏默认展开并重排
+  Conversation，History 开关放在历史栏自身标题行，收起后从内容区左上角恢复。1279px 及以下才转为覆盖式
+  Drawer；Session Context 保持独立开关与收起入口。
 - Session Context 的收起入口占满 3rem 标题栏高度并保持固定横向内边距，热区仅限右侧按钮单元；Context Pane
   的根 stacking context 必须高于全局窗口拖拽层，按钮同时使用 `window-no-drag`，保证视觉反馈与点击范围一致，
   且不能把热区扩散到标题和计数区域。
