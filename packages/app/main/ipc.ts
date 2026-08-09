@@ -88,6 +88,7 @@ import { validateSessionReferences } from './session-context-validation.js'
 import { validatePastedTextAttachments } from './pasted-text-validation.js'
 import { recordChatCompletion } from './app-badge.js'
 import { toggleWindowMaximize } from './window-maximize.js'
+import { closeWindow, minimizeWindow } from './window-actions.js'
 
 const workspace = resolveWorkspace()
 const chatStore = new ChatStore(workspace.chatsDir)
@@ -136,6 +137,16 @@ export async function shutdownNativeChatRuntimes(): Promise<void> {
 
 export function registerIpcHandlers(): void {
   markInterruptedBackgroundRuns()
+  ipcMain.handle('window.close', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || window.isDestroyed()) throw new Error('window was not found')
+    return closeWindow(window)
+  })
+  ipcMain.handle('window.minimize', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || window.isDestroyed()) throw new Error('window was not found')
+    return minimizeWindow(window)
+  })
   ipcMain.handle('window.toggleMaximize', (event) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window || window.isDestroyed()) throw new Error('window was not found')

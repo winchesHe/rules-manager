@@ -19,6 +19,10 @@
   "generationHistory": "Generation history",
   "collapseSidebar": "Collapse sidebar",
   "expandSidebar": "Expand sidebar",
+  "windowControls": "Window controls",
+  "closeWindow": "Close window",
+  "minimizeWindow": "Minimize window",
+  "zoomWindow": "Zoom window",
   "switchLight": "Switch to light theme",
   "switchDark": "Switch to dark theme"
 }

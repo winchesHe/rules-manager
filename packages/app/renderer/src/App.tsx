@@ -20,6 +20,7 @@ import { RulesView } from './views/RulesView'
 import type { RulesSection } from './views/RulesView'
 import { SettingsView } from './views/SettingsView'
 import { SidebarToggle } from './components/SidebarToggle'
+import { WindowControls } from './components/WindowControls'
 import { changeAppTheme, readStoredTheme } from './theme'
 import type { ThemeMode } from './theme'
 
@@ -106,6 +107,7 @@ export function App() {
 
   return (
     <>
+      <WindowControls />
       <div aria-hidden="true" className="window-drag-region">
         <div
           className="window-titlebar-toggle-region"

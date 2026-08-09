@@ -3573,3 +3573,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check`
   通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 精确对齐 Codex 标题栏控件`
+
+## macOS 交通灯常亮（2026-08-09）
+
+- 用户要求红、黄、绿三个窗口按钮在窗口失焦后仍保持彩色。macOS 原生 traffic lights 会由系统在非活动窗口中
+  灰化，Electron 没有强制常亮开关，因此隐藏原生按钮并以相同位置、尺寸和颜色渲染自定义窗口控件。
+- 新增 12px 自绘交通灯，圆心固定在 22 / 42 / 62px，使用 macOS 标准红 `#ff5f57`、黄 `#febc2e`、
+  绿 `#28c840`；控件位于拖拽层上方并声明 `no-drag`，侧栏开关位置保持不变。
+- 关闭、最小化分别新增受限 IPC 与纯函数窗口动作，缩放继续复用既有 `window.toggleMaximize`；macOS 创建窗口后
+  调用 `setWindowButtonVisibility(false)`，避免原生与自绘按钮重复。
+- 新增 `docs/plans/agent-dashboard-always-on-traffic-lights.md`，同步 `DESIGN.md`，并扩展窗口拖拽 / 布局合同、
+  i18n 与窗口动作单元测试，锁定位置、颜色、热区和三种行为。
+- Computer Use 在真实 Electron 中确认聚焦和失焦时交通灯都保持彩色，并验证最小化、缩放动作；关闭行为由
+  窗口动作单测与 IPC 合同覆盖。
+- App 全量 44 suites / 271 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check`
+  通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 让窗口交通灯保持常亮`

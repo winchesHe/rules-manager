@@ -20,12 +20,22 @@ describe('window drag region', () => {
       path.join(appRoot, 'renderer/src/components/SidebarToggle.tsx'),
       'utf8',
     )
+    const controlsSource = fs.readFileSync(
+      path.join(appRoot, 'renderer/src/components/WindowControls.tsx'),
+      'utf8',
+    )
+    const mainSource = fs.readFileSync(path.join(appRoot, 'main/index.ts'), 'utf8')
 
     expect(appSource).toContain('className="window-drag-region"')
     expect(appSource).toContain('className="window-titlebar-toggle-region"')
     expect(appSource).toContain("window.api.invoke('window.toggleMaximize')")
     expect(styles).toMatch(/\.window-drag-region\s*\{[^}]*-webkit-app-region:\s*drag/s)
     expect(styles).toMatch(/\.window-titlebar-toggle-region\s*\{[^}]*height:\s*0\.75rem[^}]*-webkit-app-region:\s*no-drag/s)
+    expect(styles).toMatch(/\.window-controls\s*\{[^}]*top:\s*0\.8125rem[^}]*left:\s*1rem[^}]*z-index:\s*1002[^}]*gap:\s*0\.5rem[^}]*-webkit-app-region:\s*no-drag/s)
+    expect(styles).toMatch(/\.window-control\s*\{[^}]*width:\s*0\.75rem[^}]*height:\s*0\.75rem[^}]*border-radius:\s*999px/s)
+    expect(styles).toContain('background: #ff5f57')
+    expect(styles).toContain('background: #febc2e')
+    expect(styles).toContain('background: #28c840')
     expect(styles).toMatch(/\.sidebar-titlebar-toggle\s*\{[^}]*position:\s*absolute[^}]*top:\s*0\.125rem[^}]*left:\s*5\.5rem[^}]*z-index:\s*1001[^}]*-webkit-app-region:\s*no-drag/s)
     expect(styles).toMatch(/\.window-no-drag[\s\S]*-webkit-app-region:\s*no-drag/)
     expect(toggleSource).toContain('className="size-[2.125rem] min-w-[2.125rem] rounded-md')
@@ -33,8 +43,14 @@ describe('window drag region', () => {
     expect(appSource).toContain('data-sidebar-toggle-bottom')
     expect(styles).not.toContain('.sidebar-collapse-toggle')
     expect(ipcSource).toContain("ipcMain.handle('window.toggleMaximize'")
+    expect(ipcSource).toContain("ipcMain.handle('window.close'")
+    expect(ipcSource).toContain("ipcMain.handle('window.minimize'")
     expect(ipcSource).toContain('BrowserWindow.fromWebContents(event.sender)')
     expect(ipcSource).toContain('toggleWindowMaximize(window)')
+    expect(controlsSource).toContain("window.api.invoke('window.close')")
+    expect(controlsSource).toContain("window.api.invoke('window.minimize')")
+    expect(controlsSource).toContain("window.api.invoke('window.toggleMaximize')")
+    expect(mainSource).toContain("if (process.platform === 'darwin') window.setWindowButtonVisibility(false)")
   })
 
   it('Chat Header 位于拖拽层之上，避免顶部按钮被拖拽热区拦截', () => {

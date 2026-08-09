@@ -37,6 +37,7 @@ function createWindow(): void {
       sandbox: false,
     },
   })
+  if (process.platform === 'darwin') window.setWindowButtonVisibility(false)
   mainWindow = window
 
   const persistWindowState = (): void => {

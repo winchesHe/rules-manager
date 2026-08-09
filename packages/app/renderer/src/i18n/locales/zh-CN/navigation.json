@@ -19,6 +19,10 @@
   "generationHistory": "生成历史",
   "collapseSidebar": "收起侧边栏",
   "expandSidebar": "展开侧边栏",
+  "windowControls": "窗口控制",
+  "closeWindow": "关闭窗口",
+  "minimizeWindow": "最小化窗口",
+  "zoomWindow": "缩放窗口",
   "switchLight": "切换到浅色模式",
   "switchDark": "切换到深色模式"
 }
