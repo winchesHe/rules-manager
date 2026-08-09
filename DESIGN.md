@@ -191,6 +191,9 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
   与可收起的 22rem Session Context 组成，不再常驻 Thread Rail，也不使用页面外层 Card。
 - Chat Header 使用独立历史按钮控制 18rem 历史栏，当前标题不承担导航；桌面端历史栏默认展开并
   重排 Conversation，1279px 及以下才转为覆盖式 Drawer。Session Context 保持独立开关与收起入口。
+- Session Context 的收起入口占满 3rem 标题栏高度并保持固定横向内边距，热区仅限右侧按钮单元；Context Pane
+  的根 stacking context 必须高于全局窗口拖拽层，按钮同时使用 `window-no-drag`，保证视觉反馈与点击范围一致，
+  且不能把热区扩散到标题和计数区域。
 - History 条目显示更新时间；Native Chat 支持右键重命名、置顶和归档，置顶项在当前/归档分组内优先。
 - Conversation 与 Composer 共享 820px 阅读线；各滚动区独立，页面级容器不滚动。
 - Conversation 底部固定 Composer。首次发送前是临时 Draft；发送后一个 Chat 永久绑定一个

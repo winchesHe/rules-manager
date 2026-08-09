@@ -3453,3 +3453,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`fix: 调整侧栏折叠按钮位置`
+
+## Chat Session Context 收起按钮热区修正（2026-08-09）
+
+- 用户反馈 Chat 右上角「收起」按钮视觉位置与实际热区不一致。Computer Use 复现确认：全局窗口拖拽层覆盖顶部
+  2rem 且层级为 1000；Context Pane 因位移动画形成独立 stacking context，导致按钮的大部分区域被透明拖拽层
+  截获，只有标题栏下沿可以稳定点击。
+- Context Pane 根层级提升到 1001，按钮复用 `window-no-drag`；按钮同时占满 3rem 标题栏高度、使用固定横向
+  内边距和独立右侧单元，使视觉范围与点击范围一致，不把标题和数量区域纳入热区。
+- 新增 `docs/plans/agent-dashboard-chat-context-collapse-hit-area.md`，并同步 `DESIGN.md` 与 Chat 布局合同；不修改
+  Context 开关状态、Session 选择、窄屏 Drawer、主题 token 或其他 Chat 行为。
+- Computer Use 在真实 Electron 中复验修正前顶部点击无效、修正后按钮上沿可收起，并检查浅色与深色 Chat 布局；
+  检查后恢复浅色主题，保留 Chat 与 Context 展开状态。
+- App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`fix: 修正 Chat 上下文收起热区`

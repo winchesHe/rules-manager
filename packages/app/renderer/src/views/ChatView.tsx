@@ -1279,7 +1279,7 @@ export function ChatView({
         <aside
           aria-hidden={!contextPanelOpen}
           aria-label={t('context')}
-          className={`grid min-h-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-4 max-[1279px]:right-4 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-[22rem] max-[1279px]:rounded-2xl max-[1279px]:border max-[1279px]:shadow-2xl ${contextVisibilityClass}`}
+          className={`relative z-[1001] grid min-h-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-4 max-[1279px]:right-4 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-[22rem] max-[1279px]:rounded-2xl max-[1279px]:border max-[1279px]:shadow-2xl ${contextVisibilityClass}`}
           data-chat-context-panel
           inert={!contextPanelOpen}
         >
@@ -1287,7 +1287,7 @@ export function ChatView({
             <strong className="text-sm font-semibold text-foreground">{t('sessionContext')}</strong>
             <Chip size="sm" variant="soft">{selectedContext.length}</Chip>
             <Button
-              className="ml-auto h-8 gap-1.5 px-2 text-xs text-muted"
+              className="window-no-drag ml-auto h-full min-h-0 shrink-0 self-stretch rounded-none px-4 text-xs text-muted"
               data-chat-context-close
               onPress={() => setContextOpen(false)}
               size="sm"
