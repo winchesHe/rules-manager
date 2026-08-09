@@ -120,7 +120,7 @@ export function App() {
         }`}
       >
         <aside
-          className={`relative flex h-screen min-h-0 flex-col border-r border-border bg-sidebar pb-3 pt-11 ${
+          className={`relative flex h-screen min-h-0 flex-col border-r border-border bg-sidebar pb-3 pt-14 ${
             sidebarCollapsed ? 'px-2' : 'px-3'
           }`}
         >

@@ -26,7 +26,7 @@ describe('window drag region', () => {
     expect(appSource).toContain("window.api.invoke('window.toggleMaximize')")
     expect(styles).toMatch(/\.window-drag-region\s*\{[^}]*-webkit-app-region:\s*drag/s)
     expect(styles).toMatch(/\.window-titlebar-toggle-region\s*\{[^}]*height:\s*0\.75rem[^}]*-webkit-app-region:\s*no-drag/s)
-    expect(styles).toMatch(/\.sidebar-titlebar-toggle\s*\{[^}]*position:\s*absolute[^}]*top:\s*0\.5rem[^}]*left:\s*4\.75rem[^}]*z-index:\s*1001[^}]*-webkit-app-region:\s*no-drag/s)
+    expect(styles).toMatch(/\.sidebar-titlebar-toggle\s*\{[^}]*position:\s*absolute[^}]*top:\s*0\.125rem[^}]*left:\s*5\.5rem[^}]*z-index:\s*1001[^}]*-webkit-app-region:\s*no-drag/s)
     expect(styles).toMatch(/\.window-no-drag[\s\S]*-webkit-app-region:\s*no-drag/)
     expect(toggleSource).toContain('className="size-[2.125rem] min-w-[2.125rem] rounded-md')
     expect(appSource).toContain('data-sidebar-toggle-top')

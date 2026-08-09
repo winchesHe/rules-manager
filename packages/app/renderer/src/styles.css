@@ -235,8 +235,8 @@ body {
 
 .sidebar-titlebar-toggle {
   position: absolute;
-  top: 0.5rem;
-  left: 4.75rem;
+  top: 0.125rem;
+  left: 5.5rem;
   z-index: 1001;
   -webkit-app-region: no-drag;
 }

@@ -3558,3 +3558,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check`
   通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 对齐 Codex 侧栏按钮位置`
+
+## Codex 标题栏像素级复刻修正（2026-08-09）
+
+- 用户将当前 P1 与 Codex P2 并排指出上一版仍不一致。重新按交通灯直径和中心距归一化标定后，确认偏差包含
+  四项：按钮比交通灯低约 6px、与绿色交通灯的距离少约 9px、错误使用带方向箭头的收起图标，以及品牌区
+  比 Codex 提前约 12px 开始。
+- 展开态图标从 `PanelLeftClose` 改为 Codex 同类的无方向 `PanelLeft`；定位从 `top: 0.5rem; left: 4.75rem`
+  修正为 `top: 0.125rem; left: 5.5rem`，使图标与交通灯同轴并恢复 Codex 的控制组间距。
+- 侧栏内容顶部从 `pt-11` 调整为 `pt-14`，为原生标题栏保留 `3.5rem` 高度，品牌区从标题栏下方开始；
+  收起态底部 `PanelLeftOpen`、侧栏宽度、导航、主题和页面内容均保持不变。
+- App Shell 与窗口拖拽合同锁定标题栏高度、无方向图标及最终坐标；同步 `DESIGN.md`、状态式侧栏计划和可折叠
+  侧栏计划。Computer Use 逐轮检查浅色、深色、展开、收起和恢复，检查后恢复浅色、展开侧栏和扫描页。
+- App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check`
+  通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 精确对齐 Codex 标题栏控件`
