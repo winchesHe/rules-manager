@@ -81,7 +81,7 @@
     "exportedFile": "Managed export",
     "publishedContent": "Published rules for {{project}}",
     "publishedMetadata": "{{size}} · Modified {{time}}",
-    "exportedFileDescription": "This is a Memory Manager project rules export; it does not mean the rules were published to Claude or Codex Memory.",
+    "exportedFileDescription": "This is an Agent Dashboard project rules export; it does not mean the rules were published to Claude or Codex Memory.",
     "memoryPublicationTitle": "Project Memory publication status",
     "publishToMemory": "Publish to Memory",
     "memoryAgents": {

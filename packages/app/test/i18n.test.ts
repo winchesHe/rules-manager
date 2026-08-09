@@ -177,7 +177,7 @@ describe('APP i18n', () => {
     const allowedText = new Set([
       'A',
       'M',
-      'Memory Manager',
+      'Agent Dashboard',
       'Claude · Codex',
       'English',
       '简体中文',

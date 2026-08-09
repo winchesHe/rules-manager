@@ -9,6 +9,13 @@
   "general": {
     "title": "通用",
     "description": "管理应用语言和显示偏好。",
+    "appearance": "外观与行为",
+    "appearanceDescription": "控制 Agent Dashboard 在本机的显示方式。",
+    "theme": "主题",
+    "themeDescription": "固定使用深色或浅色的黑白界面。",
+    "themeLabel": "应用主题",
+    "darkTheme": "深色",
+    "lightTheme": "浅色",
     "language": "语言",
     "languageDescription": "更改会立即生效，并在下次启动时保留。",
     "languageLabel": "应用语言",
@@ -18,10 +25,12 @@
   },
   "providers": {
     "title": "模型服务",
+    "description": "管理本机可用的 Agent Provider；点击条目可查看模型与诊断。",
     "attention": "Provider 设置需要处理",
     "discovering": "正在发现本地 Provider",
     "discoveringLabel": "正在发现 Providers",
     "defaults": "生成默认设置",
+    "defaultsDescription": "设置新一轮规则生成默认使用的运行参数。",
     "effort": "推理强度",
     "effortDescription": "生成候选规则时应用于 {{provider}}。",
     "effortLabel": "生成推理强度",
@@ -86,6 +95,12 @@
   },
   "about": {
     "title": "关于",
-    "version": "版本 0.1.0"
+    "description": "一个用于查看本机 Agent 会话、项目与规则的本地工作台。",
+    "version": "0.1.0",
+    "versionLabel": "版本",
+    "versionDescription": "当前安装的 Agent Dashboard 版本。",
+    "localLabel": "数据边界",
+    "localDescription": "会话与项目数据继续由本机来源维护。",
+    "localValue": "仅本机"
   }
 }

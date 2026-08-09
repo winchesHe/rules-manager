@@ -40,9 +40,9 @@ describe('home workflow layout', () => {
     expect(source.indexOf("id: 'agents'"))
       .toBeLessThan(source.indexOf("id: 'memories'"))
     expect(source).toContain("{ id: 'generated', labelKey: 'rulesWorkbench' }")
-    expect(source).toContain('className="grid gap-0.5 pt-3"')
-    expect(source).toContain("groupIndex === 0 ? '' : 'mt-3.5'")
-    expect(source).toContain('h-8 justify-start pl-10 pr-2 text-xs')
+    expect(source).toContain('className="grid gap-0.5 pb-1 pt-2"')
+    expect(source).toContain("groupIndex === 0 ? '' : 'mt-2.5'")
+    expect(source).toContain('h-7 justify-start px-8 text-[11px]')
     expect(source).not.toContain('ml-5 grid gap-0.5 border-l border-border pl-2')
   })
 

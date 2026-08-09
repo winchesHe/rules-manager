@@ -81,7 +81,7 @@
     "exportedFile": "托管导出文件",
     "publishedContent": "{{project}} 已发布规则内容",
     "publishedMetadata": "{{size}} · 修改于 {{time}}",
-    "exportedFileDescription": "此文件是 Memory Manager 的项目规则导出，不代表已经发布到 Claude 或 Codex Memory。",
+    "exportedFileDescription": "此文件是 Agent Dashboard 的项目规则导出，不代表已经发布到 Claude 或 Codex Memory。",
     "memoryPublicationTitle": "项目 Memory 发布状态",
     "publishToMemory": "发布到 Memory",
     "memoryAgents": {

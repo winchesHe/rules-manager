@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
   Button,
-  Card,
   Chip,
   ListBox,
   Select,
@@ -11,7 +10,6 @@ import {
   Switch,
 } from '@heroui/react'
 import {
-  ArrowLeft,
   Boxes,
   CircleDot,
   ChevronRight,
@@ -24,6 +22,7 @@ import {
 import { afterNextPaint } from '../async'
 import { ProviderDetailsModal } from '../components/ProviderDetailsModal'
 import { changeAppLocale, currentLocale, i18n, type AppLocale } from '../i18n'
+import type { ThemeMode } from '../theme'
 import type {
   LlmConfig,
   ProviderEntry,
@@ -48,8 +47,51 @@ const efforts: Array<{ id: LlmConfig['effort']; labelKey: string }> = [
   { id: 'max', labelKey: 'providers.efforts.max' },
 ]
 
-export function SettingsView({ onBack }: { onBack: () => void }) {
-  const { t } = useTranslation(['settings', 'common'])
+type SettingsViewProps = {
+  onThemeChange: (theme: ThemeMode) => void
+  theme: ThemeMode
+}
+
+type GeneralContentProps = SettingsViewProps & {
+  error: string | null
+  locale: AppLocale
+  onLocaleChange: (locale: string) => Promise<void>
+}
+
+type ProvidersContentProps = {
+  busyProvider: ProviderId | null
+  config: LlmConfig | null
+  error: string | null
+  loading: boolean
+  onEffortChange: (effort: LlmConfig['effort']) => Promise<void>
+  onFastModeChange: (enabled: boolean) => Promise<void>
+  onOpenProvider: (provider: ProviderId) => void
+  onToggleProvider: (provider: ProviderId, enabled: boolean) => Promise<void>
+  savingDefaults: boolean
+  snapshot: ProviderSnapshot
+}
+
+type ProviderRowProps = {
+  busy: boolean
+  entry: ProviderEntry
+  onOpen: () => void
+  onToggle: (enabled: boolean) => void
+}
+
+type SettingGroupProps = {
+  children: ReactNode
+  description: string
+  title: string
+}
+
+type SettingRowProps = {
+  control: ReactNode
+  description: string
+  label: ReactNode
+}
+
+export function SettingsView({ onThemeChange, theme }: SettingsViewProps) {
+  const { t } = useTranslation('settings')
   const [activeSection, setActiveSection] = useState<SettingsSection>('general')
   const [locale, setLocale] = useState<AppLocale>(() => currentLocale())
   const [localeError, setLocaleError] = useState<string | null>(null)
@@ -107,18 +149,14 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
 
   const selectedEntry =
     snapshot.entries.find((entry) => entry.id === selectedProvider) ?? null
-  const ActiveIcon =
-    activeSection === 'general' ? Languages : activeSection === 'providers' ? Boxes : Info
-  const activeLabel = t(`settings:sections.${activeSection}`)
-
   async function selectLocale(value: string): Promise<void> {
     setLocaleError(null)
     try {
       const result = await changeAppLocale(value)
       setLocale(result.locale)
-      if (!result.persisted) setLocaleError(t('settings:general.saveFailed'))
+      if (!result.persisted) setLocaleError(t('general.saveFailed'))
     } catch {
-      setLocaleError(t('settings:general.saveFailed'))
+      setLocaleError(t('general.saveFailed'))
     }
   }
 
@@ -206,82 +244,73 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
     }))
   }
 
-  return (
-    <div className="grid h-screen grid-cols-[15rem_minmax(0,1fr)] overflow-hidden bg-background text-foreground">
-      <aside className="flex h-screen flex-col border-r border-border bg-sidebar">
-        <div className="border-b border-border px-4 pb-6 pt-10">
-          <Button
-            className="justify-start gap-2 px-3 text-muted hover:bg-surface-hover hover:text-foreground"
-            fullWidth
-            onPress={onBack}
-            variant="ghost"
-          >
-            <ArrowLeft aria-hidden="true" size={18} />
-            {t('common:actions.back')}
-          </Button>
-        </div>
+  let content: ReactNode
+  if (activeSection === 'general') {
+    content = (
+      <GeneralContent
+        error={localeError}
+        locale={locale}
+        onLocaleChange={selectLocale}
+        onThemeChange={onThemeChange}
+        theme={theme}
+      />
+    )
+  } else if (activeSection === 'providers') {
+    content = (
+      <ProvidersContent
+        busyProvider={busyProvider}
+        config={config}
+        error={error}
+        loading={loading}
+        onEffortChange={changeEffort}
+        onFastModeChange={changeFastMode}
+        onOpenProvider={setSelectedProvider}
+        onToggleProvider={toggleProvider}
+        savingDefaults={savingDefaults}
+        snapshot={snapshot}
+      />
+    )
+  } else {
+    content = <AboutContent />
+  }
 
-        <div className="overflow-y-auto px-4 py-6">
-          <p className="mb-3 px-3 text-sm font-medium text-muted">
-            {t('settings:appGroup')}
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[9.25rem_minmax(0,1fr)] overflow-hidden bg-background text-foreground">
+      <aside className="flex min-h-0 flex-col border-r border-border bg-sidebar/45 px-3 pb-4 pt-8">
+          <p className="mb-3 px-2 text-[10px] font-medium uppercase tracking-[0.09em] text-muted/70">
+            {t('appGroup')}
           </p>
-          <nav aria-label={t('settings:navigationLabel')} className="grid gap-1">
-            {sections.map(({ id, labelKey, icon: Icon }) => {
-              const active = activeSection === id
-              return (
-                <Button
-                  aria-current={active ? 'page' : undefined}
-                  className={`justify-start gap-3 px-3 text-base ${
-                    active
-                      ? 'bg-surface-hover text-foreground'
-                      : 'text-muted hover:bg-surface-hover hover:text-foreground'
-                  }`}
-                  fullWidth
-                  key={id}
-                  onPress={() => setActiveSection(id)}
-                  variant="ghost"
-                >
-                  <Icon
-                    aria-hidden="true"
-                    className={active ? 'text-primary' : undefined}
-                    size={19}
-                  />
-                  {t(`settings:${labelKey}`)}
-                </Button>
-              )
-            })}
-          </nav>
-        </div>
+        <nav aria-label={t('navigationLabel')} className="grid gap-0.5">
+          {sections.map(({ id, labelKey, icon: Icon }) => {
+            const active = activeSection === id
+            return (
+              <Button
+                aria-current={active ? 'page' : undefined}
+                className={`h-8 justify-start gap-2 px-2 text-xs ${
+                  active
+                    ? 'bg-surface-hover text-foreground'
+                    : 'text-muted hover:bg-surface-hover hover:text-foreground'
+                }`}
+                fullWidth
+                key={id}
+                onPress={() => setActiveSection(id)}
+                variant="ghost"
+              >
+                <Icon aria-hidden="true" size={15} />
+                {t(labelKey)}
+              </Button>
+            )
+          })}
+        </nav>
+        <p className="mt-auto px-2 text-[10px] leading-4 text-muted/70">
+          Agent Dashboard<br />{t('about.version')}
+        </p>
       </aside>
 
-      <main className="min-w-0 overflow-y-auto bg-background">
-        <header className="sticky top-0 z-10 flex h-20 items-center gap-4 border-b border-border bg-background px-10">
-          <ActiveIcon aria-hidden="true" className="text-muted" size={22} />
-          <h1 className="text-2xl font-medium text-foreground">{activeLabel}</h1>
-        </header>
-
-        {activeSection === 'general' ? (
-          <GeneralContent
-            error={localeError}
-            locale={locale}
-            onLocaleChange={selectLocale}
-          />
-        ) : activeSection === 'providers' ? (
-          <ProvidersContent
-            busyProvider={busyProvider}
-            config={config}
-            error={error}
-            loading={loading}
-            onEffortChange={changeEffort}
-            onFastModeChange={changeFastMode}
-            onOpenProvider={setSelectedProvider}
-            onToggleProvider={toggleProvider}
-            savingDefaults={savingDefaults}
-            snapshot={snapshot}
-          />
-        ) : (
-          <AboutContent />
-        )}
+      <main className="min-h-0 min-w-0 overflow-y-auto bg-background">
+        <div className="mx-auto w-full max-w-4xl px-[clamp(2rem,5vw,4.5rem)] py-10">
+          {content}
+        </div>
       </main>
 
       <ProviderDetailsModal
@@ -300,15 +329,13 @@ function GeneralContent({
   error,
   locale,
   onLocaleChange,
-}: {
-  error: string | null
-  locale: AppLocale
-  onLocaleChange: (locale: string) => Promise<void>
-}) {
+  onThemeChange,
+  theme,
+}: GeneralContentProps) {
   const { t } = useTranslation('settings')
   return (
-    <div className="mx-auto w-full max-w-5xl px-10 py-8">
-      <p className="mb-4 text-sm text-muted">{t('general.description')}</p>
+    <div>
+      <h1 className="sr-only">{t('sections.general')}</h1>
       {error && (
         <Alert className="mb-5" status="danger">
           <Alert.Content>
@@ -316,35 +343,65 @@ function GeneralContent({
           </Alert.Content>
         </Alert>
       )}
-      <Card className="border border-border bg-surface shadow-none">
-        <Card.Content className="flex min-h-28 flex-row items-center justify-between gap-8 p-5">
-          <div>
-            <p className="font-medium text-foreground">{t('general.language')}</p>
-            <p className="mt-1 text-sm text-muted">{t('general.languageDescription')}</p>
-          </div>
-          <Select
-            aria-label={t('general.languageLabel')}
-            className="w-52 shrink-0"
-            onSelectionChange={(key) => void onLocaleChange(String(key))}
-            selectedKey={locale}
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="zh-CN" textValue="简体中文">
-                  简体中文
-                </ListBox.Item>
-                <ListBox.Item id="en-US" textValue="English">
-                  English
-                </ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </Card.Content>
-      </Card>
+      <SettingGroup
+        description={t('general.appearanceDescription')}
+        title={t('general.appearance')}
+      >
+        <SettingRow
+          control={(
+            <Select
+              aria-label={t('general.themeLabel')}
+              className="w-40 shrink-0"
+              onSelectionChange={(key) => onThemeChange(String(key) as ThemeMode)}
+              selectedKey={theme}
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="dark" textValue={t('general.darkTheme')}>
+                    {t('general.darkTheme')}
+                  </ListBox.Item>
+                  <ListBox.Item id="light" textValue={t('general.lightTheme')}>
+                    {t('general.lightTheme')}
+                  </ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          )}
+          description={t('general.themeDescription')}
+          label={t('general.theme')}
+        />
+        <SettingRow
+          control={(
+            <Select
+              aria-label={t('general.languageLabel')}
+              className="w-40 shrink-0"
+              onSelectionChange={(key) => void onLocaleChange(String(key))}
+              selectedKey={locale}
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="zh-CN" textValue="简体中文">
+                    简体中文
+                  </ListBox.Item>
+                  <ListBox.Item id="en-US" textValue="English">
+                    English
+                  </ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          )}
+          description={t('general.languageDescription')}
+          label={t('general.language')}
+        />
+      </SettingGroup>
     </div>
   )
 }
@@ -360,22 +417,11 @@ function ProvidersContent({
   onToggleProvider,
   savingDefaults,
   snapshot,
-}: {
-  busyProvider: ProviderId | null
-  config: LlmConfig | null
-  error: string | null
-  loading: boolean
-  onEffortChange: (effort: LlmConfig['effort']) => Promise<void>
-  onFastModeChange: (enabled: boolean) => Promise<void>
-  onOpenProvider: (provider: ProviderId) => void
-  onToggleProvider: (provider: ProviderId, enabled: boolean) => Promise<void>
-  savingDefaults: boolean
-  snapshot: ProviderSnapshot
-}) {
+}: ProvidersContentProps) {
   const { t } = useTranslation('settings')
   return (
-    <div className="mx-auto w-full max-w-5xl px-10 py-8">
-      <p className="mb-4 text-sm text-muted">{t('providers.title')}</p>
+    <div>
+      <h1 className="sr-only">{t('sections.providers')}</h1>
 
       {error && (
         <Alert className="mb-5" status="danger">
@@ -386,122 +432,102 @@ function ProvidersContent({
         </Alert>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <SettingGroup
+        description={t('providers.description')}
+        title={t('providers.title')}
+      >
         {loading || snapshot.entries.length === 0 ? (
-          <div className="grid min-h-56 place-items-center" data-loading="true">
+          <div className="grid min-h-44 place-items-center border-t border-border" data-loading="true">
             <div className="flex items-center gap-3 text-sm text-muted">
               <Spinner aria-label={t('providers.discoveringLabel')} color="accent" size="sm" />
               {t('providers.discovering')}
             </div>
           </div>
         ) : (
-          snapshot.entries.map((entry, index) => (
+          snapshot.entries.map((entry) => (
             <ProviderRow
               busy={busyProvider === entry.id || snapshot.refreshing}
               entry={entry}
               key={entry.id}
               onOpen={() => onOpenProvider(entry.id)}
               onToggle={(enabled) => void onToggleProvider(entry.id, enabled)}
-              separated={index > 0}
             />
           ))
         )}
-      </div>
+      </SettingGroup>
 
       {config && (
-        <section className="mt-8">
-          <p className="mb-4 text-sm text-muted">{t('providers.defaults')}</p>
-          <Card className="border border-border bg-surface shadow-none">
-            <Card.Content className="p-0">
-              <div className="flex min-h-28 items-center justify-between gap-8 p-5">
-                <div>
-                  <p className="font-medium text-foreground">{t('providers.effort')}</p>
-                  <p className="mt-1 text-sm text-muted">
-                    {t('providers.effortDescription', { provider: config.provider })}
-                  </p>
-                </div>
-                <Select
-                  aria-label={t('providers.effortLabel')}
-                  className="w-52 shrink-0"
-                  isDisabled={savingDefaults}
-                  onSelectionChange={(key) =>
-                    void onEffortChange(String(key) as LlmConfig['effort'])
-                  }
-                  selectedKey={config.effort}
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {efforts.map((effort) => (
-                        <ListBox.Item
-                          id={effort.id}
-                          key={effort.id}
-                          textValue={t(effort.labelKey)}
-                        >
-                          {t(effort.labelKey)}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </div>
-              <div className="flex min-h-28 items-center justify-between gap-8 border-t border-border p-5">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-foreground">{t('providers.fastMode')}</p>
-                    <Chip size="sm" variant="soft">
-                      Claude · Codex
-                    </Chip>
-                  </div>
-                  <p className="mt-1 text-sm text-muted">
-                    {t('providers.fastModeDescription')}
-                  </p>
-                </div>
-                <Switch
-                  aria-label={t('providers.fastModeLabel')}
-                  isDisabled={savingDefaults}
-                  isSelected={config.fastMode === true}
-                  onChange={(enabled) => void onFastModeChange(enabled)}
-                >
-                  <Switch.Content>
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                  </Switch.Content>
-                </Switch>
-              </div>
-            </Card.Content>
-          </Card>
-        </section>
+        <SettingGroup
+          description={t('providers.defaultsDescription')}
+          title={t('providers.defaults')}
+        >
+          <SettingRow
+            control={(
+              <Select
+                aria-label={t('providers.effortLabel')}
+                className="w-40 shrink-0"
+                isDisabled={savingDefaults}
+                onSelectionChange={(key) =>
+                  void onEffortChange(String(key) as LlmConfig['effort'])
+                }
+                selectedKey={config.effort}
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {efforts.map((effort) => (
+                      <ListBox.Item
+                        id={effort.id}
+                        key={effort.id}
+                        textValue={t(effort.labelKey)}
+                      >
+                        {t(effort.labelKey)}
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            )}
+            description={t('providers.effortDescription', { provider: config.provider })}
+            label={t('providers.effort')}
+          />
+          <SettingRow
+            control={(
+              <Switch
+                aria-label={t('providers.fastModeLabel')}
+                isDisabled={savingDefaults}
+                isSelected={config.fastMode === true}
+                onChange={(enabled) => void onFastModeChange(enabled)}
+              >
+                <Switch.Content>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                </Switch.Content>
+              </Switch>
+            )}
+            description={t('providers.fastModeDescription')}
+            label={(
+              <span className="flex items-center gap-2">
+                {t('providers.fastMode')}
+                <Chip size="sm" variant="soft">Claude · Codex</Chip>
+              </span>
+            )}
+          />
+        </SettingGroup>
       )}
     </div>
   )
 }
 
-function ProviderRow({
-  busy,
-  entry,
-  onOpen,
-  onToggle,
-  separated,
-}: {
-  busy: boolean
-  entry: ProviderEntry
-  onOpen: () => void
-  onToggle: (enabled: boolean) => void
-  separated: boolean
-}) {
+function ProviderRow({ busy, entry, onOpen, onToggle }: ProviderRowProps) {
   const { t } = useTranslation('settings')
   const Icon = providerIcon(entry.id)
   return (
-    <div
-      className={`flex min-h-24 items-center gap-4 px-6 transition-colors hover:bg-surface-hover ${
-        separated ? 'border-t border-border' : ''
-      }`}
-    >
+    <div className="flex min-h-20 items-center gap-4 border-t border-border py-4 transition-colors hover:bg-surface-hover/60">
       <button
         className="flex min-w-0 flex-1 items-center gap-4 text-left"
         onClick={onOpen}
@@ -511,7 +537,7 @@ function ProviderRow({
         <Icon aria-hidden="true" className="shrink-0 text-foreground" size={22} />
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
-            <strong className="text-lg font-medium text-foreground">{entry.label}</strong>
+            <strong className="text-sm font-medium text-foreground">{entry.label}</strong>
             {entry.isDefault && (
               <Chip color="accent" size="sm" variant="soft">
                 {t('providers.default')}
@@ -562,14 +588,47 @@ function providerIcon(provider: ProviderId): typeof Terminal {
 function AboutContent() {
   const { t } = useTranslation('settings')
   return (
-    <div className="mx-auto w-full max-w-5xl px-10 py-8">
-      <p className="mb-4 text-sm text-muted">{t('about.title')}</p>
-      <Card className="border border-border bg-surface shadow-none">
-        <Card.Content className="grid gap-1 p-6">
-          <strong className="text-lg text-foreground">Memory Manager</strong>
-          <span className="text-sm text-muted">{t('about.version')}</span>
-        </Card.Content>
-      </Card>
+    <div>
+      <h1 className="sr-only">{t('sections.about')}</h1>
+      <SettingGroup
+        description={t('about.description')}
+        title={'Agent Dashboard'}
+      >
+        <SettingRow
+          control={<span className="text-sm text-muted">{t('about.version')}</span>}
+          description={t('about.versionDescription')}
+          label={t('about.versionLabel')}
+        />
+        <SettingRow
+          control={<span className="text-sm text-muted">{t('about.localValue')}</span>}
+          description={t('about.localDescription')}
+          label={t('about.localLabel')}
+        />
+      </SettingGroup>
+    </div>
+  )
+}
+
+function SettingGroup({ children, description, title }: SettingGroupProps) {
+  return (
+    <section className="mb-9 border-t border-border">
+      <div className="py-4">
+        <h2 className="text-base font-medium text-foreground">{title}</h2>
+        <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function SettingRow({ control, description, label }: SettingRowProps) {
+  return (
+    <div className="grid min-h-20 grid-cols-[minmax(0,1fr)_auto] items-center gap-6 border-t border-border py-3.5">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <p className="mt-1 max-w-2xl text-xs leading-5 text-muted">{description}</p>
+      </div>
+      <div className="shrink-0">{control}</div>
     </div>
   )
 }

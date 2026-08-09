@@ -3371,3 +3371,24 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   `git diff --check` 通过；App 独立 `tsc --noEmit` 仍受仓库既有跨 workspace rootDir/file-list 配置和既有
   sessionEvidenceMode 类型错误影响，本次使用 production build 作为有效类型/打包验证。
 - 提交信息：`fix: 修正 Session Context 全选与统计`
+
+## Agent Dashboard 侧栏与设置迁移（2026-08-09）
+
+- 面向用户的产品名统一为 `Agent Dashboard`：Renderer 品牌、HTML/BrowserWindow 标题、Electron app name、
+  关于页、用户可见双语说明与宿主 Session Policy 已更新；CLI、npm workspace、`.memory-manager` 数据目录、
+  IPC 名称和受管文件标记继续保持原值，避免破坏兼容性。
+- App Shell 侧栏收窄为 11.125rem，按 Workspace / Knowledge 分组保留 Scan / Projects / Chat / Rules
+  真实导航，Settings 固定在底部；移除绿色品牌块、active icon 和侧栏主题快捷按钮，不加入预览稿中的虚构入口或隐私 tips。
+- Settings 不再切换到独立全屏外壳，而是在同一固定高度 App Shell 中使用 9.25rem 分区菜单与 Setting Row；
+  主题、语言、四个 Provider、Provider 详情、推理强度、Fast Mode 和关于信息均保留原有读写链路。
+- 深浅主题 token 改为黑白灰；绿、黄、红仍只承担 Provider/业务状态语义。主题切换迁入“通用”设置并继续使用
+  `memory-manager.theme` 本地持久化。
+- 新增 App Shell / Settings 布局合同测试，并更新 Rules 二级导航、i18n 和主题合同；App 全量 43 suites / 268 tests、
+  Electron production build 与 `git diff --check` 通过。
+- 使用 Computer Use 在真实 Electron 窗口复验 Scan、Settings 通用、Provider、深色/浅色切换和固定 viewport；
+  首轮发现 178px 侧栏品牌名截断后收紧字标，复验已完整显示，最终恢复原深色偏好。
+- App 独立 `tsc --noEmit` 仍受仓库既有跨 workspace `rootDir/file-list`、`sessionEvidenceMode` 与 HeroUI
+  `variant="flat"` 类型错误影响；本轮没有新增 App.tsx / SettingsView.tsx 类型错误，并以 production build
+  作为有效类型与打包验证。
+- `simplify` 复核将 Settings Props 与活动分区渲染显式化，移除嵌套三元表达式，不改变 UI 或设置行为。
+- 提交信息：`feat: 迁移 Agent Dashboard 侧栏与设置`

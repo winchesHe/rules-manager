@@ -8,7 +8,7 @@ import type {
 } from './chat-runtime.js'
 import { safeToolActivity } from './chat-event.js'
 
-export const HOST_SESSION_POLICY = `Memory Manager 可能在用户消息前附加 <host_session_context>。
+export const HOST_SESSION_POLICY = `Agent Dashboard 可能在用户消息前附加 <host_session_context>。
 它描述用户为当前任务选择的历史 Agent Session。
 当该块出现时，在执行用户指令前先尝试按其中命令读取每个 selected Session；读取深度、
 搜索方式、并行方式和上下文压缩由你自行决定。单个来源失败不得阻塞其他来源。

@@ -9,6 +9,13 @@
   "general": {
     "title": "General",
     "description": "Manage the app language and display preferences.",
+    "appearance": "Appearance & behavior",
+    "appearanceDescription": "Control how Agent Dashboard appears on this device.",
+    "theme": "Theme",
+    "themeDescription": "Use a fixed monochrome dark or light interface.",
+    "themeLabel": "App theme",
+    "darkTheme": "Dark",
+    "lightTheme": "Light",
     "language": "Language",
     "languageDescription": "Changes apply immediately and persist for the next launch.",
     "languageLabel": "App language",
@@ -18,10 +25,12 @@
   },
   "providers": {
     "title": "Providers",
+    "description": "Manage local Agent providers. Open a provider to inspect models and diagnostics.",
     "attention": "Provider settings need attention",
     "discovering": "Discovering local providers",
     "discoveringLabel": "Discovering providers",
     "defaults": "Generation defaults",
+    "defaultsDescription": "Choose the runtime defaults for a new rule generation run.",
     "effort": "Effort",
     "effortDescription": "Applied to {{provider}} when generating rule candidates.",
     "effortLabel": "Generation effort",
@@ -86,6 +95,12 @@
   },
   "about": {
     "title": "About",
-    "version": "Version 0.1.0"
+    "description": "A local workspace for understanding Agent sessions, projects, and rules.",
+    "version": "0.1.0",
+    "versionLabel": "Version",
+    "versionDescription": "The currently installed Agent Dashboard version.",
+    "localLabel": "Data boundary",
+    "localDescription": "Session and project data continues to be maintained by local sources.",
+    "localValue": "On device"
   }
 }

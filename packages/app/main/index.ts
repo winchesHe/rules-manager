@@ -13,6 +13,8 @@ let mainWindow: BrowserWindow | null = null
 let nativeRuntimesShuttingDown = false
 let nativeRuntimesShutdown = false
 
+app.setName('Agent Dashboard')
+
 function createWindow(): void {
   const positionStatePath = join(app.getPath('userData'), 'window-position.json')
   const restoredPosition = loadWindowPosition(
@@ -25,7 +27,8 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 620,
     show: false,
-    backgroundColor: '#f4f5f7',
+    backgroundColor: '#090909',
+    title: 'Agent Dashboard',
     titleBarStyle: 'hiddenInset',
     ...restoredPosition,
     webPreferences: {
