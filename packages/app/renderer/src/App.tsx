@@ -125,7 +125,7 @@ export function App() {
           }`}
         >
           {!sidebarCollapsed && (
-            <div className="mb-2 flex justify-end px-1" data-sidebar-toggle-top>
+            <div className="sidebar-titlebar-toggle" data-sidebar-toggle-top>
               <SidebarToggle
                 collapsed={false}
                 onToggle={() => setSidebarCollapsed(true)}

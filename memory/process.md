@@ -3544,3 +3544,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check` 通过；
   build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 按状态将侧栏开关归位`
+
+## 展开态侧栏按钮对齐 Codex 标题栏（2026-08-09）
+
+- 用户以 Codex 桌面端截图明确最终位置：展开态收起按钮应位于 macOS 标题栏行、紧邻交通灯，而不是侧栏内容区
+  顶部；收起态展开按钮继续保留在侧栏底部。
+- 展开态容器改为 `sidebar-titlebar-toggle` 绝对定位层，使用 `top: 0.5rem; left: 4.75rem` 对齐 Codex 的
+  标题栏控制位置，并以 `z-index: 1001` 和 `-webkit-app-region: no-drag` 保证按钮高于全局拖拽层且热区可用。
+- 控件脱离侧栏内容流，因此不再推低 Agent Dashboard 品牌区；侧栏宽度、导航、主题、页面 Header、Chat
+  History 与收起态底部入口均保持不变。同步 `DESIGN.md`、状态式侧栏计划和可折叠侧栏计划。
+- App Shell 与窗口拖拽合同增加标题栏定位、层级和 no-drag 断言；Computer Use 在真实 Electron 中复验浅色、
+  深色、展开与收起状态，确认标题栏按钮和底部恢复入口均可点击，检查后恢复浅色、展开侧栏和扫描页。
+- App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check`
+  通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 对齐 Codex 侧栏按钮位置`

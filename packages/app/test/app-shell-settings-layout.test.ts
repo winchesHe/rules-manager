@@ -30,7 +30,7 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     expect(source).toContain('<Moon aria-hidden="true"')
   })
 
-  it('侧栏可收起为图标栏，并按状态在侧栏顶部收起、底部展开', () => {
+  it('侧栏可收起为图标栏，并按状态在标题栏收起、底部展开', () => {
     const source = fs.readFileSync(path.join(rendererRoot, 'App.tsx'), 'utf8')
     const toggle = fs.readFileSync(
       path.join(rendererRoot, 'components/SidebarToggle.tsx'),
@@ -41,6 +41,7 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     expect(source).toContain("? 'grid-cols-[3.5rem_minmax(0,1fr)]'")
     expect(source).toContain("'grid-cols-[11.125rem_minmax(0,1fr)] max-[980px]:grid-cols-[10.25rem_minmax(0,1fr)]'")
     expect(source).toContain('!sidebarCollapsed && (')
+    expect(source).toContain('className="sidebar-titlebar-toggle" data-sidebar-toggle-top')
     expect(source).toContain('data-sidebar-toggle-top')
     expect(source).toContain('collapsed={false}')
     expect(source).toContain('onToggle={() => setSidebarCollapsed(true)}')
