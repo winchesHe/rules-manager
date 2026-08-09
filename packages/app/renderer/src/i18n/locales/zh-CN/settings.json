@@ -12,7 +12,7 @@
     "appearance": "外观与行为",
     "appearanceDescription": "控制 Agent Dashboard 在本机的显示方式。",
     "theme": "主题",
-    "themeDescription": "固定使用深色或浅色的黑白界面。",
+    "themeDescription": "固定使用深色或浅色界面。",
     "themeLabel": "应用主题",
     "darkTheme": "深色",
     "lightTheme": "浅色",

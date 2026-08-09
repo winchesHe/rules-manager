@@ -27,7 +27,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 620,
     show: false,
-    backgroundColor: '#090909',
+    backgroundColor: '#f4f5f7',
     title: 'Agent Dashboard',
     titleBarStyle: 'hiddenInset',
     ...restoredPosition,

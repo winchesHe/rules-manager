@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { Button } from '@heroui/react'
+import { Button, Tooltip } from '@heroui/react'
 import { useTranslation } from 'react-i18next'
 import {
   Blocks,
   FolderKanban,
   MessageSquareText,
+  Moon,
   ScanSearch,
   ScrollText,
   Settings,
+  Sun,
 } from 'lucide-react'
 import { OverviewView } from './views/OverviewView'
 import { ProjectsView } from './views/ProjectsView'
@@ -169,10 +171,10 @@ export function App() {
               ))}
             </nav>
 
-            <div className="mt-auto border-t border-border pt-3">
+            <div className="mt-auto flex items-center gap-1 border-t border-border pt-3">
               <Button
                 aria-current={activeView === 'settings' ? 'page' : undefined}
-                className={`h-[2.125rem] justify-start gap-2 px-2 text-[13px] ${
+                className={`h-[2.125rem] min-w-0 flex-1 justify-start gap-2 px-2 text-[13px] ${
                   activeView === 'settings'
                     ? 'bg-surface-hover text-foreground'
                     : 'text-muted hover:bg-surface-hover hover:text-foreground'
@@ -184,6 +186,28 @@ export function App() {
                 <Settings aria-hidden="true" size={16} />
                 <span>{t('settings')}</span>
               </Button>
+              <Tooltip>
+                <Button
+                  aria-label={theme === 'dark' ? t('switchLight') : t('switchDark')}
+                  className="size-[2.125rem] min-w-[2.125rem] shrink-0 text-muted hover:bg-surface-hover hover:text-foreground"
+                  isIconOnly
+                  onPress={() => {
+                    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                    changeAppTheme(nextTheme)
+                    setTheme(nextTheme)
+                  }}
+                  variant="ghost"
+                >
+                  {theme === 'dark' ? (
+                    <Sun aria-hidden="true" size={16} />
+                  ) : (
+                    <Moon aria-hidden="true" size={16} />
+                  )}
+                </Button>
+                <Tooltip.Content>
+                  {theme === 'dark' ? t('switchLight') : t('switchDark')}
+                </Tooltip.Content>
+              </Tooltip>
             </div>
           </aside>
 

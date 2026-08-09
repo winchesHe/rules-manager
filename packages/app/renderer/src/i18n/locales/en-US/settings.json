@@ -12,7 +12,7 @@
     "appearance": "Appearance & behavior",
     "appearanceDescription": "Control how Agent Dashboard appears on this device.",
     "theme": "Theme",
-    "themeDescription": "Use a fixed monochrome dark or light interface.",
+    "themeDescription": "Use a fixed dark or light interface.",
     "themeLabel": "App theme",
     "darkTheme": "Dark",
     "lightTheme": "Light",

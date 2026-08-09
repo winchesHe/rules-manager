@@ -3392,3 +3392,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   作为有效类型与打包验证。
 - `simplify` 复核将 Settings Props 与活动分区渲染显式化，移除嵌套三元表达式，不改变 UI 或设置行为。
 - 提交信息：`feat: 迁移 Agent Dashboard 侧栏与设置`
+
+## Agent Dashboard 主题与快捷入口修正（2026-08-09）
+
+- 用户明确指出本轮只迁移侧栏、设置布局与产品名，不授权删除主题快捷入口或修改既有主题配色；本次恢复左下角
+  Settings 与太阳/月亮按钮并排结构，同时保留 Settings 内完整主题选择。
+- `styles.css` 已与 `c6f73f0^` 的迁移前版本逐项对账一致：恢复 Codex 炭灰深色、白蓝浅色和 BrowserWindow
+  `#f4f5f7` 底色；Agent Dashboard 品牌名、新侧栏分组和设置布局不回退。
+- 合同测试新增侧栏快捷入口、Sun/Moon 图标、切换逻辑与窗口底色断言；主题测试恢复原始 12%/9%/15% 深色
+  与 217° 蓝色浅色契约。
+- 使用 Computer Use 复验浅色界面的蓝色主操作与白色侧栏、深色界面的炭灰层级，以及左下角主题按钮；检查后
+  恢复进入检查时的浅色偏好。
+- App 全量 43 suites / 268 tests、production build、`git diff --check` 通过；`styles.css` 相对迁移前版本无差异。
+- 提交信息：`fix: 恢复主题配色与侧栏切换`

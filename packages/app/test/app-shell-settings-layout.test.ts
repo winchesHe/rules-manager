@@ -23,6 +23,10 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     expect(source).toContain('<SettingsView')
     expect(source).not.toContain('<SettingsView onBack=')
     expect(source).not.toContain('text-success')
+    expect(source).toContain("theme === 'dark' ? t('switchLight') : t('switchDark')")
+    expect(source).toContain("const nextTheme = theme === 'dark' ? 'light' : 'dark'")
+    expect(source).toContain('<Sun aria-hidden="true"')
+    expect(source).toContain('<Moon aria-hidden="true"')
   })
 
   it('设置使用内嵌分区与行式控件，并承接真实主题配置', () => {
@@ -55,6 +59,7 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
 
     expect(main).toContain("app.setName('Agent Dashboard')")
     expect(main).toContain("title: 'Agent Dashboard'")
+    expect(main).toContain("backgroundColor: '#f4f5f7'")
     expect(html).toContain('<title>Agent Dashboard</title>')
     expect(packageJson.name).toBe('@memory-manager/app')
   })
