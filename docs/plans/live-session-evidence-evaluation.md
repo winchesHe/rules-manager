@@ -136,7 +136,7 @@ npm test -w @memory-manager/core -- --runInBand \
 | 7.1 | 完成 Core/App/evals 全量测试与 production build，修复所有新增回归 | 所有 suite 0 failed、0 skipped，构建无新增 warning | 全量命令 + `git diff --check` | ✅ | 2026-08-09 |
 | 7.2 | 使用隔离 HOME 做 Electron 完整/部分/变化/取消视觉与生命周期 smoke | UI 与 Coverage 一致，主应用数据不变 | production Electron 实测记录 | ✅ | 2026-08-09 |
 | 7.3 | 对照 spec 逐项完成 completion audit，更新 `memory/process.md` 和 plan reviewed/决策记录 | spec 每项有代码、测试或实测证据 | 文件/命令/运行结果 Coverage Ledger | ✅ | 2026-08-09 |
-| 7.4 | 按仓库规则完成最终 commit/push，并确认本地与 `origin/main` SHA 一致 | 工作树干净，远端包含最终提交 | Git SHA 对账 | ⏳ | —— |
+| 7.4 | 按仓库规则完成最终 commit/push，并确认本地与 `origin/main` SHA 一致 | 工作树干净，远端包含最终提交 | Git SHA 对账 | ✅ | 2026-08-09 |
 
 **Observability Checkpoint**：
 
@@ -206,7 +206,7 @@ OpenCode 创建全拒绝权限 Session 并拒绝兜底请求，Pi 使用 no-tool
 | 7. 持久化与隐私边界 | Core DB 无 schema diff；临时目录清理、ChatStore aggregate、report/payload allowlist 测试 | 已证明 |
 | 8. v3 硬门禁与版本比较 | v3 `hard_gates=pass`；compare `dataset=match v3_thresholds=pass` | 已证明 |
 | 9. Langfuse 可选且失败隔离 | Reporter/Payload 25 eval tests；none 正常；缺凭据/不可达为 reporter_failed | 已证明；当前机器无 Docker daemon/凭据，未执行真实 UI/API readback |
-| 10. 本机与交付验收 | production Electron 隔离 HOME 四状态实测；Core/App/Evals 测试与三 workspace build 完成 | Git 远端对账待 7.4 |
+| 10. 本机与交付验收 | production Electron 隔离 HOME 四状态实测；Core/App/Evals 测试与三 workspace build 完成；commit/push 后 SHA 对账 | 已证明 |
 
 最终回归：Core 36 suites / 358 tests、App 42 suites / 264 tests、Evals 6 suites / 25 tests，均 0 failed、0
 skipped。Core/App/Evals build 全部成功；Core 的 tsdown `define` warning 和 App 的第三方 Markstream PURE comment
