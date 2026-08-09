@@ -117,8 +117,8 @@ export function App() {
       <div
         className={`grid h-screen w-screen max-w-full overflow-hidden bg-background text-foreground transition-[grid-template-columns] duration-200 motion-reduce:transition-none ${
           sidebarCollapsed
-            ? 'grid-cols-[3.5rem_minmax(0,1fr)]'
-            : 'grid-cols-[11.125rem_minmax(0,1fr)] max-[980px]:grid-cols-[10.25rem_minmax(0,1fr)]'
+            ? 'grid-cols-[5.25rem_minmax(0,1fr)]'
+            : 'grid-cols-[12.5rem_minmax(0,1fr)] max-[980px]:grid-cols-[11.5rem_minmax(0,1fr)]'
         }`}
       >
         <aside

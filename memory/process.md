@@ -3599,3 +3599,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 定向 App Shell / 窗口拖拽合同 2 suites / 6 tests、production build 与 `git diff --check` 通过；build 仅有
   既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 恢复侧栏收起图标`
+
+## 调整侧栏展开与收起宽度（2026-08-09）
+
+- 用户指出收起侧栏的边框切过绿色交通灯，并要求展开侧栏再宽一些。根据自绘交通灯固定中心 22 / 42 / 62px
+  与 12px 直径，将收起宽度从 56px 调整为 84px，使绿色交通灯右缘至边框保留 16px 间距。
+- 展开宽度从 178px 调整为 200px，`<=980px` 的紧凑宽度从 164px 调整为 184px；导航、图标和底部操作
+  继续使用现有居中 / 左对齐规则，交通灯坐标、标题栏收起按钮坐标和交互均不改变。
+- 同步 `DESIGN.md`、可折叠侧栏计划与 App Shell 合同测试。
+- Computer Use 在真实 Electron 中检查浅色收起、浅色展开和深色展开状态，确认收起边框完整位于三颗交通灯
+  右侧、导航图标继续居中，展开栏文字和分组获得更多横向空间；验收后恢复浅色展开状态。
+- 定向 App Shell / 窗口拖拽合同 2 suites / 6 tests、production build 与 `git diff --check` 通过；build 仅有
+  既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 调整侧栏展开与收起宽度`

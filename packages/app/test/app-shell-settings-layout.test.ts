@@ -11,7 +11,7 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     const source = fs.readFileSync(path.join(rendererRoot, 'App.tsx'), 'utf8')
 
     expect(source).toContain('Agent Dashboard')
-    expect(source).toContain('grid-cols-[11.125rem_minmax(0,1fr)]')
+    expect(source).toContain('grid-cols-[12.5rem_minmax(0,1fr)]')
     expect(source).toContain("{t('workspace')}")
     expect(source).toContain("{t('knowledge')}")
     expect(source).toContain("{ id: 'overview', labelKey: 'scan'")
@@ -38,8 +38,8 @@ describe('Agent Dashboard App Shell 与设置布局', () => {
     )
 
     expect(source).toContain('const [sidebarCollapsed, setSidebarCollapsed] = useState(false)')
-    expect(source).toContain("? 'grid-cols-[3.5rem_minmax(0,1fr)]'")
-    expect(source).toContain("'grid-cols-[11.125rem_minmax(0,1fr)] max-[980px]:grid-cols-[10.25rem_minmax(0,1fr)]'")
+    expect(source).toContain("? 'grid-cols-[5.25rem_minmax(0,1fr)]'")
+    expect(source).toContain("'grid-cols-[12.5rem_minmax(0,1fr)] max-[980px]:grid-cols-[11.5rem_minmax(0,1fr)]'")
     expect(source).toContain('bg-sidebar pb-3 pt-14')
     expect(source).toContain('!sidebarCollapsed && (')
     expect(source).toContain('className="sidebar-titlebar-toggle" data-sidebar-toggle-top')
