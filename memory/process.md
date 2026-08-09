@@ -3159,3 +3159,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Claim Gate/Engine/Coverage 定向 3 suites / 21 tests、Core 全量 35 suites / 344 tests、Core build 与
   `git diff --check` 通过；build 只保留既有 tsdown `define` warning。
 - 提交信息：`feat: 完成 Live Evidence Claim Gate`
+
+## Live Evidence Query Plan 与 Native Chat 路由（2026-08-09）
+
+- Chunk 4.1 新增 Provider-neutral `planSessionEvidence`，支持 auto/complete/targeted；集合级关键词与不确定请求
+  偏向 complete，具体事实/命令/例子检索进入 targeted，显式模式可覆盖自动判定。
+- Planner 在 selected 为空时返回 null，生产 NativeChatController 因此保持普通 Chat 零额外 Evidence 调用；默认
+  byte budget 为 512 KiB、Map/中间 Reduce 并发为 4。
+- IPC 接受并校验可选 `sessionEvidenceMode`，生产 Controller 打开 Evidence 路由；存在 Session Context 且无粘贴
+  文本附件时，旧 `<host_session_context>` 不再注入 Provider，改由 Reader → Map → Reduce → Claim Gate 链路处理。
+- Reduce 使用真实 Chat 的 Native session/handle，成功后绑定更新后的 handle；可见 Assistant 只写
+  `renderedAnswer`，Map/Reduce 的结构化原文和内部 assistant delta 不写入 ChatStore/Timeline。
+- Session Context revision 只在整条 Evidence 链路成功后标记 injected；失败仍沿用既有 retry 语义。临时 Context
+  由 Engine finally 清理。
+- 中英文 Planner 表覆盖 11 个 complete/targeted/显式/空集合案例；Controller 验证无 Context 仅 1 次普通调用，
+  complete/targeted 各为 1 次隔离 Map + 1 次当前 Chat Reduce，并验证 handle、Gate 后答案与目录清理。
+- `simplify` 复核把 Planner reason 的嵌套条件提取为具名函数；Controller 抽出普通 send path，保持旧行为测试不变。
+- Core Planner/Engine 定向 2 suites / 14 tests、App Controller/Runner 定向 2 suites / 22 tests、Core 全量
+  36 suites / 355 tests、App 全量 42 suites / 257 tests、Core/App build 与 `git diff --check` 通过。
+- 提交信息：`feat: 接入 Live Evidence Query Plan`

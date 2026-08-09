@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
+import { runLiveSessionEvidence } from '../../core/src/live-evidence-engine.js'
+import {
+  planSessionEvidence,
+  type SessionEvidenceRequestMode,
+} from '../../core/src/live-evidence-planner.js'
+import type { AgentName } from '../../core/src/types.js'
 import {
   candidateRulesOutputSchema,
   parseCandidateRulesOutput,
@@ -26,8 +32,10 @@ import type {
   NativeChatEvent,
   NativeToolActivity,
   NativeToolItemPage,
+  NativeTurnResult,
   NativeTurnTimelineItem,
 } from './chat-runtime.js'
+import { NativeEvidenceModelRunner } from './evidence-model-runner.js'
 import { buildSessionContextPrompt } from './session-context-prompt.js'
 import { prepareSessionContextInput } from './session-context-input.js'
 import {
@@ -41,6 +49,7 @@ export interface NativeChatSendRequest {
   message: string
   config: NativeTurnConfig
   sessionContext?: NativeSessionReference[]
+  sessionEvidenceMode?: SessionEvidenceRequestMode
   pastedTextAttachments?: NativePastedTextAttachment[]
 }
 
@@ -65,6 +74,9 @@ export interface NativeChatControllerOptions {
   onEvent?: (envelope: { chatId: string; event: NativeChatEvent }) => void
   onThreadChanged?: (chatId: string) => void
   onTurnCompleted?: (chatId: string) => void
+  enableSessionEvidence?: boolean
+  sessionEvidenceHomeDir?: string
+  sessionEvidenceTempParentDir?: string
 }
 
 export interface NativeRulesStartResult {
@@ -142,46 +154,60 @@ export class NativeChatController {
     this.options.onThreadChanged?.(chatId)
     let timeline: NativeTurnTimelineItem[] = []
     try {
-      const result = await (async () => {
-        const preparedInput = await prepareSessionContextInput({
+      const evidencePlan = this.options.enableSessionEvidence && pastedTextAttachments.length === 0
+        ? planSessionEvidence({
+            runId: `${chatId}:evidence:${randomUUID()}`,
+            question: message,
+            selected: contextSelected.map((reference) => ({
+              id: reference.id,
+              agent: evidenceAgent(reference.agent),
+            })),
+            mode: request.sessionEvidenceMode ?? 'auto',
+          })
+        : null
+      let result: NativeTurnResult
+      let assistantContent: string
+      if (evidencePlan) {
+        let reduceResult: NativeTurnResult | undefined
+        const runner = new NativeEvidenceModelRunner({
+          runtime: this.options.runtime,
           provider: request.provider,
+          workingDirectory: this.options.workingDirectory,
+          config: request.config,
+          onReduceEvent: (event) => {
+            if (event.type === 'usage') this.options.onEvent?.({ chatId, event })
+          },
+          onReduceResult: (value) => { reduceResult = value },
+        })
+        const evidenceResult = await runLiveSessionEvidence({
+          question: message,
+          currentChat: {
+            chatId,
+            nativeSessionId,
+            nativeHandle: nativeSessionHandle?.nativeHandle,
+          },
+        }, evidencePlan, runner, {
+          homeDir: this.options.sessionEvidenceHomeDir,
+          tempParentDir: this.options.sessionEvidenceTempParentDir,
+        })
+        if (!reduceResult) throw new Error('session evidence reduce result is unavailable')
+        result = reduceResult
+        assistantContent = evidenceResult.renderedAnswer
+      } else {
+        result = await this.sendNativeTurn({
+          chatId,
+          provider: request.provider,
+          nativeSessionId,
+          nativeSessionHandle,
           message,
           contextPrompt,
-          revision: contextRevision,
+          contextRevision,
           pastedTextAttachments,
+          config: request.config,
+          onTimeline: (value) => { timeline = value },
         })
-        try {
-          return await this.options.runtime.sendTurn({
-            chatId,
-            provider: request.provider,
-            nativeSessionId,
-            nativeSessionHandle,
-            message: preparedInput.message,
-            ...(preparedInput.mentions ? { mentions: preparedInput.mentions } : {}),
-            workingDirectory: this.options.workingDirectory,
-            config: request.config,
-            onEvent: (event) => {
-              timeline = mergeNativeTimelineEvent(timeline, event)
-              if (event.type === 'assistant_delta' || event.type === 'thinking_delta') {
-                const item = timeline.find((current) =>
-                  current.itemId === event.itemId
-                  && current.type === (event.type === 'assistant_delta' ? 'assistant' : 'thinking'),
-                )
-                this.options.onEvent?.({
-                  chatId,
-                  event: { ...event, content: item?.type === 'assistant' || item?.type === 'thinking'
-                    ? item.content
-                    : event.text },
-                })
-              } else {
-                this.options.onEvent?.({ chatId, event })
-              }
-            },
-          })
-        } finally {
-          await preparedInput.cleanup()
-        }
-      })()
+        assistantContent = result.content
+      }
       const completedAt = this.now()
       if (contextPrompt) {
         this.options.store.markNativeSessionContextInjected(
@@ -196,11 +222,11 @@ export class NativeChatController {
       if (result.contextUsage) {
         this.options.store.updateContextUsage(chatId, result.contextUsage, completedAt)
       }
-      timeline = completeNativeTimeline(timeline, result.content)
+      timeline = completeNativeTimeline(timeline, assistantContent)
       this.options.store.appendNativeMessage(chatId, visibleMessage({
         id: randomUUID(),
         role: 'assistant',
-        content: result.content,
+        content: assistantContent,
         at: completedAt,
         startedAt,
         timeline,
@@ -213,6 +239,64 @@ export class NativeChatController {
       throw error
     } finally {
       this.options.onThreadChanged?.(chatId)
+    }
+  }
+
+  private async sendNativeTurn(input: {
+    chatId: string
+    provider: NativeChatProvider
+    nativeSessionId: string | null
+    nativeSessionHandle: NativeSessionHandle | null
+    message: string
+    contextPrompt: string | null
+    contextRevision: number
+    pastedTextAttachments: NativePastedTextAttachment[]
+    config: NativeTurnConfig
+    onTimeline: (timeline: NativeTurnTimelineItem[]) => void
+  }): Promise<NativeTurnResult> {
+    const preparedInput = await prepareSessionContextInput({
+      provider: input.provider,
+      message: input.message,
+      contextPrompt: input.contextPrompt,
+      revision: input.contextRevision,
+      pastedTextAttachments: input.pastedTextAttachments,
+    })
+    let timeline: NativeTurnTimelineItem[] = []
+    try {
+      return await this.options.runtime.sendTurn({
+        chatId: input.chatId,
+        provider: input.provider,
+        nativeSessionId: input.nativeSessionId,
+        nativeSessionHandle: input.nativeSessionHandle,
+        message: preparedInput.message,
+        ...(preparedInput.mentions ? { mentions: preparedInput.mentions } : {}),
+        workingDirectory: this.options.workingDirectory,
+        config: input.config,
+        onEvent: (event) => {
+          timeline = mergeNativeTimelineEvent(timeline, event)
+          input.onTimeline(timeline)
+          if (event.type === 'assistant_delta' || event.type === 'thinking_delta') {
+            const item = timeline.find((current) =>
+              current.itemId === event.itemId
+              && current.type === (event.type === 'assistant_delta' ? 'assistant' : 'thinking'),
+            )
+            this.options.onEvent?.({
+              chatId: input.chatId,
+              event: {
+                ...event,
+                content: item?.type === 'assistant' || item?.type === 'thinking'
+                  ? item.content
+                  : event.text,
+              },
+            })
+          } else {
+            this.options.onEvent?.({ chatId: input.chatId, event })
+          }
+        },
+      })
+    } finally {
+      input.onTimeline(timeline)
+      await preparedInput.cleanup()
     }
   }
 
@@ -479,6 +563,18 @@ export function rulesGenerationCoreBridge(
     return { provider: 'codex', model: model ?? 'opencode:default' }
   }
   return { provider, ...(model ? { model } : {}) }
+}
+
+function evidenceAgent(value: string): AgentName {
+  if (
+    value === 'claude'
+    || value === 'codex'
+    || value === 'copilot'
+    || value === 'cursor'
+    || value === 'opencode'
+    || value === 'pi'
+  ) return value
+  throw new Error('session evidence agent is unsupported')
 }
 
 function locateToolActivity(messages: ChatMessage[], itemId: string): {

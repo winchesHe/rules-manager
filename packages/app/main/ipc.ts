@@ -101,6 +101,7 @@ const nativeChatController = new NativeChatController({
   store: chatStore,
   runtime: chatRuntime,
   workingDirectory: workspace.workspaceDir,
+  enableSessionEvidence: true,
   onEvent: broadcastNativeChatEvent,
   onThreadChanged: broadcastNativeChatChanged,
   onTurnCompleted: recordChatCompletion,
@@ -624,6 +625,14 @@ function validateNativeChatSendRequest(value: unknown) {
   )) {
     throw new Error('chat model must be a non-empty string')
   }
+  if (
+    request.sessionEvidenceMode !== undefined
+    && request.sessionEvidenceMode !== 'auto'
+    && request.sessionEvidenceMode !== 'complete'
+    && request.sessionEvidenceMode !== 'targeted'
+  ) {
+    throw new Error('chat session evidence mode is unsupported')
+  }
   return {
     ...(typeof request.chatId === 'string' ? { chatId: request.chatId } : {}),
     provider: request.provider,
@@ -638,6 +647,9 @@ function validateNativeChatSendRequest(value: unknown) {
     },
     ...(request.sessionContext !== undefined
       ? { sessionContext: validateSessionReferences(request.sessionContext) }
+      : {}),
+    ...(typeof request.sessionEvidenceMode === 'string'
+      ? { sessionEvidenceMode: request.sessionEvidenceMode }
       : {}),
     ...(pastedTextAttachments.length > 0 ? { pastedTextAttachments } : {}),
   }

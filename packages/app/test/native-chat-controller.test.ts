@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from '@jest/globals'
+import { initDatabase } from '../../core/src/db.js'
 import { ChatStore } from '../main/chat-store.js'
 import {
   ChatRuntimeManager,
@@ -10,6 +11,23 @@ import {
 import { NativeChatController } from '../main/native-chat-controller.js'
 
 const roots: string[] = []
+
+function createEvidenceSession(root: string): void {
+  fs.mkdirSync(path.join(root, '.memory-manager'), { recursive: true })
+  const sourcePath = path.join(root, 'session-evidence.jsonl')
+  fs.writeFileSync(sourcePath, `${JSON.stringify({
+    role: 'user', content: '总结时先核对 Coverage', timestamp: '2026-08-09T00:00:00Z',
+  })}\n`)
+  const db = initDatabase(root)
+  db.prepare(`
+    INSERT INTO sessions (
+      id, agent, source_path, workspace_link, slug, content_hash, updated_at,
+      status, first_seen_at, last_seen_at
+    ) VALUES ('session-evidence', 'codex', ?, '/tmp/link', 'demo', 'hash',
+      '2026-08-09', 'updated', '2026-08-09', '2026-08-09')
+  `).run(sourcePath)
+  db.close()
+}
 
 describe('NativeChatController', () => {
   afterEach(() => {
@@ -92,6 +110,146 @@ describe('NativeChatController', () => {
       'resume:native-fixed:third after restart',
     ])
     expect(store.readThread('chat-fixed')?.messages).toHaveLength(6)
+  })
+
+  it('启用 Evidence 时，无 Session Context 的普通 Chat 不增加隐藏调用', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-no-evidence-'))
+    roots.push(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const requests: string[] = []
+    const controller = new NativeChatController({
+      store,
+      runtime: new ChatRuntimeManager((): ChatProviderAdapter => ({
+        start: async (request) => {
+          requests.push(request.message)
+          return { nativeSessionId: 'native-plain', content: '普通回答' }
+        },
+        resume: async () => { throw new Error('不应 resume') },
+        interrupt: async () => undefined,
+        readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+        archive: async () => undefined,
+        unarchive: async () => undefined,
+        delete: async () => undefined,
+        close: async () => undefined,
+      })),
+      workingDirectory: root,
+      createId: () => 'chat-plain-evidence-enabled',
+      enableSessionEvidence: true,
+      sessionEvidenceHomeDir: root,
+    })
+
+    await controller.send({
+      provider: 'codex', message: '普通聊天',
+      config: { effort: 'medium', fastMode: false },
+    })
+
+    expect(requests).toEqual(['普通聊天'])
+    expect(store.readThread('chat-plain-evidence-enabled')?.messages.at(-1)).toMatchObject({
+      content: '普通回答',
+    })
+  })
+
+  it.each([
+    { question: '总结这些 Session 的经验', expectedStatus: 'complete' },
+    { question: '找一下之前提到的 Coverage 要求', expectedStatus: 'targeted' },
+  ])('Session Context 自动规划并走 Evidence：$expectedStatus', async ({ question, expectedStatus }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-live-evidence-'))
+    const tempParent = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-live-evidence-context-'))
+    roots.push(root, tempParent)
+    createEvidenceSession(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const requests: Array<{ chatId: string; message: string }> = []
+    const closed: string[] = []
+    const runtime = new ChatRuntimeManager((_provider, chatId): ChatProviderAdapter => ({
+      start: async (request) => {
+        requests.push({ chatId, message: request.message })
+        if (request.message.includes('[memory-manager:live-evidence-map]')) {
+          const chunkPath = request.mentions?.[0]?.path
+          if (!chunkPath) throw new Error('map chunk mention is required')
+          const chunk = fs.readFileSync(chunkPath, 'utf8')
+          const sourceRevision = chunk.match(/"sourceRevision":"([^"]+)"/)?.[1]
+          if (!sourceRevision) throw new Error('source revision is required')
+          return {
+            nativeSessionId: 'native-map',
+            content: '',
+            structuredOutput: {
+              sessionId: 'session-evidence',
+              agent: 'codex',
+              chunkIndex: 0,
+              chunkCount: 1,
+              summary: '先核对 Coverage',
+              facts: [{
+                id: 'fact-coverage',
+                text: '总结时先核对 Coverage',
+                kind: 'explicit',
+                locators: [{
+                  sessionId: 'session-evidence', agent: 'codex', messageIndex: 0, sourceRevision,
+                }],
+              }],
+              relevant: true,
+            },
+          }
+        }
+        if (!request.message.includes('[memory-manager:live-evidence-reduce]')) {
+          throw new Error('unexpected ordinary provider turn')
+        }
+        return {
+          nativeSessionId: 'native-current-evidence',
+          nativeSessionHandle: {
+            sessionId: 'native-current-evidence', nativeHandle: 'handle-current-evidence',
+          },
+          content: '',
+          structuredOutput: {
+            answerMarkdown: '证据表明总结前应核对 Coverage。',
+            claims: [{ text: '总结前核对 Coverage', evidenceFactIds: ['fact-coverage'] }],
+            limitations: [],
+          },
+        }
+      },
+      resume: async () => { throw new Error('不应 resume') },
+      interrupt: async () => undefined,
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => { closed.push(chatId) },
+    }))
+    const controller = new NativeChatController({
+      store,
+      runtime,
+      workingDirectory: root,
+      createId: () => `chat-evidence-${expectedStatus}`,
+      now: () => '2026-08-09T10:00:00.000Z',
+      enableSessionEvidence: true,
+      sessionEvidenceHomeDir: root,
+      sessionEvidenceTempParentDir: tempParent,
+    })
+
+    const result = await controller.send({
+      provider: 'codex',
+      message: question,
+      config: { effort: 'medium', fastMode: false },
+      sessionContext: [{ agent: 'codex', id: 'session-evidence' }],
+    })
+
+    expect(result.nativeSessionId).toBe('native-current-evidence')
+    expect(requests).toHaveLength(2)
+    expect(requests[0].message).toContain('[memory-manager:live-evidence-map]')
+    expect(requests[1].message).toContain(`"status":"${expectedStatus}"`)
+    expect(requests.every((request) => !request.message.includes('<host_session_context'))).toBe(true)
+    const answer = store.readThread(`chat-evidence-${expectedStatus}`)?.messages.at(-1)?.content
+    if (expectedStatus === 'targeted') {
+      expect(answer).toContain('仅基于本次处理的证据')
+    } else {
+      expect(answer).toBe('证据表明总结前应核对 Coverage。')
+    }
+    expect(store.readThread(`chat-evidence-${expectedStatus}`)).toMatchObject({
+      nativeSessionId: 'native-current-evidence',
+      nativeSessionHandle: { nativeHandle: 'handle-current-evidence' },
+      sessionContext: { revision: 1, lastInjectedRevision: 1 },
+    })
+    expect(closed).toEqual([expect.stringMatching(/:map:/)])
+    expect(fs.readdirSync(tempParent)).toEqual([])
   })
 
   it('首轮后拒绝切换 Provider', async () => {
