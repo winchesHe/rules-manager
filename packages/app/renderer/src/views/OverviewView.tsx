@@ -4,7 +4,7 @@ import { ArrowLeft, History as HistoryIcon, ScanLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
-import { FilterTransition, PageTransition } from '../components/UxTransition'
+import { EntranceTransition, FilterTransition, PageTransition } from '../components/UxTransition'
 import { ViewError } from '../components/ViewStates'
 import { formatDateTime } from '../i18n/format'
 import { currentLocale, i18n } from '../i18n'
@@ -555,14 +555,17 @@ export function OverviewView({
       )}
 
       {scanning && agentStates ? (
-        <ScanProgressPanel
-          agentStates={agentStates}
-          onCancel={() => void cancelScan()}
-          state={scanState}
-        />
+        <EntranceTransition delay={110}>
+          <ScanProgressPanel
+            agentStates={agentStates}
+            onCancel={() => void cancelScan()}
+            state={scanState}
+          />
+        </EntranceTransition>
       ) : displayedSummary ? (
         <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <EntranceTransition delay={50}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
               <Chip size="sm" variant="soft">{t('summary.sessions', { count: displayedSummary.total })}</Chip>
               <Chip color="success" size="sm" variant="soft">{t('summary.new', { count: displayedSummary.new })}</Chip>
@@ -603,9 +606,11 @@ export function OverviewView({
                 ))}
               </div>
             </div>
-          </div>
-          <FilterTransition transitionKey={`scan-changes:${filter}`}>
-            <Card className="border border-border bg-surface shadow-none">
+            </div>
+          </EntranceTransition>
+          <EntranceTransition delay={110}>
+            <FilterTransition transitionKey={`scan-changes:${filter}`}>
+              <Card className="border border-border bg-surface shadow-none">
               <Card.Content className="p-0">
               {changes.length === 0 ? (
                 <div className="grid min-h-52 place-items-center text-sm text-muted">
@@ -658,27 +663,30 @@ export function OverviewView({
                 </Table>
               )}
               </Card.Content>
-            </Card>
-          </FilterTransition>
+              </Card>
+            </FilterTransition>
+          </EntranceTransition>
         </>
       ) : (
-        <Card className="border border-border bg-surface shadow-none">
-          <Card.Content className="grid min-h-64 place-items-center content-center gap-4 text-center">
-            <ScanLine aria-hidden="true" className="text-muted" size={28} />
-            <div>
-              <p className="font-medium text-foreground">{t('latest.firstTitle')}</p>
-              <p className="mt-1 text-sm text-muted">
-                {t('latest.firstDescription')}
-              </p>
-            </div>
-            <Button
-              className="bg-primary text-primary-foreground"
-              onPress={() => setPage('create')}
-            >
-              {t('latest.configureFirst')}
-            </Button>
-          </Card.Content>
-        </Card>
+        <EntranceTransition delay={110}>
+          <Card className="border border-border bg-surface shadow-none">
+            <Card.Content className="grid min-h-64 place-items-center content-center gap-4 text-center">
+              <ScanLine aria-hidden="true" className="text-muted" size={28} />
+              <div>
+                <p className="font-medium text-foreground">{t('latest.firstTitle')}</p>
+                <p className="mt-1 text-sm text-muted">
+                  {t('latest.firstDescription')}
+                </p>
+              </div>
+              <Button
+                className="bg-primary text-primary-foreground"
+                onPress={() => setPage('create')}
+              >
+                {t('latest.configureFirst')}
+              </Button>
+            </Card.Content>
+          </Card>
+        </EntranceTransition>
       )}
     </PageTransition>
   )

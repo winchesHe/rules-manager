@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 export function PageTransition({
   children,
@@ -10,7 +10,30 @@ export function PageTransition({
   transitionKey: string
 }) {
   return (
-    <div className={`ux-page-transition ${className}`.trim()} key={transitionKey}>
+    <div
+      className={`ux-page-transition ${className}`.trim()}
+      data-transition-key={transitionKey}
+      key={transitionKey}
+    >
+      {children}
+    </div>
+  )
+}
+
+export function EntranceTransition({
+  children,
+  className = '',
+  delay = 0,
+}: {
+  children: ReactNode
+  className?: string
+  delay?: 0 | 50 | 110
+}) {
+  return (
+    <div
+      className={`ux-entrance-transition ${className}`.trim()}
+      style={{ '--ux-enter-delay': `${delay}ms` } as CSSProperties}
+    >
       {children}
     </div>
   )
@@ -30,7 +53,7 @@ export function FilterTransition({
       aria-busy={busy}
       className="ux-filter-transition"
       data-busy={busy}
-      key={transitionKey}
+      data-transition-key={transitionKey}
     >
       {children}
     </div>

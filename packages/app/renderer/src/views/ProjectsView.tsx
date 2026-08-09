@@ -4,7 +4,7 @@ import { ChevronRight, FileSearch, FolderOpen, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
-import { FilterTransition, PageTransition } from '../components/UxTransition'
+import { EntranceTransition, FilterTransition, PageTransition } from '../components/UxTransition'
 import { EmptyProjects, ViewError } from '../components/ViewStates'
 import { currentLocale, i18n } from '../i18n'
 import { formatBytes, formatDateTime } from '../i18n/format'
@@ -160,44 +160,47 @@ export function ProjectsView({
         description={t('description')}
         title={t('title')}
       />
-      <div className="mb-5 grid gap-3">
-        <TextField className="max-w-xl" onChange={setQuery} value={query}>
-          <div className="relative">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted"
-              size={17}
-            />
-            <Input className="pl-10" fullWidth placeholder={t('list.search')} />
+      <EntranceTransition>
+        <div className="mb-5 grid gap-3">
+          <TextField className="max-w-xl" onChange={setQuery} value={query}>
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted"
+                size={17}
+              />
+              <Input className="pl-10" fullWidth placeholder={t('list.search')} />
+            </div>
+          </TextField>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div aria-label={t('filters.label')} className="flex flex-wrap gap-2">
+              {projectFilters.map((item) => (
+                <Button
+                  aria-pressed={filter === item.value}
+                  key={item.value}
+                  onPress={() => setFilter(item.value)}
+                  size="sm"
+                  variant={filter === item.value ? 'primary' : 'ghost'}
+                >
+                  {t(item.labelKey)}
+                </Button>
+              ))}
+            </div>
+            {!loading && (
+              <span aria-live="polite" className="text-xs tabular-nums text-muted">
+                {t('list.filteredCount', { visible: filteredRows.length, total: rows.length })}
+              </span>
+            )}
           </div>
-        </TextField>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div aria-label={t('filters.label')} className="flex flex-wrap gap-2">
-            {projectFilters.map((item) => (
-              <Button
-                aria-pressed={filter === item.value}
-                key={item.value}
-                onPress={() => setFilter(item.value)}
-                size="sm"
-                variant={filter === item.value ? 'primary' : 'ghost'}
-              >
-                {t(item.labelKey)}
-              </Button>
-            ))}
-          </div>
-          {!loading && (
-            <span aria-live="polite" className="text-xs tabular-nums text-muted">
-              {t('list.filteredCount', { visible: filteredRows.length, total: rows.length })}
-            </span>
-          )}
         </div>
-      </div>
+      </EntranceTransition>
 
-      <FilterTransition
-        busy={isFiltering}
-        transitionKey={`projects:${filter}:${deferredQuery}`}
-      >
-        <Card className="min-h-80 border border-border bg-surface shadow-none">
+      <EntranceTransition delay={110}>
+        <FilterTransition
+          busy={isFiltering}
+          transitionKey={`projects:${filter}:${deferredQuery}`}
+        >
+          <Card className="min-h-80 border border-border bg-surface shadow-none">
           <Card.Content className="p-0">
           {loading ? (
             <div className="min-h-64" />
@@ -263,8 +266,9 @@ export function ProjectsView({
             </Table>
           )}
           </Card.Content>
-        </Card>
-      </FilterTransition>
+          </Card>
+        </FilterTransition>
+      </EntranceTransition>
     </PageTransition>
   )
 }

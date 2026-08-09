@@ -3668,3 +3668,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   恢复浅色、展开侧栏的最近扫描页。App 全量 45 suites / 275 tests、Core 全量 36 suites / 359 tests、
   Electron production build、定向合同测试与 `git diff --check` 通过。
 - 提交信息：`fix: 移除页面切换骨架与加载`
+
+## 页面进入动效对齐 TokenTracker（2026-08-10）
+
+- 用户认为此前整页 180ms / 6px 淡入与筛选 140ms / 4px 重播效果生硬，要求直接对齐本地 TokenTracker。
+  以 TokenTracker `FadeIn.jsx` 为权威参考，复刻 350ms、12px 与
+  `cubic-bezier(0.16, 1, 0.3, 1)`，但继续使用原生 CSS，未把 Motion runtime 打入 renderer。
+- 删除整页位移动画；Page Header 保持稳定。Projects 的工具栏在 0ms 进入、表格在 110ms 进入；Scan 的
+  摘要在 50ms 进入、主表格 / 运行面板 / 空状态在 110ms 进入，形成与 TokenTracker 相同的轻微错峰层次。
+- `FilterTransition` 不再因搜索词或筛选 key 重挂载并重播位移动画，只保留 deferred filtering 期间的
+  120ms 透明度反馈；`prefers-reduced-motion` 下所有入场位移动效关闭。
+- 同步 `DESIGN.md`、UX 计划与合同测试。Computer Use 在真实 Electron 中连续切换 Scan / Projects，确认
+  Header、侧栏和最终布局稳定，检查后恢复浅色、展开侧栏的最近扫描页。
+- App 全量 45 suites / 275 tests、Core 全量 36 suites / 359 tests、Electron production build 与
+  `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 对齐 TokenTracker 页面动效`

@@ -7,20 +7,25 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const rendererRoot = path.join(appRoot, 'renderer/src')
 
 describe('Agent Dashboard UX transitions', () => {
-  it('页面和筛选结果使用统一的轻量过渡', () => {
+  it('页面区块使用 TokenTracker 同款分层进入动画', () => {
     const transition = fs.readFileSync(
       path.join(rendererRoot, 'components/UxTransition.tsx'),
       'utf8',
     )
     const styles = fs.readFileSync(path.join(rendererRoot, 'styles.css'), 'utf8')
 
-    expect(transition).toContain('className={`ux-page-transition ${className}`.trim()}')
+    expect(transition).toContain('export function EntranceTransition')
+    expect(transition).toContain('delay?: 0 | 50 | 110')
+    expect(transition).toContain("'--ux-enter-delay': `${delay}ms`")
     expect(transition).toContain('className="ux-filter-transition"')
     expect(transition).toContain('aria-busy={busy}')
-    expect(styles).toContain('animation: ux-page-enter 180ms')
-    expect(styles).toContain('animation: ux-filter-enter 140ms')
+    expect(styles).toContain('animation: ux-content-enter 350ms cubic-bezier(0.16, 1, 0.3, 1)')
+    expect(styles).toContain('transform: translateY(12px)')
+    expect(styles).not.toContain('animation: ux-page-enter 180ms')
+    expect(styles).not.toContain('animation: ux-filter-enter 140ms')
     expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/)
     expect(styles).toContain(".ux-filter-transition[data-busy='true']")
+    expect(transition).toContain('data-transition-key={transitionKey}')
   })
 
   it('App 页面切换和 Scan 筛选使用统一过渡', () => {
@@ -32,6 +37,8 @@ describe('Agent Dashboard UX transitions', () => {
     expect(overview).toContain('transitionKey="scan:history"')
     expect(overview).toContain('transitionKey="scan:create"')
     expect(overview).toContain('transitionKey={`scan-changes:${filter}`}')
+    expect(overview).toContain('<EntranceTransition delay={50}>')
+    expect(overview).toContain('<EntranceTransition delay={110}>')
   })
 
   it('项目搜索延迟计算并提供结果数量和忙碌反馈', () => {
@@ -40,6 +47,8 @@ describe('Agent Dashboard UX transitions', () => {
     expect(projects).toContain('const deferredQuery = useDeferredValue(query)')
     expect(projects).toContain('filterProjectRows(rows, deferredQuery, filter)')
     expect(projects).toContain('busy={isFiltering}')
+    expect(projects).toContain('<EntranceTransition>')
+    expect(projects).toContain('<EntranceTransition delay={110}>')
     expect(projects).toContain("t('list.filteredCount'")
     expect(projects).toContain('const deferredSessionQuery = useDeferredValue(sessionQuery)')
     expect(projects).toContain('busy={isSessionFiltering}')
