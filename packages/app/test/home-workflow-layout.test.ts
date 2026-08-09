@@ -144,7 +144,7 @@ describe('home workflow layout', () => {
     expect(source).toContain('max-[1279px]:grid-cols-1')
     expect(source).toContain("window.matchMedia('(max-width: 1279px)')")
     expect(source).toContain('inert={!contextPanelOpen}')
-    expect(source).toContain('className={`relative z-[1001] grid min-h-0 grid-rows-[3rem_minmax(0,1fr)]')
+    expect(source).toContain('relative z-[1001] grid min-h-0 grid-rows-[3rem_minmax(0,1fr)]')
     expect(source).toContain("event.key !== 'Escape'")
     expect(source).toContain('composerOptionsOpen || (compactLayout && (historyPaneOpen || compactContextOpen))')
     expect(source).toContain('if (compactLayout) {')

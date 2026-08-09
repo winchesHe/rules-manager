@@ -21,11 +21,27 @@ describe('Agent Dashboard UX transitions', () => {
     expect(transition).toContain('aria-busy={busy}')
     expect(styles).toContain('animation: ux-content-enter 350ms cubic-bezier(0.16, 1, 0.3, 1)')
     expect(styles).toContain('transform: translateY(12px)')
+    expect(styles).toContain('.ux-stagger-regions > *')
+    expect(styles).toContain(".ux-page-transition[data-transition-key^='rules:'] > :not([data-page-shell])")
+    expect(styles).toContain('.ux-enter-delay-160')
     expect(styles).not.toContain('animation: ux-page-enter 180ms')
     expect(styles).not.toContain('animation: ux-filter-enter 140ms')
     expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/)
     expect(styles).toContain(".ux-filter-transition[data-busy='true']")
     expect(transition).toContain('data-transition-key={transitionKey}')
+  })
+
+  it('规则、设置与 Chat 的主要模块也使用错峰入场', () => {
+    const pageShell = fs.readFileSync(path.join(rendererRoot, 'components/PageShell.tsx'), 'utf8')
+    const settings = fs.readFileSync(path.join(rendererRoot, 'views/SettingsView.tsx'), 'utf8')
+    const chat = fs.readFileSync(path.join(rendererRoot, 'views/ChatView.tsx'), 'utf8')
+
+    expect(pageShell).toContain('ux-stagger-regions')
+    expect(settings.match(/className="ux-stagger-regions"/g)).toHaveLength(3)
+    expect(chat).toContain('ux-entrance-fade ux-enter-delay-50')
+    expect(chat).toContain('ux-entrance-transition ux-enter-delay-110')
+    expect(chat).toContain('ux-entrance-transition ux-enter-delay-160')
+    expect(chat).toContain('ux-entrance-fade ux-enter-delay-160')
   })
 
   it('App 页面切换和 Scan 筛选使用统一过渡', () => {

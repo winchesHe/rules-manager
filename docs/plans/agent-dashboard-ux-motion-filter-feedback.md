@@ -7,9 +7,9 @@
 
 ## 交互规范
 
-- 页面进入动效对齐 TokenTracker 的 `FadeIn`：Header 不移动，工具栏、摘要、主内容按 `0 / 50 / 110ms`
-  错峰进入；每层使用 350ms、12px 纵向位移和 `cubic-bezier(0.16, 1, 0.3, 1)`，继续使用原生 CSS，
-  不增加运行时依赖。
+- 页面进入动效对齐 TokenTracker 的 `FadeIn`：普通页面的 Header、摘要、主内容按 `0 / 50 / 110ms`
+  错峰进入，Chat 延伸到 `160ms` 的 Composer；每层使用 350ms、12px 纵向位移和
+  `cubic-bezier(0.16, 1, 0.3, 1)`，继续使用原生 CSS，不增加运行时依赖。
 - Scan 的最近结果 / 新建扫描 / 历史记录、Projects 的列表 / 详情使用同一页面过渡。
 - Scan 结果筛选、Projects 搜索与筛选、项目 Session 搜索与筛选不重新播放入场动画，只保留 120ms
   busy 透明度反馈，避免每次输入或切换筛选都让整张表上下浮动。

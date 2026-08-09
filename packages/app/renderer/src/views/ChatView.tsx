@@ -917,7 +917,7 @@ export function ChatView({
     <aside
       aria-hidden={!historyPaneOpen}
       aria-label={t('threadRail')}
-      className={`relative z-10 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-r border-pane-border bg-pane transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-0 max-[1279px]:left-0 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-72 max-[1279px]:shadow-2xl ${historyPaneOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}
+      className={`ux-entrance-fade ux-enter-delay-50 relative z-10 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-r border-pane-border bg-pane transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-0 max-[1279px]:left-0 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-72 max-[1279px]:shadow-2xl ${historyPaneOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-6 opacity-0'}`}
       data-chat-history-pane
       inert={!historyPaneOpen}
     >
@@ -988,7 +988,7 @@ export function ChatView({
         data-chat-workspace
       >
         <main aria-label={t('conversation')} className="grid min-h-0 min-w-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden bg-background">
-          <header className="window-no-drag flex min-w-0 items-center gap-1 border-b border-border px-3" data-chat-header>
+          <header className="ux-entrance-transition window-no-drag flex min-w-0 items-center gap-1 border-b border-border px-3" data-chat-header>
             <div className="flex min-w-0 items-baseline gap-2 px-1" data-chat-current-title>
               <strong className="min-w-0 truncate text-sm font-semibold text-foreground">{currentTitle}</strong>
               <span className="shrink-0 text-xs font-normal text-muted">{currentSubtitle}</span>
@@ -1079,7 +1079,7 @@ export function ChatView({
             {historyPane}
             <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden">
             <section
-              className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pb-8 pt-8"
+              className="ux-entrance-transition ux-enter-delay-110 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pb-8 pt-8"
               data-chat-conversation
               onScroll={updateFollowState}
               ref={conversationRef}
@@ -1107,7 +1107,7 @@ export function ChatView({
             </section>
 
             {!legacy && (!thread || (thread.kind === 'native-chat' && !thread.archivedAt)) && (
-              <div className="bg-gradient-to-t from-background via-background to-transparent px-5 pb-4 pt-3" data-chat-composer>
+              <div className="ux-entrance-transition ux-enter-delay-160 bg-gradient-to-t from-background via-background to-transparent px-5 pb-4 pt-3" data-chat-composer>
                 {pendingInteraction && (
                   <div className="mx-auto mb-3 grid w-full max-w-[51.25rem] gap-3 rounded-2xl border border-primary/40 bg-surface p-4 shadow-lg" data-chat-interaction-card>
                     <strong className="text-sm text-foreground">{pendingInteraction.request.title ?? t('interactionTitle')}</strong>
@@ -1282,7 +1282,7 @@ export function ChatView({
         <aside
           aria-hidden={!contextPanelOpen}
           aria-label={t('context')}
-          className={`relative z-[1001] grid min-h-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-4 max-[1279px]:right-4 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-[22rem] max-[1279px]:rounded-2xl max-[1279px]:border max-[1279px]:shadow-2xl ${contextVisibilityClass}`}
+          className={`ux-entrance-fade ux-enter-delay-160 relative z-[1001] grid min-h-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden border-l border-border bg-surface transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none max-[1279px]:fixed max-[1279px]:bottom-4 max-[1279px]:right-4 max-[1279px]:top-12 max-[1279px]:z-40 max-[1279px]:w-[22rem] max-[1279px]:rounded-2xl max-[1279px]:border max-[1279px]:shadow-2xl ${contextVisibilityClass}`}
           data-chat-context-panel
           inert={!contextPanelOpen}
         >

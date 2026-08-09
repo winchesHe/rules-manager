@@ -3683,3 +3683,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 45 suites / 275 tests、Core 全量 36 suites / 359 tests、Electron production build 与
   `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 对齐 TokenTracker 页面动效`
+
+## TokenTracker 错峰入场覆盖全部主界面（2026-08-10）
+
+- 用户进一步明确要的是 TokenTracker 在每个新界面中让不同模块逐个出现的效果，而不是只覆盖 Scan / Projects。
+  继续以其 `FadeIn.jsx` 的 350ms、12px 与 `cubic-bezier(0.16, 1, 0.3, 1)` 为基准。
+- `PageShell` 现在统一让 Rules 各页面的一级模块按 `0 / 50 / 110ms` 错峰进入；Settings 的通用、模型服务、
+  关于内容组使用同样节奏。Chat 按 Header / 历史栏 / 会话 / Composer 的 `0 / 50 / 110 / 160ms`
+  进入，其中已有收起展开 transform 的历史栏和 Context 只做淡入，避免动画属性互相覆盖。
+- Scan / Projects 保留既有显式分层；搜索、筛选和异步数据更新不重新挂载页面动效，也没有恢复骨架屏或全屏
+  Loading。所有新增动画继续遵循 `prefers-reduced-motion`。
+- Computer Use 在真实 Electron 中检查 Rules 概览、Settings 通用页和 Chat：一级模块、辅助栏、固定高度、
+  历史列表、正文滚动与 Composer 均无布局回归。
+- App 全量 45 suites / 276 tests、Core 全量 36 suites / 359 tests、Electron production build 与
+  `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`feat: 扩展页面错峰入场动效`

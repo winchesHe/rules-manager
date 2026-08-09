@@ -334,7 +334,7 @@ function GeneralContent({
 }: GeneralContentProps) {
   const { t } = useTranslation('settings')
   return (
-    <div>
+    <div className="ux-stagger-regions">
       <h1 className="sr-only">{t('sections.general')}</h1>
       {error && (
         <Alert className="mb-5" status="danger">
@@ -420,7 +420,7 @@ function ProvidersContent({
 }: ProvidersContentProps) {
   const { t } = useTranslation('settings')
   return (
-    <div>
+    <div className="ux-stagger-regions">
       <h1 className="sr-only">{t('sections.providers')}</h1>
 
       {error && (
@@ -588,7 +588,7 @@ function providerIcon(provider: ProviderId): typeof Terminal {
 function AboutContent() {
   const { t } = useTranslation('settings')
   return (
-    <div>
+    <div className="ux-stagger-regions">
       <h1 className="sr-only">{t('sections.about')}</h1>
       <SettingGroup
         description={t('about.description')}

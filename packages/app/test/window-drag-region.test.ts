@@ -68,7 +68,7 @@ describe('window drag region', () => {
     expect(chatSource).toContain('aria-label={t(\'openHistory\')}')
     expect(chatSource).toContain('aria-label={t(\'chatManagement\')}')
     expect(chatSource.match(/className="size-8 min-w-8 shrink-0 p-0"/g)).toHaveLength(1)
-    expect(chatSource).toContain('className="window-no-drag flex min-w-0 items-center gap-1 border-b border-border px-3"')
+    expect(chatSource).toContain('window-no-drag flex min-w-0 items-center gap-1 border-b border-border px-3')
     expect(chatSource).not.toContain('<SidebarToggle')
   })
 })

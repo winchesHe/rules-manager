@@ -46,7 +46,7 @@ export function PageShell({
 }) {
   return (
     <div
-      className={`${widthClasses[width]} ${densityClasses[density]} ${paddingClasses[padding]} ${scrollClasses[scroll]} ${className}`.trim()}
+      className={`ux-stagger-regions ${widthClasses[width]} ${densityClasses[density]} ${paddingClasses[padding]} ${scrollClasses[scroll]} ${className}`.trim()}
       data-density={density}
       data-layout={archetype}
       data-padding={padding}
