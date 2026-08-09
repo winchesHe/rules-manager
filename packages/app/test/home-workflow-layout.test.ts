@@ -575,6 +575,7 @@ describe('home workflow layout', () => {
     expect(rulesSource).not.toContain('snapshot.rounds ?? 30')
     const mainSource = fs.readFileSync(path.join(appRoot, 'main/index.ts'), 'utf8')
     expect(mainSource).toContain('cleanupStaleEvidenceContexts()')
+    expect(mainSource).toContain('cleanupStaleLiveEvidenceContexts()')
   })
 
   it('Rules 子页面不重复 PageHeader 与 Start Generate', () => {

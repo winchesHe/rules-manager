@@ -22,7 +22,9 @@
     "processing": "Extracting evidence",
     "reducing": "Synthesizing evidence",
     "gating": "Validating evidence claims",
-    "complete": "Evidence processing complete"
+    "complete": "Evidence processing complete",
+    "cancelled": "Evidence review cancelled",
+    "failed": "Evidence review failed"
   },
   "evidenceCoverage": "Session Evidence Coverage",
   "evidenceStatus": {

@@ -43,6 +43,39 @@ function createSessionFixture(count: number, messagesPerSession: number): {
 }
 
 describe('Live Session Evidence Engine', () => {
+  it('Reader 开始前已取消时不读取、不调用模型且不创建 Context', async () => {
+    const fixture = createSessionFixture(1, 1)
+    const abortController = new AbortController()
+    abortController.abort()
+    const runner: EvidenceModelRunner = {
+      runMap: async () => { throw new Error('不应调用 Map') },
+      runReduceBatch: async () => { throw new Error('不应调用 Reduce Batch') },
+      runReduce: async () => { throw new Error('不应调用 Reduce') },
+    }
+
+    try {
+      await expect(runLiveSessionEvidence({
+        question: '总结全部 Session',
+        currentChat: { chatId: 'chat-reader-cancel' },
+      }, {
+        runId: 'run-reader-cancel',
+        mode: 'complete',
+        selected: fixture.selected,
+        reason: '取消 Reader',
+        batchByteBudget: 64 * 1024,
+        maxConcurrency: 1,
+      }, runner, {
+        homeDir: fixture.home,
+        tempParentDir: fixture.tempParent,
+        signal: abortController.signal,
+      })).rejects.toMatchObject({ code: 'RUN_CANCELLED' })
+      expect(fs.readdirSync(fixture.tempParent)).toEqual([])
+    } finally {
+      fs.rmSync(fixture.home, { recursive: true, force: true })
+      fs.rmSync(fixture.tempParent, { recursive: true, force: true })
+    }
+  })
+
   it('单 Session 单 chunk 走通 Map、当前 Chat Reduce、Coverage 与 Claim Gate', async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-live-engine-'))
     const tempParent = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-live-engine-context-'))

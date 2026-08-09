@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { throwIfAborted } from '../../core/src/abort.js'
 import {
   evidenceReduceBatchOutputSchema,
   parseEvidenceReduceBatch,
@@ -51,6 +52,7 @@ export interface NativeEvidenceModelRunnerOptions {
   config: NativeTurnConfig
   onReduceEvent?: (event: NativeChatEvent) => void
   onReduceResult?: (result: NativeTurnResult) => void
+  signal?: AbortSignal
 }
 
 function structuredValue(result: NativeTurnResult): unknown {
@@ -137,7 +139,17 @@ function internalChatId(runId: string, kind: string, identity: string): string {
 }
 
 export class NativeEvidenceModelRunner implements EvidenceModelRunner {
+  private readonly active = new Set<string>()
+
   constructor(private readonly options: NativeEvidenceModelRunnerOptions) {}
+
+  activeChatIds(): string[] {
+    return [...this.active].sort()
+  }
+
+  async interrupt(): Promise<void> {
+    await Promise.all(this.activeChatIds().map((chatId) => this.options.runtime.interrupt(chatId)))
+  }
 
   private async runStructured<T>(input: {
     chatId: string
@@ -155,20 +167,28 @@ export class NativeEvidenceModelRunner implements EvidenceModelRunner {
     let nativeSessionHandle = input.nativeSessionHandle
     let parseError: unknown
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const result = await this.options.runtime.sendTurn({
-        chatId: input.chatId,
-        provider: this.options.provider,
-        ...(nativeSessionId ? { nativeSessionId } : {}),
-        ...(nativeSessionHandle ? { nativeSessionHandle } : {}),
-        message: this.options.provider === 'pi'
-          ? piJsonPrompt(input.message, input.schema, attempt)
-          : input.message,
-        workingDirectory: this.options.workingDirectory,
-        config: this.options.config,
-        outputSchema: input.schema,
-        ...(input.mentions ? { mentions: input.mentions } : {}),
-        ...(input.onEvent ? { onEvent: input.onEvent } : {}),
-      })
+      throwIfAborted(this.options.signal)
+      this.active.add(input.chatId)
+      let result: NativeTurnResult
+      try {
+        result = await this.options.runtime.sendTurn({
+          chatId: input.chatId,
+          provider: this.options.provider,
+          ...(nativeSessionId ? { nativeSessionId } : {}),
+          ...(nativeSessionHandle ? { nativeSessionHandle } : {}),
+          message: this.options.provider === 'pi'
+            ? piJsonPrompt(input.message, input.schema, attempt)
+            : input.message,
+          workingDirectory: this.options.workingDirectory,
+          config: this.options.config,
+          outputSchema: input.schema,
+          ...(input.mentions ? { mentions: input.mentions } : {}),
+          ...(input.onEvent ? { onEvent: input.onEvent } : {}),
+        })
+      } finally {
+        this.active.delete(input.chatId)
+      }
+      throwIfAborted(this.options.signal)
       try {
         return { value: input.parse(structuredValue(result)), result }
       } catch (error) {

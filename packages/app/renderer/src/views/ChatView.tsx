@@ -1547,6 +1547,7 @@ function LiveTurn({
 function EvidenceProgressCard({ progress }: { progress: SessionEvidenceProgress }) {
   const { t } = useTranslation('chat')
   const showCount = progress.stage === 'reading' || progress.stage === 'processing'
+  const terminal = progress.stage === 'complete' || progress.stage === 'cancelled' || progress.stage === 'failed'
   return (
     <div className="flex min-h-8 items-center gap-2 px-1 text-xs text-muted" data-evidence-progress>
       <ShieldCheck aria-hidden="true" className="text-primary" size={15} />
@@ -1554,7 +1555,7 @@ function EvidenceProgressCard({ progress }: { progress: SessionEvidenceProgress 
       {showCount && (
         <span className="tabular-nums">{progress.completed}/{progress.total}</span>
       )}
-      {progress.stage !== 'complete' && <Spinner className="ml-auto" color="accent" size="sm" />}
+      {!terminal && <Spinner className="ml-auto" color="accent" size="sm" />}
     </div>
   )
 }

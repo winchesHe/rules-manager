@@ -358,7 +358,7 @@ export interface SessionEvidenceCoverageSummary {
 }
 
 export interface SessionEvidenceProgress {
-  stage: 'planning' | 'reading' | 'processing' | 'reducing' | 'gating' | 'complete'
+  stage: 'planning' | 'reading' | 'processing' | 'reducing' | 'gating' | 'complete' | 'cancelled' | 'failed'
   completed: number
   total: number
   mode: 'complete' | 'targeted'

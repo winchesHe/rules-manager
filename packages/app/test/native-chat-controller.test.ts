@@ -264,6 +264,77 @@ describe('NativeChatController', () => {
     expect(fs.readdirSync(tempParent)).toEqual([])
   })
 
+  it('取消 Evidence Map 时中断内部 Provider job、清理 Context 且不写伪完成消息', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-evidence-cancel-'))
+    const tempParent = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-evidence-cancel-context-'))
+    roots.push(root, tempParent)
+    createEvidenceSession(root)
+    const store = new ChatStore(path.join(root, 'chats'))
+    const progressStages: string[] = []
+    const interrupted: string[] = []
+    const runtime = new ChatRuntimeManager((_provider, chatId): ChatProviderAdapter => {
+      let rejectActive: ((error: Error) => void) | undefined
+      return {
+        start: async (request) => {
+          if (!request.message.includes('[memory-manager:live-evidence-map]')) {
+            throw new Error('unexpected non-map turn')
+          }
+          return new Promise((_resolve, reject) => { rejectActive = reject })
+        },
+        resume: async () => { throw new Error('不应 resume') },
+        interrupt: async () => {
+          interrupted.push(chatId)
+          const error = new Error('provider interrupted')
+          error.name = 'AbortError'
+          rejectActive?.(error)
+        },
+        readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+        archive: async () => undefined,
+        unarchive: async () => undefined,
+        delete: async () => undefined,
+        close: async () => undefined,
+      }
+    })
+    const controller = new NativeChatController({
+      store,
+      runtime,
+      workingDirectory: root,
+      createId: () => 'chat-evidence-cancel',
+      enableSessionEvidence: true,
+      sessionEvidenceHomeDir: root,
+      sessionEvidenceTempParentDir: tempParent,
+      onEvent: ({ event }) => {
+        if (event.type === 'evidence_progress') progressStages.push(event.progress.stage)
+      },
+    })
+
+    const pending = controller.send({
+      provider: 'codex',
+      message: '总结所有 Session',
+      config: { effort: 'medium', fastMode: false },
+      sessionContext: [{ agent: 'codex', id: 'session-evidence' }],
+    })
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'RUN_CANCELLED' })
+    while (runtime.activeChatIds().length === 0) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+
+    await controller.interrupt('chat-evidence-cancel')
+    await rejected
+
+    expect(interrupted).toEqual([expect.stringMatching(/:map:/)])
+    expect(runtime.activeChatIds()).toEqual([])
+    expect(fs.readdirSync(tempParent)).toEqual([])
+    expect(progressStages.at(-1)).toBe('cancelled')
+    expect(store.readThread('chat-evidence-cancel')).toMatchObject({
+      status: 'interrupted',
+      lastError: null,
+      sessionContext: { revision: 1, lastInjectedRevision: 0 },
+      messages: [{ role: 'user' }],
+    })
+    expect(store.readThread('chat-evidence-cancel')?.messages).toHaveLength(1)
+  })
+
   it('首轮后拒绝切换 Provider', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-chat-'))
     roots.push(root)

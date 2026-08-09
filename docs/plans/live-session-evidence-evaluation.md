@@ -90,7 +90,7 @@ npm test -w @memory-manager/core -- --runInBand \
 |---|---|---|---|---|---|
 | 4.1 | 接入 auto / complete / targeted Query Plan，同时保持无 Session Context 的普通 Chat 零额外调用 | 集合级请求进入 complete，单点请求进入 targeted | Planner 中英文 query 表 + Controller 调用次数测试 | ✅ | 2026-08-09 |
 | 4.2 | 把读取、处理、汇总、Gate 进度与 Coverage 结果送到 Renderer | UI 可见 n/N、partial 原因、changedDuringRun；取消终态随 4.3 生命周期语义验收 | IPC/type/i18n/layout 测试 | ✅ | 2026-08-09 |
-| 4.3 | 让 interrupt 覆盖 Reader、Map、Reduce 和内部 Provider job，并保持 ChatStore revision/retry 语义 | 取消后无活跃 job、无临时目录、无伪完成消息 | Controller 中断测试 + ChatStore 回归 | ⏳ | —— |
+| 4.3 | 让 interrupt 覆盖 Reader、Map、Reduce 和内部 Provider job，并保持 ChatStore revision/retry 语义 | 取消后无活跃 job、无临时目录、无伪完成消息 | Controller 中断测试 + ChatStore 回归 | ✅ | 2026-08-09 |
 | 4.4 | 排除当前 Native Session、Rules Generation 和内部 Evidence Session，阻止自我回灌 | 二次扫描后 selection 不新增内部会话 | scan/scope 集成测试 | ⏳ | —— |
 
 **Observability Checkpoint**：

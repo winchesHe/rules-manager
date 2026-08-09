@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
+import { isRunCancelledError } from '../../core/src/abort.js'
 import {
   runLiveSessionEvidence,
   type SessionEvidenceCoverageSummary,
@@ -90,6 +91,10 @@ export interface NativeRulesStartResult {
 export class NativeChatController {
   private readonly createId: () => string
   private readonly now: () => string
+  private readonly activeEvidenceRuns = new Map<string, {
+    abortController: AbortController
+    runner: NativeEvidenceModelRunner
+  }>()
 
   constructor(private readonly options: NativeChatControllerOptions) {
     this.createId = options.createId ?? randomUUID
@@ -157,6 +162,8 @@ export class NativeChatController {
     this.options.onThreadChanged?.(chatId)
     let timeline: NativeTurnTimelineItem[] = []
     let evidenceSummary: SessionEvidenceCoverageSummary | undefined
+    let evidenceMode: 'complete' | 'targeted' | undefined
+    let evidenceAbortController: AbortController | undefined
     try {
       const evidencePlan = this.options.enableSessionEvidence && pastedTextAttachments.length === 0
         ? planSessionEvidence({
@@ -172,6 +179,8 @@ export class NativeChatController {
       let result: NativeTurnResult
       let assistantContent: string
       if (evidencePlan) {
+        evidenceMode = evidencePlan.mode
+        evidenceAbortController = new AbortController()
         let reduceResult: NativeTurnResult | undefined
         const runner = new NativeEvidenceModelRunner({
           runtime: this.options.runtime,
@@ -182,7 +191,9 @@ export class NativeChatController {
             if (event.type === 'usage') this.options.onEvent?.({ chatId, event })
           },
           onReduceResult: (value) => { reduceResult = value },
+          signal: evidenceAbortController.signal,
         })
+        this.activeEvidenceRuns.set(chatId, { abortController: evidenceAbortController, runner })
         const evidenceResult = await runLiveSessionEvidence({
           question: message,
           currentChat: {
@@ -193,6 +204,7 @@ export class NativeChatController {
         }, evidencePlan, runner, {
           homeDir: this.options.sessionEvidenceHomeDir,
           tempParentDir: this.options.sessionEvidenceTempParentDir,
+          signal: evidenceAbortController.signal,
           onProgress: (progress) => {
             if (progress.coverage) evidenceSummary = progress.coverage
             this.options.onEvent?.({
@@ -247,9 +259,30 @@ export class NativeChatController {
       this.options.onTurnCompleted?.(chatId)
       return { chatId, nativeSessionId: result.nativeSessionId }
     } catch (error) {
-      this.options.store.markNativeTurnFailed(chatId, errorMessage(error), this.now())
+      const cancelled = evidenceAbortController?.signal.aborted || isRunCancelledError(error)
+      if (evidenceMode) {
+        this.options.onEvent?.({
+          chatId,
+          event: {
+            type: 'evidence_progress',
+            progress: {
+              stage: cancelled ? 'cancelled' : 'failed',
+              completed: 0,
+              total: 1,
+              mode: evidenceMode,
+              ...(evidenceSummary ? { coverage: evidenceSummary } : {}),
+            },
+          },
+        })
+      }
+      if (cancelled) this.options.store.markNativeTurnInterrupted(chatId, this.now())
+      else this.options.store.markNativeTurnFailed(chatId, errorMessage(error), this.now())
       throw error
     } finally {
+      const activeEvidence = this.activeEvidenceRuns.get(chatId)
+      if (activeEvidence?.abortController === evidenceAbortController) {
+        this.activeEvidenceRuns.delete(chatId)
+      }
       this.options.onThreadChanged?.(chatId)
     }
   }
@@ -480,8 +513,11 @@ export class NativeChatController {
     }
   }
 
-  interrupt(chatId: string): Promise<void> {
-    return this.options.runtime.interrupt(chatId)
+  async interrupt(chatId: string): Promise<void> {
+    const evidenceRun = this.activeEvidenceRuns.get(chatId)
+    if (!evidenceRun) return this.options.runtime.interrupt(chatId)
+    evidenceRun.abortController.abort()
+    await evidenceRun.runner.interrupt()
   }
 
   updateSessionContext(

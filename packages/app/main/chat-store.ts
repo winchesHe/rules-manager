@@ -284,6 +284,16 @@ export class ChatStore {
     } satisfies NativeChatThreadFile)
   }
 
+  markNativeTurnInterrupted(threadId: string, at: string): void {
+    const thread = this.requireNativeThread(threadId)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      status: 'interrupted',
+      updatedAt: at,
+      lastError: null,
+    } satisfies NativeChatThreadFile)
+  }
+
   completeNativeRulesRun(
     threadId: string,
     artifact: NonNullable<NativeChatThreadFile['rulesArtifact']>,

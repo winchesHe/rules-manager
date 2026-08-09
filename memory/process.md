@@ -3194,3 +3194,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 36 suites / 355 tests、App 全量 42 suites / 258 tests、App production build 与
   `git diff --check` 通过；build 仅保留既有 Markstream PURE comment warnings。
 - 提交信息：`feat: 展示 Live Evidence 进度与 Coverage`
+
+## Live Evidence 取消与恢复语义（2026-08-09）
+
+- Chunk 4.3 为每个 Evidence Turn 建立独立 AbortController；Reader 与 Core 并发队列接收同一 signal，已取消时
+  统一抛出 `RUN_CANCELLED`，不把 Provider 的 AbortError 误记为普通 Map 失败。
+- NativeEvidenceModelRunner 跟踪本轮活跃的 Map、中间 Reduce 和最终 Reduce chatId；外层 Chat interrupt 先
+  abort 执行计划，再逐个中断活跃 Provider job。job 结束后从集合移除，避免残留运行句柄。
+- ChatStore 新增明确的 interrupted 转换。取消不写 Assistant 完成消息、不推进 Session Context 的
+  lastInjectedRevision，也不调用完成通知；普通异常仍保持 failed/retry 语义。
+- Renderer 接收 cancelled/failed Evidence 终态且终态不显示 Spinner；App 启动时同时清理旧 Evidence Context
+  和 Live Evidence Context 的陈旧私有目录。
+- Controller 阻塞 Map 的集成测试确认内部 Provider 已 interrupt、Runtime activeChatIds 为空、临时目录为空、
+  Thread 为 interrupted、revision 未推进且消息仅保留用户请求；Core 另验证 Reader 前取消不会读源或调用模型。
+- `simplify` 复核将活跃 job 管理集中在 Runner 的 `runStructured`，Map/Reduce 不复制中断监听与清理逻辑。
+- Core 全量 36 suites / 356 tests、App 全量 42 suites / 259 tests、App production build 与
+  `git diff --check` 通过；build 仅保留既有 Markstream PURE comment warnings。
+- 提交信息：`feat: 完成 Live Evidence 取消语义`

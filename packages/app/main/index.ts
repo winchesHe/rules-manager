@@ -6,6 +6,7 @@ import {
   saveWindowPosition,
 } from './window-position'
 import { cleanupStaleEvidenceContexts } from '../../core/src/evidence-context'
+import { cleanupStaleLiveEvidenceContexts } from '../../core/src/live-evidence-context'
 import { clearChatCompletionBadge } from './app-badge'
 
 let mainWindow: BrowserWindow | null = null
@@ -78,6 +79,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     cleanupStaleEvidenceContexts()
+    cleanupStaleLiveEvidenceContexts()
     registerIpcHandlers()
     createWindow()
     app.on('activate', () => {

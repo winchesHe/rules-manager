@@ -22,7 +22,9 @@
     "processing": "提取证据",
     "reducing": "汇总证据",
     "gating": "校验证据声明",
-    "complete": "证据处理完成"
+    "complete": "证据处理完成",
+    "cancelled": "证据读取已取消",
+    "failed": "证据读取失败"
   },
   "evidenceCoverage": "Session Evidence Coverage",
   "evidenceStatus": {

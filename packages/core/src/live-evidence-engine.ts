@@ -131,6 +131,8 @@ export type SessionEvidenceStage =
   | 'reducing'
   | 'gating'
   | 'complete'
+  | 'cancelled'
+  | 'failed'
 
 export interface SessionEvidenceCoverageSummary {
   mode: SessionEvidenceMode
@@ -295,6 +297,7 @@ async function runWithConcurrency<T, R>(
       try {
         results[index] = { status: 'fulfilled', value: await task(values[index]) }
       } catch (error) {
+        throwIfAborted(signal)
         if (isRunCancelledError(error)) throw error
         results[index] = { status: 'rejected', reason: error }
       }
