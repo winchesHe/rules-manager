@@ -67,3 +67,50 @@ export interface CaseEvaluation {
   gates: HardGateResult[]
   hardGatesPassed: boolean
 }
+
+export interface QualityMetrics {
+  relevantSessionRecall: number
+  relevantSessionPrecision: number
+  goldFactRecall: number
+  evidenceSupportPrecision: number
+}
+
+export interface EfficiencyMetrics {
+  latencyMs: number
+  calls: number
+  inputTokens: number
+  outputTokens: number
+  readBytes: number
+  retries: number
+}
+
+export interface SessionEvidenceEvalReport {
+  schemaVersion: 1
+  datasetVersion: string
+  variant: EvalVariant
+  hardGates: {
+    passed: boolean
+    byName: Record<HardGateName, boolean>
+  }
+  cases: Array<{
+    caseId: string
+    caseHash: string
+    tags: string[]
+    sessionCount: number
+    hardGatesPassed: boolean
+    gates: HardGateResult[]
+    quality: QualityMetrics
+    efficiency: EfficiencyMetrics
+  }>
+  summary: {
+    qualityMacro: QualityMetrics
+    efficiency: {
+      latencyMs: { p50: number; p95: number }
+      calls: number
+      inputTokens: number
+      outputTokens: number
+      readBytes: number
+      retries: number
+    }
+  }
+}

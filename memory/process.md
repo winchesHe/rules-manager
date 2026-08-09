@@ -3264,3 +3264,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - `simplify` 复核保留一个 `evaluateCase` 纯函数和具名 gate 结果，不生成聚合总分，也不把门禁藏进 Variant 实现。
 - Evals 2 suites / 11 tests、`tsc --noEmit`、v3 成功 smoke、v0 非零退出 smoke 与 `git diff --check` 通过。
 - 提交信息：`feat: 增加 Session Evidence 硬门禁`
+
+## Session Evidence 质量与效率报告（2026-08-09）
+
+- Chunk 5.3 在硬门禁之外独立计算 relevant_session_recall/precision、gold_fact_recall 和
+  evidence_support_precision；空分母使用 1 的数学约定，避免“没有 gold/没有输出”产生 NaN。
+- 每个 case 单独保留 latency、调用数、输入/输出 token、读取字节、重试数；汇总只提供质量宏平均、Latency
+  P50/P95 和效率总量，不生成单一加权总分。
+- JSON report schemaVersion=1，包含 datasetVersion、variant、逐门禁结果、逐 case caseHash/tags/sessionCount、
+  quality 与 efficiency；不包含 visibleOutput、fixture 消息、Prompt、Capsule 或 Tool output。
+- CLI 支持显式 `--output`，以 0600 临时文件原子 rename 写报告；未提供 output 时不在仓库或用户目录制造产物。
+- 1/10/151/500 四个 case 均进入 schema 测试，其中 10/151/500 满足计划的规模验收；v3 四项质量宏指标均为 1，
+  v0 保留逐 case 退化并确认 report 不存在 `score` 字段。
+- `simplify` 复核将 ratio、intersection、mean、percentile 保持为小型纯函数，报告构建不读取运行时原始正文。
+- Evals 3 suites / 13 tests、`tsc --noEmit`、v3 JSON report smoke 与 `git diff --check` 通过；smoke 验证
+  cases=[1,10,151,500]、hard=true、Latency P50=10/P95=498。
+- 提交信息：`feat: 输出 Session Evidence 质量效率报告`

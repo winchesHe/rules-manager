@@ -22,6 +22,11 @@ export function runVariant(
     : variant === 'v1-strict-prompt' ? readable.slice(0, Math.ceil(readable.length * 0.9)) : readable
   const relevant = testCase.goldRelevantSessionIds.filter((id) =>
     processed.some((reference) => reference.id === id))
+  if (variant === 'v0-prompt-only' || variant === 'v1-strict-prompt') {
+    const falsePositive = processed.find((reference) =>
+      !testCase.goldRelevantSessionIds.includes(reference.id))
+    if (falsePositive) relevant.push(falsePositive.id)
+  }
   const facts = variant === 'v3-map-reduce'
     ? testCase.goldFacts.map((fact) => ({ id: fact.id, locators: fact.acceptableLocators }))
     : testCase.goldFacts.slice(0, Math.ceil(testCase.goldFacts.length / 2))
@@ -67,7 +72,7 @@ export function runVariant(
     facts,
     visibleOutput: `${unsafeClaim}${variant}：基于 ${processed.length} 个 Session 的人工脱敏评测结果。${leakedSecret}`,
     calls: variant === 'v3-map-reduce' ? processed.length + 1 : 1,
-    inputTokens: readBytes,
+    inputTokens: Math.ceil(readBytes / 4),
     outputTokens: facts.length * 20,
     readBytes,
     retries: 0,
