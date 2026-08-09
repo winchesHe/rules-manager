@@ -239,21 +239,6 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.sidebar-collapse-toggle {
-  position: absolute;
-  left: 0.75rem;
-  z-index: 1001;
-  -webkit-app-region: no-drag;
-}
-
-.sidebar-collapse-toggle--topbar {
-  top: 0.5rem;
-}
-
-.sidebar-collapse-toggle--page-title {
-  top: 3rem;
-}
-
 button,
 a,
 input,

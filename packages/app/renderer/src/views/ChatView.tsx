@@ -78,6 +78,7 @@ import {
   writeStoredContextPaneOpen,
 } from './chat-layout-preference'
 import { ChatSkillPicker } from './ChatSkillPicker'
+import { SidebarToggle } from '../components/SidebarToggle'
 import type { ChatSkillOption } from './chat-skill-picker-model'
 import {
   composeMessageWithSkills,
@@ -988,7 +989,8 @@ export function ChatView({
         data-chat-workspace
       >
         <main aria-label={t('conversation')} className="grid min-h-0 min-w-0 grid-rows-[3rem_minmax(0,1fr)] overflow-hidden bg-background">
-          <header className="window-no-drag flex min-w-0 items-center gap-1 border-b border-border pl-14 pr-3" data-chat-header>
+          <header className="window-no-drag flex min-w-0 items-center gap-3 border-b border-border px-3" data-chat-header>
+            <SidebarToggle />
             <div className="flex min-w-0 items-baseline gap-2 px-1" data-chat-current-title>
               <strong className="min-w-0 truncate text-sm font-semibold text-foreground">{currentTitle}</strong>
               <span className="shrink-0 text-xs font-normal text-muted">{currentSubtitle}</span>

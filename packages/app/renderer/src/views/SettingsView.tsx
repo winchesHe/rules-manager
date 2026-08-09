@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { afterNextPaint } from '../async'
 import { ProviderDetailsModal } from '../components/ProviderDetailsModal'
+import { SidebarToggle } from '../components/SidebarToggle'
 import { changeAppLocale, currentLocale, i18n, type AppLocale } from '../i18n'
 import type { ThemeMode } from '../theme'
 import type {
@@ -276,10 +277,13 @@ export function SettingsView({ onThemeChange, theme }: SettingsViewProps) {
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[9.25rem_minmax(0,1fr)] overflow-hidden bg-background text-foreground">
-      <aside className="flex min-h-0 flex-col border-r border-border bg-sidebar/45 px-3 pb-4 pt-8">
-          <p className="mb-3 px-2 text-[10px] font-medium uppercase tracking-[0.09em] text-muted/70">
+      <aside className="flex min-h-0 flex-col border-r border-border bg-sidebar/45 px-3 pb-4 pt-2">
+        <div className="mb-3 flex h-8 items-center gap-3">
+          <SidebarToggle />
+          <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-muted/70">
             {t('appGroup')}
           </p>
+        </div>
         <nav aria-label={t('navigationLabel')} className="grid gap-0.5">
           {sections.map(({ id, labelKey, icon: Icon }) => {
             const active = activeSection === id

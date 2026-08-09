@@ -2,7 +2,7 @@
 
 ## 范围
 
-- 保留全局侧栏按钮在右侧主界面左上角。
+- 保留全局侧栏按钮在 Chat Header 的 leading control 位置。
 - 把 Chat History 开关从 Chat 顶栏下移到「对话历史」标题行；历史栏关闭时在 Chat 内容区左上角提供恢复入口。
 - 不修改历史数据、筛选、会话生命周期、侧栏宽度、主题或其他页面。
 
@@ -14,7 +14,7 @@
 
 ## 验证方式
 
-- 合同测试锁定 History 开关先于「对话历史」标题、Chat Header 左侧预留、关闭态恢复按钮及全局按钮位置。
+- 合同测试锁定 History 开关先于「对话历史」标题、Chat Header leading control、关闭态恢复按钮及全局按钮位置。
 - App 全量测试与 production build 验证历史栏状态、侧栏折叠和其他 Chat 行为不变。
 - Computer Use 检查 History 展开、关闭、恢复，以及全局侧栏展开/收起时两个按钮的视觉与点击边界。
 

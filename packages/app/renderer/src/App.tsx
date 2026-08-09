@@ -8,8 +8,6 @@ import {
   FolderKanban,
   MessageSquareText,
   Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
   ScanSearch,
   ScrollText,
   Settings,
@@ -21,6 +19,7 @@ import { ChatView } from './views/ChatView'
 import { RulesView } from './views/RulesView'
 import type { RulesSection } from './views/RulesView'
 import { SettingsView } from './views/SettingsView'
+import { SidebarToggleProvider } from './components/SidebarToggle'
 import { changeAppTheme, readStoredTheme } from './theme'
 import type { ThemeMode } from './theme'
 
@@ -308,111 +307,89 @@ export function App() {
             </div>
           </aside>
 
-          <main
-            className={`relative min-w-0 max-w-full overflow-x-hidden bg-background ${
-              activeView === 'chat' || activeView === 'settings'
-                ? 'overflow-y-hidden'
-                : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
-            }`}
-            key={activeView}
+          <SidebarToggleProvider
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed((current) => !current)}
           >
-            <div
-              className={`sidebar-collapse-toggle ${
+            <main
+              className={`min-w-0 max-w-full overflow-x-hidden bg-background ${
                 activeView === 'chat' || activeView === 'settings'
-                  ? 'sidebar-collapse-toggle--topbar'
-                  : 'sidebar-collapse-toggle--page-title'
+                  ? 'overflow-y-hidden'
+                  : 'overflow-y-auto px-[clamp(1.75rem,5vw,4.5rem)] py-12'
               }`}
+              key={activeView}
             >
-              <Tooltip>
-                <Button
-                  aria-label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
-                  className="size-8 min-w-8 rounded-md border border-border bg-background p-0 text-muted shadow-sm hover:bg-surface-hover hover:text-foreground"
-                  isIconOnly
-                  onPress={() => setSidebarCollapsed((current) => !current)}
-                  variant="ghost"
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeftOpen aria-hidden="true" size={15} />
-                  ) : (
-                    <PanelLeftClose aria-hidden="true" size={15} />
-                  )}
-                </Button>
-                <Tooltip.Content>
-                  {sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}
-                </Tooltip.Content>
-              </Tooltip>
-            </div>
-
-            {activeView === 'settings' && (
-              <SettingsView
-                onThemeChange={(nextTheme) => {
-                  changeAppTheme(nextTheme)
-                  setTheme(nextTheme)
-                }}
-                theme={theme}
-              />
-            )}
-            {activeView === 'overview' && (
-              <OverviewView
-                onOpenProject={(slug) => {
-                  setSelectedProjectSlug(slug)
-                  setSelectedProjectTab('sessions')
-                  setActiveView('projects')
-                }}
-              />
-            )}
-            {activeView === 'projects' && (
-              <ProjectsView
-                initialProjectSlug={selectedProjectSlug}
-                initialProjectTab={selectedProjectTab}
-                onInitialProjectHandled={() => {
-                  setSelectedProjectSlug(null)
-                  setSelectedProjectTab('sessions')
-                }}
-                onGenerateRules={(slug) => {
-                  setSelectedRulesProject(slug)
-                  openRulesSection('overview')
-                }}
-                onPublishRules={(slug) => {
-                  setSelectedPublishProject(slug)
-                  openRulesSection('generated')
-                }}
-              />
-            )}
-            {activeView === 'chat' && (
-              <ChatView
-                initialThreadId={selectedChatThreadId}
-                onOpenGeneratedRules={(runId) => {
-                  selectRulesSection('generated')
-                  setSelectedRulesRunId(runId)
-                  setSelectedChatThreadId(null)
-                  setActiveView('rules')
-                }}
-              />
-            )}
-            {activeView === 'rules' && (
-              <RulesView
-                initialProjectSlug={selectedRulesProject}
-                initialPublishProjectSlug={selectedPublishProject}
-                initialRunId={selectedRulesRunId}
-                key={rulesViewKey}
-                onInitialProjectHandled={() => setSelectedRulesProject(null)}
-                onInitialPublishProjectHandled={() => setSelectedPublishProject(null)}
-                onInitialRunHandled={() => setSelectedRulesRunId(null)}
-                onOpenProjectRules={(slug) => {
-                  setSelectedProjectSlug(slug ?? null)
-                  setSelectedProjectTab('rules')
-                  setActiveView('projects')
-                }}
-                onOpenChat={(threadId) => {
-                  setSelectedChatThreadId(threadId)
-                  setActiveView('chat')
-                }}
-                onSectionChange={selectRulesSection}
-                section={activeRulesSection}
-              />
-            )}
-          </main>
+              {activeView === 'settings' && (
+                <SettingsView
+                  onThemeChange={(nextTheme) => {
+                    changeAppTheme(nextTheme)
+                    setTheme(nextTheme)
+                  }}
+                  theme={theme}
+                />
+              )}
+              {activeView === 'overview' && (
+                <OverviewView
+                  onOpenProject={(slug) => {
+                    setSelectedProjectSlug(slug)
+                    setSelectedProjectTab('sessions')
+                    setActiveView('projects')
+                  }}
+                />
+              )}
+              {activeView === 'projects' && (
+                <ProjectsView
+                  initialProjectSlug={selectedProjectSlug}
+                  initialProjectTab={selectedProjectTab}
+                  onInitialProjectHandled={() => {
+                    setSelectedProjectSlug(null)
+                    setSelectedProjectTab('sessions')
+                  }}
+                  onGenerateRules={(slug) => {
+                    setSelectedRulesProject(slug)
+                    openRulesSection('overview')
+                  }}
+                  onPublishRules={(slug) => {
+                    setSelectedPublishProject(slug)
+                    openRulesSection('generated')
+                  }}
+                />
+              )}
+              {activeView === 'chat' && (
+                <ChatView
+                  initialThreadId={selectedChatThreadId}
+                  onOpenGeneratedRules={(runId) => {
+                    selectRulesSection('generated')
+                    setSelectedRulesRunId(runId)
+                    setSelectedChatThreadId(null)
+                    setActiveView('rules')
+                  }}
+                />
+              )}
+              {activeView === 'rules' && (
+                <RulesView
+                  initialProjectSlug={selectedRulesProject}
+                  initialPublishProjectSlug={selectedPublishProject}
+                  initialRunId={selectedRulesRunId}
+                  key={rulesViewKey}
+                  onInitialProjectHandled={() => setSelectedRulesProject(null)}
+                  onInitialPublishProjectHandled={() => setSelectedPublishProject(null)}
+                  onInitialRunHandled={() => setSelectedRulesRunId(null)}
+                  onOpenProjectRules={(slug) => {
+                    setSelectedProjectSlug(slug ?? null)
+                    setSelectedProjectTab('rules')
+                    setActiveView('projects')
+                  }}
+                  onOpenChat={(threadId) => {
+                    setSelectedChatThreadId(threadId)
+                    setActiveView('chat')
+                  }}
+                  onSectionChange={selectRulesSection}
+                  section={activeRulesSection}
+                />
+              )}
+            </main>
+          </SidebarToggleProvider>
         </div>
     </>
   )

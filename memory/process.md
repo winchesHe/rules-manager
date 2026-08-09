@@ -3512,3 +3512,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`fix: 对齐侧栏按钮与页面标题`
+
+## P2 式 Header 内嵌侧栏开关（2026-08-09）
+
+- 用户指出上一轮仅把绝对定位按钮与标题垂直对齐，仍会在主内容左侧形成一条无归属的按钮轨道；本轮按 P2
+  的正式 Header 模式重做，不再把折叠按钮当成悬浮控件。
+- 新增共享 `SidebarToggleProvider` / `SidebarToggle`：折叠状态和行为仍由 App Shell 管理，按钮、竖分隔线与当前
+  标题作为 Header leading control 进入正常布局流；删除 `sidebar-collapse-toggle` 绝对定位节点和两种定位类。
+- 普通页面由 `PageHeader` 统一承载，Chat 会话 Header 与 Settings 分区导航 Header 使用同一控件；History 仍在
+  「对话历史」标题行，页面内容、侧栏宽度、折叠行为、主题 token 和导航均保持不变。
+- 新增 `docs/plans/agent-dashboard-p2-header-toggle.md`，删除已过时的纯垂直对齐计划，并同步 `DESIGN.md`、折叠侧栏、
+  Chat History 与 Shell 计划；布局合同锁定 Provider、leading control、分隔线和 no-drag 热区，并禁止绝对定位回归。
+- Computer Use 在真实 Electron 中复验 Scan、Chat、Settings，覆盖侧栏展开/收起和浅色/深色主题：按钮始终与当前
+  标题同层，没有独立空白轨道，也未与 History、拖拽区或设置导航重叠；检查后恢复浅色、展开侧栏和扫描页。
+- App 全量 43 suites / 269 tests、Core 全量 36 suites / 359 tests、production build 与 `git diff --check` 通过；
+  App 独立 typecheck 仍被仓库既有跨包 `rootDir` / `include` 配置及既有类型错误阻塞，production build 无新增错误。
+- 提交信息：`fix: 将侧栏开关并入页面 Header`

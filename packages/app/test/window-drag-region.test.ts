@@ -16,6 +16,10 @@ describe('window drag region', () => {
       'utf8',
     )
     const ipcSource = fs.readFileSync(path.join(appRoot, 'main/ipc.ts'), 'utf8')
+    const toggleSource = fs.readFileSync(
+      path.join(appRoot, 'renderer/src/components/SidebarToggle.tsx'),
+      'utf8',
+    )
 
     expect(appSource).toContain('className="window-drag-region"')
     expect(appSource).toContain('className="window-titlebar-toggle-region"')
@@ -23,10 +27,9 @@ describe('window drag region', () => {
     expect(styles).toMatch(/\.window-drag-region\s*\{[^}]*-webkit-app-region:\s*drag/s)
     expect(styles).toMatch(/\.window-titlebar-toggle-region\s*\{[^}]*height:\s*0\.75rem[^}]*-webkit-app-region:\s*no-drag/s)
     expect(styles).toMatch(/\.window-no-drag[\s\S]*-webkit-app-region:\s*no-drag/)
-    expect(styles).toMatch(/\.sidebar-collapse-toggle\s*\{[^}]*position:\s*absolute[^}]*-webkit-app-region:\s*no-drag/s)
-    expect(styles).toMatch(/\.sidebar-collapse-toggle\s*\{[^}]*left:\s*0\.75rem/s)
-    expect(styles).toMatch(/\.sidebar-collapse-toggle--topbar\s*\{[^}]*top:\s*0\.5rem/s)
-    expect(styles).toMatch(/\.sidebar-collapse-toggle--page-title\s*\{[^}]*top:\s*3rem/s)
+    expect(toggleSource).toContain('className={`window-no-drag flex shrink-0 items-center gap-3')
+    expect(toggleSource).toContain('data-sidebar-toggle-leading')
+    expect(styles).not.toContain('.sidebar-collapse-toggle')
     expect(ipcSource).toContain("ipcMain.handle('window.toggleMaximize'")
     expect(ipcSource).toContain('BrowserWindow.fromWebContents(event.sender)')
     expect(ipcSource).toContain('toggleWindowMaximize(window)')
@@ -47,6 +50,7 @@ describe('window drag region', () => {
     expect(chatSource).toContain('aria-label={t(\'openHistory\')}')
     expect(chatSource).toContain('aria-label={t(\'chatManagement\')}')
     expect(chatSource.match(/className="size-8 min-w-8 shrink-0 p-0"/g)).toHaveLength(1)
-    expect(chatSource).toContain('className="window-no-drag flex min-w-0 items-center gap-1 border-b border-border pl-14 pr-3"')
+    expect(chatSource).toContain('className="window-no-drag flex min-w-0 items-center gap-3 border-b border-border px-3"')
+    expect(chatSource).toContain('<SidebarToggle />')
   })
 })
