@@ -3016,3 +3016,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 定向 1 suite / 6 tests、Core 全量 31 suites / 316 tests、Core build 与 `git diff --check` 全部通过；build
   只保留既有 tsdown `define` warning。
 - 提交信息：`feat: 建立 Session Evidence Coverage 状态机`
+
+## 六 Agent Session Source Reader（2026-08-09）
+
+- Chunk 1.2 新增逐 Session `readSessionSources` 合同，按 selection 原顺序为每个 `{agent,id}` 返回唯一
+  `readable / empty / unavailable / failed` 终态；结果同时携带消息数、归属 slug、稳定错误码和诊断信息。
+- Claude、Codex、Cursor、Pi 直接读取 JSONL；Copilot 优先 `events.jsonl` 并保留 `session-store.db` turns
+  回退；OpenCode 直接只读 SQLite `message/part`，不再需要启动 SDK server 或截获 CLI stdout。
+- 索引缺失、Agent 不匹配、索引 missing/error、源缺失、空内容、JSONL 格式错误和 SQLite 查询错误分别进入
+  明确结果，单个源失败不会抛弃同批其他 Session；取消信号仍立即向上抛出。
+- 红测首先因 Reader 模块不存在得到 `TS2307`；实现后六 Agent 顺序读取、Copilot DB 回退和全部失败分类
+  共 5 个行为测试通过，既有 `sessions show` 15 个测试及 Coverage 6 个测试同步回归通过。
+- Core 全量 32 suites / 321 tests、Core build 与 `git diff --check` 通过；build 只保留既有 tsdown
+  `define` warning。
+- 提交信息：`feat: 收敛六类 Session Source Reader`
