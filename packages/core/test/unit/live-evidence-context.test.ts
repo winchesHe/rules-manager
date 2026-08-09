@@ -1,0 +1,101 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import {
+  createCoverageState,
+  finalizeCoverage,
+  recordProcessingOutcome,
+  recordSourceOutcome,
+} from '../../src/evidence-coverage'
+import { createLiveEvidenceContext } from '../../src/live-evidence-context'
+import type { SessionSourceReadResult } from '../../src/session-source-reader'
+
+describe('LiveEvidenceContext', () => {
+  it('以私有权限写入 manifest、分片、coverage 与 capsule，并保留 locator', () => {
+    const parentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-live-context-parent-'))
+    const selected = [{ agent: 'claude', id: 'session-1' }] as const
+    try {
+      const context = createLiveEvidenceContext({
+        runId: '../unsafe/run',
+        mode: 'complete',
+        selected: [...selected],
+      }, { parentDir, maxChunkBytes: 190 })
+      expect(path.dirname(context.rootDir)).toBe(parentDir)
+      expect(path.basename(context.rootDir)).not.toContain('unsafe')
+      expect(fs.statSync(context.rootDir).mode & 0o777).toBe(0o700)
+      expect(fs.statSync(context.sourcesDir).mode & 0o777).toBe(0o700)
+      expect(fs.statSync(context.capsulesDir).mode & 0o777).toBe(0o700)
+
+      const readResult: SessionSourceReadResult = {
+        sessionId: 'session-1',
+        agent: 'claude',
+        projectSlug: 'demo',
+        status: 'readable',
+        messageCount: 3,
+        messages: [
+          { role: 'user', content: 'first message' },
+          { role: 'assistant', content: 'second message' },
+          { role: 'user', content: 'third message' },
+        ],
+        sourceRevision: {
+          kind: 'jsonl-watermark',
+          fingerprint: 'a'.repeat(64),
+          changedDuringRun: false,
+        },
+      }
+      const source = context.writeSessionChunks(readResult)
+      expect(source.chunkCount).toBeGreaterThan(1)
+      expect(source.chunkPaths.every((chunkPath) => (
+        fs.statSync(chunkPath).mode & 0o777
+      ) === 0o600)).toBe(true)
+      const content = source.chunkPaths.map((chunkPath) => fs.readFileSync(chunkPath, 'utf8')).join('\n')
+      expect(content).toContain('"messageIndex":0')
+      expect(content).toContain('"messageIndex":1')
+      expect(content).toContain('"messageIndex":2')
+      expect(content).toContain(`"sourceRevision":"${'a'.repeat(64)}"`)
+      expect(content.indexOf('first message')).toBeLessThan(content.indexOf('third message'))
+
+      let coverage = createCoverageState('../unsafe/run', 'complete', [...selected])
+      coverage = recordSourceOutcome(coverage, {
+        ...selected[0],
+        status: 'readable',
+        messageCount: 3,
+        sourceRevision: readResult.sourceRevision,
+      })
+      coverage = recordProcessingOutcome(coverage, {
+        ...selected[0],
+        status: 'processed',
+        relevant: true,
+      })
+      context.writeCoverage(finalizeCoverage(coverage))
+      const capsulePath = context.writeCapsule({
+        sessionId: 'session-1',
+        agent: 'claude',
+        chunkIndex: 0,
+        chunkCount: source.chunkCount,
+        summary: 'summary',
+        facts: [],
+        relevant: true,
+      })
+
+      const manifest = JSON.parse(fs.readFileSync(context.manifestPath, 'utf8')) as {
+        runId: string
+        sessions: Array<{ id: string; directory: string; chunks: Array<{ path: string }> }>
+      }
+      expect(manifest.runId).toBe('../unsafe/run')
+      expect(manifest.sessions).toEqual([expect.objectContaining({
+        id: 'session-1',
+        directory: 'sources/session-0001',
+        chunks: expect.any(Array),
+      })])
+      expect(fs.statSync(context.manifestPath).mode & 0o777).toBe(0o600)
+      expect(fs.statSync(context.coveragePath).mode & 0o777).toBe(0o600)
+      expect(fs.statSync(capsulePath).mode & 0o777).toBe(0o600)
+
+      context.cleanup()
+      expect(fs.existsSync(context.rootDir)).toBe(false)
+    } finally {
+      fs.rmSync(parentDir, { recursive: true, force: true })
+    }
+  })
+})

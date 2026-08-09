@@ -60,7 +60,7 @@ npm test -w @memory-manager/core -- --runInBand \
 | # | 步 | 观察点 | 验证方式 | 状态 | reviewed |
 |---|---|---|---|---|---|
 | 2.1 | 为 JSONL 固定文件集合和字节水位，为 SQLite 使用短只读事务并记录变化指纹 | 运行中追加内容不混入本轮，变化计数可见 | 水位与 SQLite 变化 fixture 测试 | ✅ | 2026-08-09 |
-| 2.2 | 扩展临时 Context writer，输出私有 manifest、chunks、coverage 和 capsules 目录 | 文件权限、chunk 顺序、locator 与 cleanup 可观察 | `evidence-context.test.ts` 权限/分片/清理测试 | ⏳ | —— |
+| 2.2 | 扩展临时 Context writer，输出私有 manifest、chunks、coverage 和 capsules 目录 | 文件权限、chunk 顺序、locator 与 cleanup 可观察 | `evidence-context.test.ts` 权限/分片/清理测试 | ✅ | 2026-08-09 |
 | 2.3 | 覆盖成功、Reader 失败、取消、owner PID 消失和 TTL 清理 | 临时目录没有泄漏，源文件未修改 | 中断/异常测试 + 临时目录前后对账 | ⏳ | —— |
 
 **Observability Checkpoint**：

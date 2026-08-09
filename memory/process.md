@@ -3059,3 +3059,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 水位、Evidence、Coverage 与 sessions show 定向 4 suites / 44 tests 通过；Core 全量 32 suites / 324 tests、
   Core build 与 `git diff --check` 通过，build 只保留既有 tsdown `define` warning。
 - 提交信息：`feat: 固定 Session Source 动态读取水位`
+
+## Live Evidence 临时 Context Writer（2026-08-09）
+
+- Chunk 2.2 新增独立 `live-evidence-context.ts`，保留既有 Rules `evidence-context.ts` 合同；运行目录使用
+  `memory-manager-live-evidence-<pid>-<run-hash>-*`，不把未清洗 runId 或 Session ID 放入目录名。
+- writer 建立 `manifest.json / coverage.json / sources/session-N/chunk-N.md / capsules/session-N-N.json` 合同；
+  root、sources、capsules 与 Session 目录使用 `0700`，所有正文/JSON 文件强制 `0600`。
+- 消息严格按原顺序和消息边界分片；每条消息携带 `{sessionId, agent, messageIndex, timestamp?,
+  sourceRevision}` locator，manifest 记录 chunk byte 数和首尾消息索引，sourceRevision 只写 fingerprint。
+- Coverage 必须匹配 runId；Capsule 必须匹配 selected Session、manifest chunkCount 和合法 chunkIndex；重复写
+  同一 Session chunks 或写未 selected Session 会直接失败。
+- 红测首先因模块不存在得到 `TS2307`；实现后私有权限、两段以上分片、locator 顺序、manifest、Coverage、
+  Capsule 和显式 cleanup 全部通过。`simplify` 复核补齐 undefined content 的 `null` 序列化并展开长条件。
+- 临时 Context/旧 Evidence Context/Reader/Coverage 定向 4 suites / 17 tests 通过；Core 全量 33 suites /
+  325 tests、Core build 与 `git diff --check` 通过，build 只保留既有 tsdown `define` warning。
+- 提交信息：`feat: 建立 Live Evidence 临时 Context`
