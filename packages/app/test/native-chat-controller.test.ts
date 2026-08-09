@@ -160,6 +160,7 @@ describe('NativeChatController', () => {
     const store = new ChatStore(path.join(root, 'chats'))
     const requests: Array<{ chatId: string; message: string }> = []
     const closed: string[] = []
+    const progressStages: string[] = []
     const runtime = new ChatRuntimeManager((_provider, chatId): ChatProviderAdapter => ({
       start: async (request) => {
         requests.push({ chatId, message: request.message })
@@ -223,6 +224,9 @@ describe('NativeChatController', () => {
       enableSessionEvidence: true,
       sessionEvidenceHomeDir: root,
       sessionEvidenceTempParentDir: tempParent,
+      onEvent: ({ event }) => {
+        if (event.type === 'evidence_progress') progressStages.push(event.progress.stage)
+      },
     })
 
     const result = await controller.send({
@@ -247,7 +251,15 @@ describe('NativeChatController', () => {
       nativeSessionId: 'native-current-evidence',
       nativeSessionHandle: { nativeHandle: 'handle-current-evidence' },
       sessionContext: { revision: 1, lastInjectedRevision: 1 },
+      messages: [
+        { role: 'user' },
+        { role: 'assistant', sessionEvidence: { status: expectedStatus, selected: 1, processed: 1 } },
+      ],
     })
+    expect(progressStages).toEqual([
+      'planning', 'reading', 'reading', 'processing', 'processing',
+      'reducing', 'gating', 'complete',
+    ])
     expect(closed).toEqual([expect.stringMatching(/:map:/)])
     expect(fs.readdirSync(tempParent)).toEqual([])
   })

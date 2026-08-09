@@ -310,6 +310,19 @@ describe('home workflow layout', () => {
     expect(source).toContain('visibleProjectResponses')
   })
 
+  it('Chat 直接展示 Live Evidence 进度与持久化 Coverage，不由 Renderer 推导计数', () => {
+    const source = read('views/ChatView.tsx')
+
+    expect(source).toContain("event.type === 'evidence_progress'")
+    expect(source).toContain('data-evidence-progress')
+    expect(source).toContain('data-evidence-coverage')
+    expect(source).toContain('summary.visited')
+    expect(source).toContain('summary.processed')
+    expect(source).toContain('summary.changedDuringRun')
+    expect(source).toContain("t(`evidenceStage.${progress.stage}`)")
+    expect(source).toContain("t(`evidenceStatus.${summary.status}`)")
+  })
+
   it('Chat 失败终态可复用原请求重新生成并进入新 Thread', () => {
     const source = read('views/ChatView.tsx')
 

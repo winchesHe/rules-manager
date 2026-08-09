@@ -9,6 +9,7 @@ import type { ProjectGenerationResponse } from '../../core/src/commands/rules-ge
 import type { RunState } from './background-run.js'
 import type { NativeToolActivity, NativeTurnTimelineItem } from './chat-runtime.js'
 import { canonicalReferences } from './session-context-prompt.js'
+import type { SessionEvidenceCoverageSummary } from '../../core/src/live-evidence-engine.js'
 
 export type ChatThreadStatus = Exclude<RunState, 'idle'>
 
@@ -24,6 +25,7 @@ export interface ChatMessage {
   attachments?: ChatMessageAttachment[]
   toolActivities?: NativeToolActivity[]
   timeline?: NativeTurnTimelineItem[]
+  sessionEvidence?: SessionEvidenceCoverageSummary
 }
 
 export interface ChatMessageAttachment {

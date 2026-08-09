@@ -16,6 +16,24 @@
   "copyResponse": "Copy response",
   "workedFor": "Worked for {{elapsed}}",
   "thinking": "Thinking",
+  "evidenceStage": {
+    "planning": "Planning evidence scope",
+    "reading": "Reading sessions",
+    "processing": "Extracting evidence",
+    "reducing": "Synthesizing evidence",
+    "gating": "Validating evidence claims",
+    "complete": "Evidence processing complete"
+  },
+  "evidenceCoverage": "Session Evidence Coverage",
+  "evidenceStatus": {
+    "complete": "Complete",
+    "targeted": "Targeted",
+    "partial": "Partial",
+    "failed": "Failed"
+  },
+  "evidenceCoverageCounts": "Visited {{visited}}/{{selected}}; processed {{processed}}/{{readable}} readable sessions",
+  "evidenceCoverageFailures": "Unavailable {{unavailable}}, read failures {{readFailed}}, processing failures {{processFailed}}",
+  "evidenceCoverageChanged": "{{count}} sources changed during the run; this result uses fixed read watermarks",
   "stopChat": "Stop turn",
   "queue_one": "Queue",
   "queue_other": "Queue ({{count}})",

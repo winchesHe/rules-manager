@@ -16,6 +16,24 @@
   "copyResponse": "复制回复",
   "workedFor": "用时 {{elapsed}}",
   "thinking": "思考",
+  "evidenceStage": {
+    "planning": "规划证据范围",
+    "reading": "读取 Session",
+    "processing": "提取证据",
+    "reducing": "汇总证据",
+    "gating": "校验证据声明",
+    "complete": "证据处理完成"
+  },
+  "evidenceCoverage": "Session Evidence Coverage",
+  "evidenceStatus": {
+    "complete": "完整",
+    "targeted": "目标检索",
+    "partial": "部分完成",
+    "failed": "失败"
+  },
+  "evidenceCoverageCounts": "已访问 {{visited}}/{{selected}}，已处理 {{processed}}/{{readable}} 个可读 Session",
+  "evidenceCoverageFailures": "不可用 {{unavailable}}，读取失败 {{readFailed}}，处理失败 {{processFailed}}",
+  "evidenceCoverageChanged": "{{count}} 个来源在读取期间发生变化；本轮使用固定读取水位",
   "stopChat": "停止本轮",
   "queue_one": "加入队列",
   "queue_other": "加入队列（{{count}}）",

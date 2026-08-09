@@ -339,6 +339,30 @@ export interface ChatMessage {
   }>
   toolActivities?: NativeToolActivity[]
   timeline?: NativeTurnTimelineItem[]
+  sessionEvidence?: SessionEvidenceCoverageSummary
+}
+
+export interface SessionEvidenceCoverageSummary {
+  mode: 'complete' | 'targeted'
+  status: 'complete' | 'targeted' | 'partial' | 'failed'
+  selected: number
+  visited: number
+  readable: number
+  empty: number
+  unavailable: number
+  readFailed: number
+  processed: number
+  processFailed: number
+  relevant: number
+  changedDuringRun: number
+}
+
+export interface SessionEvidenceProgress {
+  stage: 'planning' | 'reading' | 'processing' | 'reducing' | 'gating' | 'complete'
+  completed: number
+  total: number
+  mode: 'complete' | 'targeted'
+  coverage?: SessionEvidenceCoverageSummary
 }
 
 export interface NativeToolActivity {
@@ -375,6 +399,7 @@ export type NativeChatEvent =
     }
   | { type: 'tool_activity'; activity: NativeToolActivity }
   | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
+  | { type: 'evidence_progress'; progress: SessionEvidenceProgress }
   | { type: 'interaction_request'; request: NativeInteractionRequest }
 
 export interface NativeInteractionRequest {

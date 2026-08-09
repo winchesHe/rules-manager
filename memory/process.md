@@ -3178,3 +3178,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core Planner/Engine 定向 2 suites / 14 tests、App Controller/Runner 定向 2 suites / 22 tests、Core 全量
   36 suites / 355 tests、App 全量 42 suites / 257 tests、Core/App build 与 `git diff --check` 通过。
 - 提交信息：`feat: 接入 Live Evidence Query Plan`
+
+## Live Evidence 进度与 Coverage 展示（2026-08-09）
+
+- Chunk 4.2 由 Core Engine 发出 planning、reading、processing、reducing、gating、complete 六阶段进度；
+  reading/processing 使用实际 completed/total，Renderer 不根据消息内容猜测执行阶段。
+- Main Process 通过独立 `evidence_progress` 事件转发实时状态，并明确将该事件排除在 Timeline 合并之外；
+  `simplify` 复核后继续使用单独的 Renderer state，避免刷新或持久化时生成伪消息。
+- 最终 Assistant 消息只持久化 Coverage 聚合统计，包括 selected/visited/readable/processed、失败分类、
+  changedDuringRun 和 complete/partial/targeted/failed 状态，不保存 Session 正文、Prompt 或 Tool output。
+- Renderer 按 `DESIGN.md` 使用扁平进度行和左边框元信息区，而非新增嵌套 Card；中英文 i18n 覆盖阶段、
+  Coverage 状态、失败数量与运行中变化提示。
+- Controller 集成测试验证完整阶段序列及 Coverage 回写；布局测试验证实时进度、最终 Coverage 和类型字段存在。
+  取消/失败终态及清理合同纳入紧随其后的 4.3，以同一个生命周期状态机验收。
+- Core 全量 36 suites / 355 tests、App 全量 42 suites / 258 tests、App production build 与
+  `git diff --check` 通过；build 仅保留既有 Markstream PURE comment warnings。
+- 提交信息：`feat: 展示 Live Evidence 进度与 Coverage`

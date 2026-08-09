@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
-import { runLiveSessionEvidence } from '../../core/src/live-evidence-engine.js'
+import {
+  runLiveSessionEvidence,
+  type SessionEvidenceCoverageSummary,
+} from '../../core/src/live-evidence-engine.js'
 import {
   planSessionEvidence,
   type SessionEvidenceRequestMode,
@@ -153,6 +156,7 @@ export class NativeChatController {
     }))
     this.options.onThreadChanged?.(chatId)
     let timeline: NativeTurnTimelineItem[] = []
+    let evidenceSummary: SessionEvidenceCoverageSummary | undefined
     try {
       const evidencePlan = this.options.enableSessionEvidence && pastedTextAttachments.length === 0
         ? planSessionEvidence({
@@ -189,6 +193,13 @@ export class NativeChatController {
         }, evidencePlan, runner, {
           homeDir: this.options.sessionEvidenceHomeDir,
           tempParentDir: this.options.sessionEvidenceTempParentDir,
+          onProgress: (progress) => {
+            if (progress.coverage) evidenceSummary = progress.coverage
+            this.options.onEvent?.({
+              chatId,
+              event: { type: 'evidence_progress', progress },
+            })
+          },
         })
         if (!reduceResult) throw new Error('session evidence reduce result is unavailable')
         result = reduceResult
@@ -231,6 +242,7 @@ export class NativeChatController {
         startedAt,
         timeline,
         toolActivities: timeline.flatMap((item) => item.type === 'tool' ? [item.activity] : []),
+        evidenceSummary,
       }))
       this.options.onTurnCompleted?.(chatId)
       return { chatId, nativeSessionId: result.nativeSessionId }
@@ -610,6 +622,7 @@ function visibleMessage(input: {
   attachments?: ChatMessage['attachments']
   toolActivities?: NativeToolActivity[]
   timeline?: NativeTurnTimelineItem[]
+  evidenceSummary?: SessionEvidenceCoverageSummary
 }): ChatMessage {
   return {
     id: input.id,
@@ -631,6 +644,7 @@ function visibleMessage(input: {
           ? { ...item, activity: { ...item.activity } }
           : { ...item }) }
       : {}),
+    ...(input.evidenceSummary ? { sessionEvidence: { ...input.evidenceSummary } } : {}),
   }
 }
 

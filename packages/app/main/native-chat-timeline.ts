@@ -9,7 +9,11 @@ export function mergeNativeTimelineEvent(
   current: NativeTurnTimelineItem[],
   event: NativeChatEvent,
 ): NativeTurnTimelineItem[] {
-  if (event.type === 'usage' || event.type === 'interaction_request') return current
+  if (
+    event.type === 'usage'
+    || event.type === 'interaction_request'
+    || event.type === 'evidence_progress'
+  ) return current
   if (event.type === 'tool_activity') {
     return upsertTimelineItem(current, {
       type: 'tool', itemId: event.activity.itemId, activity: event.activity,

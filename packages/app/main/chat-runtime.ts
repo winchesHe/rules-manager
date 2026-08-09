@@ -3,6 +3,7 @@ import type {
   NativeSessionHandle,
   NativeTurnConfig,
 } from './chat-store.js'
+import type { SessionEvidenceProgress } from '../../core/src/live-evidence-engine.js'
 
 export interface NativeTurnRequest {
   chatId: string
@@ -58,6 +59,7 @@ export type NativeChatEvent =
     }
   | { type: 'tool_activity'; activity: NativeToolActivity }
   | { type: 'usage'; contextUsage: { usedTokens: number; maxTokens: number } }
+  | { type: 'evidence_progress'; progress: SessionEvidenceProgress }
   | { type: 'interaction_request'; request: NativeInteractionRequest }
 
 export interface NativeInteractionRequest {

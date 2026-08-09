@@ -121,6 +121,38 @@ export interface LiveSessionEvidenceOptions {
   homeDir?: string
   tempParentDir?: string
   signal?: AbortSignal
+  onProgress?: (progress: SessionEvidenceProgress) => void
+}
+
+export type SessionEvidenceStage =
+  | 'planning'
+  | 'reading'
+  | 'processing'
+  | 'reducing'
+  | 'gating'
+  | 'complete'
+
+export interface SessionEvidenceCoverageSummary {
+  mode: SessionEvidenceMode
+  status: CoverageStatus
+  selected: number
+  visited: number
+  readable: number
+  empty: number
+  unavailable: number
+  readFailed: number
+  processed: number
+  processFailed: number
+  relevant: number
+  changedDuringRun: number
+}
+
+export interface SessionEvidenceProgress {
+  stage: SessionEvidenceStage
+  completed: number
+  total: number
+  mode: SessionEvidenceMode
+  coverage?: SessionEvidenceCoverageSummary
 }
 
 const COMPLETE_CLAIM = /(?:全部(?:读取|处理|总结|覆盖)|完整(?:读取|处理|总结|覆盖)|所有会话(?:都|均)?(?:已)?(?:读取|处理|总结|覆盖)|(?:已)?(?:读取|处理|总结|覆盖)(?:了)?(?:全部|所有)(?:会话|sessions?)|没有遗漏|无遗漏|all sessions|complete coverage|reviewed all sessions|no omissions?)/i
@@ -195,6 +227,25 @@ function validatePlan(plan: SessionEvidencePlan): void {
   }
   if (!Number.isInteger(plan.maxConcurrency) || plan.maxConcurrency <= 0) {
     throw new Error('session evidence max concurrency must be a positive integer')
+  }
+}
+
+export function sessionEvidenceCoverageSummary(
+  coverage: CoverageLedger,
+): SessionEvidenceCoverageSummary {
+  return {
+    mode: coverage.mode,
+    status: coverage.status,
+    selected: coverage.selected,
+    visited: coverage.visited,
+    readable: coverage.readable,
+    empty: coverage.empty,
+    unavailable: coverage.unavailable,
+    readFailed: coverage.readFailed,
+    processed: coverage.processed,
+    processFailed: coverage.processFailed,
+    relevant: coverage.relevant,
+    changedDuringRun: coverage.changedDuringRun,
   }
 }
 
@@ -414,10 +465,19 @@ export async function runLiveSessionEvidence(
 ): Promise<SessionEvidenceRunResult> {
   if (!query.question.trim()) throw new Error('session evidence question is required')
   validatePlan(plan)
+  options.onProgress?.({
+    stage: 'planning', completed: 0, total: plan.selected.length, mode: plan.mode,
+  })
   let coverageState = createCoverageState(plan.runId, plan.mode, plan.selected)
   const sourceResults = await readSessionSources(plan.selected, {
     homeDir: options.homeDir,
     signal: options.signal,
+    onVisit: (_reference, index, total) => options.onProgress?.({
+      stage: 'reading', completed: index, total, mode: plan.mode,
+    }),
+  })
+  options.onProgress?.({
+    stage: 'reading', completed: sourceResults.length, total: plan.selected.length, mode: plan.mode,
   })
   for (const source of sourceResults) {
     coverageState = recordSourceOutcome(coverageState, {
@@ -440,6 +500,11 @@ export async function runLiveSessionEvidence(
     maxChunkBytes: plan.batchByteBudget,
   }, async (context) => {
     const capsules: SessionCapsule[] = []
+    const readableCount = sourceResults.filter((source) => source.status === 'readable').length
+    let processedSessionCount = 0
+    options.onProgress?.({
+      stage: 'processing', completed: 0, total: readableCount, mode: plan.mode,
+    })
     const sessions: Array<{
       source: SessionSourceReadResult
       jobs: EvidenceMapInput[]
@@ -471,6 +536,11 @@ export async function runLiveSessionEvidence(
           errorCode: 'MAP_FAILED',
           errorMessage: error instanceof Error ? error.message : String(error),
         })
+        processedSessionCount += 1
+        options.onProgress?.({
+          stage: 'processing', completed: processedSessionCount,
+          total: readableCount, mode: plan.mode,
+        })
       }
     }
 
@@ -501,6 +571,11 @@ export async function runLiveSessionEvidence(
             ? failure.reason.message
             : String(failure.reason),
         })
+        processedSessionCount += 1
+        options.onProgress?.({
+          stage: 'processing', completed: processedSessionCount,
+          total: readableCount, mode: plan.mode,
+        })
         continue
       }
       const sessionCapsules = sessionResults.map((result) =>
@@ -512,10 +587,19 @@ export async function runLiveSessionEvidence(
         status: 'processed',
         relevant: sessionCapsules.some((capsule) => capsule.relevant),
       })
+      processedSessionCount += 1
+      options.onProgress?.({
+        stage: 'processing', completed: processedSessionCount,
+        total: readableCount, mode: plan.mode,
+      })
     }
 
     const coverage = finalizeCoverage(coverageState)
     context.writeCoverage(coverage)
+    options.onProgress?.({
+      stage: 'reducing', completed: 0, total: 1, mode: plan.mode,
+      coverage: sessionEvidenceCoverageSummary(coverage),
+    })
     const evidence = await reduceEvidenceLayers(
       plan,
       query.question,
@@ -532,7 +616,15 @@ export async function runLiveSessionEvidence(
       evidence,
       coverage,
     })
+    options.onProgress?.({
+      stage: 'gating', completed: 0, total: 1, mode: plan.mode,
+      coverage: sessionEvidenceCoverageSummary(coverage),
+    })
     const claimGate = applyClaimGate(synthesis, capsules, coverage)
+    options.onProgress?.({
+      stage: 'complete', completed: 1, total: 1, mode: plan.mode,
+      coverage: sessionEvidenceCoverageSummary(coverage),
+    })
     return {
       runId: plan.runId,
       plan,

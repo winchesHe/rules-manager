@@ -57,6 +57,8 @@ import type {
   NativeSessionReference,
   SessionContextItem,
   SessionContextPage,
+  SessionEvidenceCoverageSummary,
+  SessionEvidenceProgress,
 } from '../types'
 import {
   assistantTurnStartedAt,
@@ -150,6 +152,7 @@ export function ChatView({
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [recentSkills, setRecentSkills] = useState<string[]>(() => readRecentSkills(window.localStorage))
   const [liveTimeline, setLiveTimeline] = useState<NativeTurnTimelineItem[]>([])
+  const [liveEvidenceProgress, setLiveEvidenceProgress] = useState<SessionEvidenceProgress | null>(null)
   const [liveStartedAt, setLiveStartedAt] = useState<string | null>(null)
   const [liveUsage, setLiveUsage] = useState<{ usedTokens: number; maxTokens: number } | null>(null)
   const [queuedCount, setQueuedCount] = useState(0)
@@ -345,6 +348,8 @@ export function ChatView({
       liveChatIdRef.current = envelope.chatId
       if (event.type === 'usage') {
         setLiveUsage(event.contextUsage)
+      } else if (event.type === 'evidence_progress') {
+        setLiveEvidenceProgress(event.progress)
       } else if (event.type === 'interaction_request') {
         setPendingInteraction({ chatId: envelope.chatId, request: event.request })
         setInteractionAnswers({})
@@ -604,6 +609,7 @@ export function ChatView({
     setPastedTextAttachments([])
     setSelectedSkills([])
     setLiveTimeline([])
+    setLiveEvidenceProgress(null)
     setLiveStartedAt(null)
     setLiveUsage(null)
     liveChatIdRef.current = null
@@ -671,6 +677,7 @@ export function ChatView({
     setIsSending(true)
     setError(null)
     setLiveTimeline([])
+    setLiveEvidenceProgress(null)
     setLiveStartedAt(new Date().toISOString())
     let next: QueuedChatTurn | undefined = first
     let currentChatId = thread?.kind === 'native-chat' ? thread.id : undefined
@@ -694,6 +701,7 @@ export function ChatView({
         setSelectedId(result.chatId)
         await refresh(result.chatId)
         setLiveTimeline([])
+        setLiveEvidenceProgress(null)
         next = queueRef.current.shift()
         setLiveStartedAt(next ? new Date().toISOString() : null)
         setQueuedCount(queueRef.current.length)
@@ -1069,9 +1077,18 @@ export function ChatView({
               {!thread && !legacy && !isSending ? (
                 <div className="grid h-full place-items-center text-sm text-muted">{loading ? t('loading') : t('emptySelection')}</div>
               ) : thread?.kind === 'native-chat' ? (
-                <NativeConversation liveStartedAt={liveStartedAt} liveTimeline={liveTimeline} thread={thread} />
+                <NativeConversation
+                  liveEvidenceProgress={liveEvidenceProgress}
+                  liveStartedAt={liveStartedAt}
+                  liveTimeline={liveTimeline}
+                  thread={thread}
+                />
               ) : !thread && isSending ? (
-                <LiveTurn startedAt={liveStartedAt ?? undefined} timeline={liveTimeline} />
+                <LiveTurn
+                  evidenceProgress={liveEvidenceProgress}
+                  startedAt={liveStartedAt ?? undefined}
+                  timeline={liveTimeline}
+                />
               ) : thread ? (
                 <PersistedConversation thread={thread} />
               ) : (
@@ -1446,10 +1463,12 @@ export function ChatView({
 
 function NativeConversation({
   thread,
+  liveEvidenceProgress,
   liveStartedAt,
   liveTimeline,
 }: {
   thread: Extract<ChatThread, { version: 2 }>
+  liveEvidenceProgress: SessionEvidenceProgress | null
   liveStartedAt: string | null
   liveTimeline: NativeTurnTimelineItem[]
 }) {
@@ -1478,6 +1497,7 @@ function NativeConversation({
         </div>
       ) : (
         <article className="grid min-w-0 max-w-full gap-3 overflow-hidden text-sm leading-7 text-foreground" key={message.id}>
+          {message.sessionEvidence && <EvidenceCoverageCard summary={message.sessionEvidence} />}
           {message.timeline && message.timeline.length > 0 ? (
             <NativeTurnTimeline chatId={thread.id} final timeline={message.timeline} />
           ) : (
@@ -1492,6 +1512,7 @@ function NativeConversation({
       {thread.status === 'running' && (
         <LiveTurn
           chatId={thread.id}
+          evidenceProgress={liveEvidenceProgress}
           startedAt={assistantTurnStartedAt(thread.messages, thread.messages.length) ?? liveStartedAt ?? undefined}
           timeline={liveTimeline}
         />
@@ -1504,19 +1525,77 @@ function NativeConversation({
 function LiveTurn({
   timeline,
   chatId,
+  evidenceProgress,
   startedAt,
 }: {
   timeline: NativeTurnTimelineItem[]
   chatId?: string
+  evidenceProgress?: SessionEvidenceProgress | null
   startedAt?: string
 }) {
   return (
     <article className="mx-auto grid min-h-full w-full max-w-[51.25rem] content-end gap-3 py-4 text-sm leading-7 text-foreground">
+      {evidenceProgress && <EvidenceProgressCard progress={evidenceProgress} />}
       <NativeTurnTimeline chatId={chatId} final={false} timeline={timeline} />
       {startedAt
         ? <RunningElapsed showLabel startedAt={startedAt} />
         : <Spinner color="accent" size="sm" />}
     </article>
+  )
+}
+
+function EvidenceProgressCard({ progress }: { progress: SessionEvidenceProgress }) {
+  const { t } = useTranslation('chat')
+  const showCount = progress.stage === 'reading' || progress.stage === 'processing'
+  return (
+    <div className="flex min-h-8 items-center gap-2 px-1 text-xs text-muted" data-evidence-progress>
+      <ShieldCheck aria-hidden="true" className="text-primary" size={15} />
+      <strong className="font-medium text-foreground">{t(`evidenceStage.${progress.stage}`)}</strong>
+      {showCount && (
+        <span className="tabular-nums">{progress.completed}/{progress.total}</span>
+      )}
+      {progress.stage !== 'complete' && <Spinner className="ml-auto" color="accent" size="sm" />}
+    </div>
+  )
+}
+
+function EvidenceCoverageCard({ summary }: { summary: SessionEvidenceCoverageSummary }) {
+  const { t } = useTranslation('chat')
+  const tone = summary.status === 'complete' || summary.status === 'targeted'
+    ? 'success'
+    : summary.status === 'partial' ? 'warning' : 'danger'
+  return (
+    <div className="ml-1 grid gap-2 border-l border-border py-1 pl-3 text-xs" data-evidence-coverage>
+      <div className="flex items-center gap-2">
+        <ShieldCheck aria-hidden="true" className="text-primary" size={15} />
+        <strong className="font-medium text-foreground">{t('evidenceCoverage')}</strong>
+        <Chip className="ml-auto" color={tone} size="sm" variant="flat">
+          {t(`evidenceStatus.${summary.status}`)}
+        </Chip>
+      </div>
+      <p className="text-muted">
+        {t('evidenceCoverageCounts', {
+          visited: summary.visited,
+          selected: summary.selected,
+          processed: summary.processed,
+          readable: summary.readable,
+        })}
+      </p>
+      {(summary.unavailable > 0 || summary.readFailed > 0 || summary.processFailed > 0) && (
+        <p className="text-warning">
+          {t('evidenceCoverageFailures', {
+            unavailable: summary.unavailable,
+            readFailed: summary.readFailed,
+            processFailed: summary.processFailed,
+          })}
+        </p>
+      )}
+      {summary.changedDuringRun > 0 && (
+        <p className="text-muted">
+          {t('evidenceCoverageChanged', { count: summary.changedDuringRun })}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -2317,6 +2396,14 @@ function isNativeChatEvent(value: unknown): value is NativeChatEvent {
     if (!event.contextUsage || typeof event.contextUsage !== 'object') return false
     const usage = event.contextUsage as Record<string, unknown>
     return typeof usage.usedTokens === 'number' && typeof usage.maxTokens === 'number'
+  }
+  if (event.type === 'evidence_progress') {
+    if (!event.progress || typeof event.progress !== 'object') return false
+    const progress = event.progress as Record<string, unknown>
+    return typeof progress.stage === 'string'
+      && typeof progress.completed === 'number'
+      && typeof progress.total === 'number'
+      && (progress.mode === 'complete' || progress.mode === 'targeted')
   }
   if (event.type === 'interaction_request') {
     return Boolean(event.request && typeof event.request === 'object')
