@@ -48,13 +48,10 @@ describe('Agent Dashboard UX transitions', () => {
   it('主导航切换不会显示居中的全屏加载转圈', () => {
     const overview = fs.readFileSync(path.join(rendererRoot, 'views/OverviewView.tsx'), 'utf8')
     const projects = fs.readFileSync(path.join(rendererRoot, 'views/ProjectsView.tsx'), 'utf8')
-    const viewStates = fs.readFileSync(path.join(rendererRoot, 'components/ViewStates.tsx'), 'utf8')
 
     expect(overview).not.toContain("if (loading) return <ViewLoading")
     expect(projects).not.toContain("if (loading) return <ViewLoading")
-    expect(overview).toContain('<TablePageSkeleton columns={6}')
-    expect(projects).toContain("<TablePageSkeleton label={t('loading.projects')} />")
-    expect(viewStates).toContain('data-loading="skeleton"')
-    expect(viewStates).toContain('animationType="shimmer"')
+    expect(overview).not.toContain('TablePageSkeleton')
+    expect(projects).not.toContain('TablePageSkeleton')
   })
 })

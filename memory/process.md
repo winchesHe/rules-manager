@@ -3656,3 +3656,15 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 45 suites / 275 tests、Core 全量 36 suites / 359 tests、Electron production build 与
   `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 使用骨架屏展示页面加载`
+
+## 移除主导航骨架与 Loading（2026-08-10）
+
+- 用户最终决定切页首屏不展示骨架屏或 Loading。删除共享 `TablePageSkeleton` 及 HeroUI Skeleton 依赖，Scan
+  状态返回前直接呈现页面结构；Projects 保留稳定表格容器高度，数据返回后直接填充。
+- 操作按钮、扫描运行、取消和保存等局部进度反馈保留，避免真实异步操作失去状态提示。
+- 同步 `DESIGN.md`、UX 计划与合同测试，锁定 Scan / Projects 不再引用 `ViewLoading` 或
+  `TablePageSkeleton`。
+- Computer Use 快速切换 Scan / Projects，确认页面直接显示实际结构与数据，没有骨架或中央 Loading；验收后
+  恢复浅色、展开侧栏的最近扫描页。App 全量 45 suites / 275 tests、Core 全量 36 suites / 359 tests、
+  Electron production build、定向合同测试与 `git diff --check` 通过。
+- 提交信息：`fix: 移除页面切换骨架与加载`

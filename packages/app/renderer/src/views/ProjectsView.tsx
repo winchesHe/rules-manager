@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { afterNextPaint } from '../async'
 import { PageHeader } from '../components/PageHeader'
 import { FilterTransition, PageTransition } from '../components/UxTransition'
-import { EmptyProjects, TablePageSkeleton, ViewError } from '../components/ViewStates'
+import { EmptyProjects, ViewError } from '../components/ViewStates'
 import { currentLocale, i18n } from '../i18n'
 import { formatBytes, formatDateTime } from '../i18n/format'
 import type {
@@ -200,7 +200,7 @@ export function ProjectsView({
         <Card className="min-h-80 border border-border bg-surface shadow-none">
           <Card.Content className="p-0">
           {loading ? (
-            <TablePageSkeleton label={t('loading.projects')} />
+            <div className="min-h-64" />
           ) : projects.length === 0 ? (
             <EmptyProjects />
           ) : filteredRows.length === 0 ? (
