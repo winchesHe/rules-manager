@@ -3307,3 +3307,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - `npm install` 后仓库审计报告 3 个既有/传递 vulnerabilities（1 low、2 high）；本段未执行自动 audit fix。
 - Evals Reporter 定向测试与全量类型检查通过；Langfuse SDK Publisher、Dataset/Experiment 映射在 6.2 接续。
 - 提交信息：`feat: 建立可选 Langfuse Reporter 边界`
+
+## Session Evidence Langfuse Dataset 与 Experiment 映射（2026-08-09）
+
+- Chunk 6.2 使用官方 JS/TS v5 SDK 实现 LangfuseSdkPublisher：创建版本化 Dataset、按稳定 SHA-256 ID upsert
+  Dataset Item、读取远端 Dataset 并对全部 caseHash 做集合相等校验后才启动 Experiment。
+- Dataset Item input 仅含 caseId/caseHash/tags/sessionCount，expectedOutput 仅含 caseHash；Dataset/Run metadata 仅含
+  datasetVersion、variant、schemaVersion，不上传 requestText、可见回答、Session 正文、Prompt 或 Tool output。
+- 每个 Dataset Item 由 Experiment 自动形成 Trace；task 内建立 plan/read/map/reduce/gate 五个 Observation，属性只含
+  caseId/caseHash/variant/sessionCount；五项硬门禁和四项质量指标映射为九个 Numeric/Boolean 0-1 Score。
+- Reporter 同时支持 Cloud 默认地址和 `LANGFUSE_BASE_URL=http://localhost:3000` 自托管地址；缺 key 立即失败且错误
+  不包含 key 值。Client flush/shutdown 与 OpenTelemetry shutdown 在 finally 中等待。
+- Fake Runtime 合同测试验证 4 Dataset Items、20 phase spans、36 scores、runId/url 映射；远端 hash 不一致时拒绝
+  Experiment 并仍 shutdown。本地 Docker 与真实 API readback 需要可用实例/凭据，留在 7.2 环境验收明确记录。
+- Evals Publisher 定向测试、全量测试与 `tsc --noEmit` 通过。
+- 提交信息：`feat: 映射 Langfuse Dataset Experiment 与 Score`

@@ -120,7 +120,7 @@ npm test -w @memory-manager/core -- --runInBand \
 | # | 步 | 观察点 | 验证方式 | 状态 | reviewed |
 |---|---|---|---|---|---|
 | 6.1 | 在 eval workspace 增加 Reporter 接口与 Langfuse 实现，生产 Core/App 不引入 SDK | dependency 只存在于 eval package | workspace dependency 与 bundle 检查 | ✅ | 2026-08-09 |
-| 6.2 | 映射 Dataset Item、Experiment、Trace/Span 和 Score，并校验本地 caseHash | Langfuse UI 可比较同一 Dataset 的 v0-v3 | 本地 Docker Langfuse smoke + API readback | ⏳ | —— |
+| 6.2 | 映射 Dataset Item、Experiment、Trace/Span 和 Score，并校验本地 caseHash | Langfuse UI 可比较同一 Dataset 的 v0-v3 | Publisher 合同测试 + 本地 Docker/API readback 待 7.2 环境验收 | ✅ | 2026-08-09 |
 | 6.3 | 对 Reporter payload 使用字段 allowlist，并隔离不可达、鉴权和 flush 失败 | payload 无原文/Prompt/Tool output，上报失败不损坏本地报告 | payload snapshot + 网络失败测试 | ⏳ | —— |
 
 **Observability Checkpoint**：
