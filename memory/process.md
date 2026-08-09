@@ -3230,3 +3230,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 36 suites / 358 tests、App 全量 42 suites / 260 tests、Core/App production build 与
   `git diff --check` 通过；build 仅保留既有 warnings。
 - 提交信息：`feat: 阻止 Live Evidence Session 自我回灌`
+
+## Session Evidence Eval Workspace 与 Variant Runner（2026-08-09）
+
+- Chunk 5.1 新增独立 `@memory-manager/evals` workspace；生产 Core/App 不导入它，根默认 build/test 行为不变，
+  仅新增显式 `eval:session-evidence` 入口。
+- Dataset manifest 使用人工脱敏的生成式 fixture，固定覆盖 1/10/151/500 四个规模边界、6 Agent 轮转、
+  complete/targeted、partial、Prompt injection、跨 chunk 与 secret/failure 标签，不复制本机真实 Session。
+- `caseHash` 只由 datasetVersion、generatorVersion 与规范化 case manifest 计算；生成路径和本机绝对路径不参与，
+  同一 case 在 v0-prompt-only、v1-strict-prompt、v2-live-read、v3-map-reduce 间保持相同身份。
+- Variant Runner 统一产出访问、处理、相关 Session、fact/locator 与效率原始数据；当前实现为完全离线、确定性的
+  recorded baseline，后续 5.2/5.3 在同一合同上增加门禁和质量/效率 evaluator。
+- `simplify` 复核把 locator 直接从 selected reference 映射，未引入临时对象清洗或 Variant 特例分支。
+- Evals 1 suite / 5 tests、`tsc --noEmit`、v3 `--reporter none` smoke 与 `git diff --check` 通过；smoke 输出
+  `variant=v3-map-reduce reporter=none cases=4 case_hashes=stable`。
+- `npm install --package-lock-only --ignore-scripts` 只登记新 workspace；审计仍报告仓库既有 6 个 vulnerabilities，
+  本段未执行可能扩大范围的自动修复。
+- 提交信息：`feat: 建立 Session Evidence 评测工作区`

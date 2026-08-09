@@ -1,0 +1,19 @@
+{
+  "name": "@memory-manager/evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "node --experimental-vm-modules ../../node_modules/.bin/jest",
+    "eval:session-evidence": "tsx src/session-evidence/cli.ts"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.21",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.4",
+    "tsx": "^4.23.1",
+    "typescript": "^5.8.3"
+  }
+}

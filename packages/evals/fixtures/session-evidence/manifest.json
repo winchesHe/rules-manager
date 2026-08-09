@@ -1,0 +1,44 @@
+{
+  "datasetVersion": "session-evidence-v1",
+  "generatorVersion": 1,
+  "cases": [
+    {
+      "caseId": "single-complete",
+      "requestText": "总结全部 Session 的经验",
+      "expectedMode": "complete",
+      "sessionCount": 1,
+      "relevantSessionIndexes": [0],
+      "goldFactSessionIndexes": [0],
+      "tags": ["scale-1", "complete"]
+    },
+    {
+      "caseId": "mixed-ten",
+      "requestText": "总结这些 Session，并说明证据限制",
+      "expectedMode": "complete",
+      "sessionCount": 10,
+      "relevantSessionIndexes": [1, 4, 8],
+      "goldFactSessionIndexes": [1, 4, 8],
+      "tags": ["scale-10", "mixed-agent", "prompt-injection"]
+    },
+    {
+      "caseId": "scale-151-targeted",
+      "requestText": "找出 Coverage 记账相关的证据",
+      "expectedMode": "targeted",
+      "sessionCount": 151,
+      "relevantSessionIndexes": [3, 77, 150],
+      "goldFactSessionIndexes": [3, 77, 150],
+      "tags": ["scale-151", "targeted", "cross-chunk"]
+    },
+    {
+      "caseId": "scale-500-partial",
+      "requestText": "总结全部 Session，来源失败必须明确说明",
+      "expectedMode": "complete",
+      "sessionCount": 500,
+      "relevantSessionIndexes": [0, 99, 249, 499],
+      "goldFactSessionIndexes": [0, 99, 249, 499],
+      "unavailableSessionIndexes": [17],
+      "readFailedSessionIndexes": [318],
+      "tags": ["scale-500", "partial", "secret", "failure"]
+    }
+  ]
+}

@@ -7,6 +7,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "npm run build -w @memory-manager/core",
-    "test": "npm test -w @memory-manager/core"
+    "test": "npm test -w @memory-manager/core",
+    "eval:session-evidence": "npm run eval:session-evidence -w @memory-manager/evals --"
   }
 }
