@@ -3141,3 +3141,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Evidence Runner + Claude/Codex/OpenCode/Pi Adapter 定向 5 suites / 35 tests、App 全量 42 suites /
   254 tests、App production build 与 `git diff --check` 通过；build 只保留既有 Markstream warnings。
 - 提交信息：`feat: 统一 Evidence Provider 结构化输出`
+
+## Live Evidence Claim Gate 完整门禁（2026-08-09）
+
+- Chunk 3.4 将 Claim Gate 从 fact ID 存在性扩展为完整回溯校验：Capsule 必须属于本轮 processed Session；
+  locator 的 Agent/Session、sourceRevision 与 messageIndex 必须对得上 Coverage row；重复 fact ID、空 claim 引用
+  和只有一个独立 locator 的 inferred fact 都进入 `unknown-evidence-ref`。
+- false-complete 同时扫描回答、claim 文本和 limitations，覆盖“全部读取/完整总结/总结了所有会话/没有遗漏”及
+  对应英文措辞；任何非 complete 状态命中即使用固定安全失败文案，不展示原声明。
+- partial 由 Host 固定展示 unavailable/readFailed/processFailed 计数并要求非空 limitations；targeted 固定显示
+  “仅基于本次处理的证据”；failed 不展示模型猜测，只显示没有可靠证据的固定结果。
+- `changedDuringRun>0` 在所有状态前披露变化数量和固定读取水位；answer、claim、limitations 合并执行 secret
+  检测，可见 answer/limitations 再逐项 redaction，secret 原文不会进入最终展示文本。
+- 新增 `claim-gate.test.ts`，覆盖合法回溯、7 类未知引用、虚假完整声明、空限制、secret fixture、targeted、
+  changedDuringRun 和 failed 共 12 个行为测试。
+- `simplify` 复核过滤空白 limitations，避免安全前缀后生成无意义空 bullet；门禁语义不变。
+- Claim Gate/Engine/Coverage 定向 3 suites / 21 tests、Core 全量 35 suites / 344 tests、Core build 与
+  `git diff --check` 通过；build 只保留既有 tsdown `define` warning。
+- 提交信息：`feat: 完成 Live Evidence Claim Gate`

@@ -123,7 +123,7 @@ export interface LiveSessionEvidenceOptions {
   signal?: AbortSignal
 }
 
-const COMPLETE_CLAIM = /(?:全部(?:读取|处理|总结)|完整总结|没有遗漏|all sessions|complete coverage)/i
+const COMPLETE_CLAIM = /(?:全部(?:读取|处理|总结|覆盖)|完整(?:读取|处理|总结|覆盖)|所有会话(?:都|均)?(?:已)?(?:读取|处理|总结|覆盖)|(?:已)?(?:读取|处理|总结|覆盖)(?:了)?(?:全部|所有)(?:会话|sessions?)|没有遗漏|无遗漏|all sessions|complete coverage|reviewed all sessions|no omissions?)/i
 const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'opencode', 'pi'])
 const locatorSchema = z.object({
   sessionId: z.string().min(1),
@@ -322,42 +322,80 @@ export function applyClaimGate(
   coverage: CoverageLedger,
 ): ClaimGateResult {
   const violations = new Set<ClaimGateViolation>()
-  const processed = new Set(coverage.rows
+  const processed = new Map<string, CoverageLedger['rows'][number]>(coverage.rows
     .filter((row) => row.processingStatus === 'processed')
-    .map((row) => `${row.agent}\0${row.sessionId}`))
-  const facts = new Map(capsules.flatMap((capsule) => capsule.facts)
-    .map((fact) => [fact.id, fact] as const))
+    .map((row) => [`${row.agent}\0${row.sessionId}`, row] as const))
+  const facts = new Map<string, SessionCapsule['facts'][number]>()
 
-  for (const fact of facts.values()) {
-    if (fact.locators.some((locator) => !processed.has(`${locator.agent}\0${locator.sessionId}`))) {
-      violations.add('unknown-evidence-ref')
+  for (const capsule of capsules) {
+    const capsuleKey = `${capsule.agent}\0${capsule.sessionId}`
+    const row = processed.get(capsuleKey)
+    if (!row) violations.add('unknown-evidence-ref')
+    for (const fact of capsule.facts) {
+      if (facts.has(fact.id)) violations.add('unknown-evidence-ref')
+      facts.set(fact.id, fact)
+      const uniqueLocators = new Set(fact.locators.map((locator) =>
+        `${locator.agent}\0${locator.sessionId}\0${locator.messageIndex}\0${locator.sourceRevision}`))
+      if (fact.kind === 'inferred' && uniqueLocators.size < 2) {
+        violations.add('unknown-evidence-ref')
+      }
+      if (fact.locators.some((locator) => {
+        const locatorRow = processed.get(`${locator.agent}\0${locator.sessionId}`)
+        return locator.agent !== capsule.agent
+          || locator.sessionId !== capsule.sessionId
+          || !locatorRow
+          || locator.sourceRevision !== locatorRow.sourceRevision?.fingerprint
+          || locator.messageIndex < 0
+          || locator.messageIndex >= locatorRow.messageCount
+      })) {
+        violations.add('unknown-evidence-ref')
+      }
     }
   }
-  if (synthesis.claims.some((claim) =>
-    claim.evidenceFactIds.some((factId) => !facts.has(factId)))) {
+  if (synthesis.claims.some((claim) => claim.evidenceFactIds.length === 0
+    || claim.evidenceFactIds.some((factId) => !facts.has(factId)))) {
     violations.add('unknown-evidence-ref')
   }
-  if (coverage.status !== 'complete' && COMPLETE_CLAIM.test(synthesis.answerMarkdown)) {
+  const outputText = [
+    synthesis.answerMarkdown,
+    ...synthesis.claims.map((claim) => claim.text),
+    ...synthesis.limitations,
+  ].join('\n')
+  if (coverage.status !== 'complete' && COMPLETE_CLAIM.test(outputText)) {
     violations.add('false-complete-claim')
   }
-  if (coverage.status === 'partial' && synthesis.limitations.length === 0) {
+  if (
+    (coverage.status === 'partial' || coverage.status === 'failed')
+    && !synthesis.limitations.some((limitation) => limitation.trim())
+  ) {
     violations.add('missing-limitations')
   }
-  if (containsSecret(synthesis.answerMarkdown)) violations.add('secret-leak')
+  if (containsSecret(outputText)) violations.add('secret-leak')
 
   let renderedAnswer = redactSecrets(synthesis.answerMarkdown)
   if (violations.has('unknown-evidence-ref') || violations.has('false-complete-claim')) {
     renderedAnswer = '证据声明校验失败，无法安全展示本轮总结。'
+  } else if (coverage.status === 'failed') {
+    renderedAnswer = '本轮未能读取或处理可用证据，无法生成可靠总结。'
   } else if (coverage.status === 'partial') {
     renderedAnswer = [
       `> 本轮仅部分完成：${coverage.unavailable} 个来源不可用，${coverage.readFailed} 个读取失败，${coverage.processFailed} 个处理失败。`,
       '',
       renderedAnswer,
       '',
-      ...synthesis.limitations.map((limitation) => `- ${redactSecrets(limitation)}`),
+      ...synthesis.limitations
+        .filter((limitation) => limitation.trim())
+        .map((limitation) => `- ${redactSecrets(limitation)}`),
     ].join('\n')
   } else if (coverage.status === 'targeted') {
     renderedAnswer = `> 以下结论仅基于本次处理的证据。\n\n${renderedAnswer}`
+  }
+  if (coverage.changedDuringRun > 0) {
+    renderedAnswer = [
+      `> 本轮有 ${coverage.changedDuringRun} 个来源在读取期间发生变化；结论基于固定读取水位。`,
+      '',
+      renderedAnswer,
+    ].join('\n')
   }
 
   return {
