@@ -3247,3 +3247,20 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - `npm install --package-lock-only --ignore-scripts` 只登记新 workspace；审计仍报告仓库既有 6 个 vulnerabilities，
   本段未执行可能扩大范围的自动修复。
 - 提交信息：`feat: 建立 Session Evidence 评测工作区`
+
+## Session Evidence 五项硬门禁（2026-08-09）
+
+- Chunk 5.2 为 Variant 结果补齐逐 Session source/processing 终态与 Coverage 状态，并实现
+  source_accounting_pass、processing_accounting_pass、false_complete_claim_pass、locator_validity、
+  secret_leak_pass 五项独立门禁。
+- Source Gate 校验 selected 集合无缺失、无额外、无重复；Processing Gate 在非 targeted 结果中要求每个 readable
+  Session 恰好进入 processed/process_failed 终态，不能用汇总数字掩盖漏处理。
+- False Claim Gate 只在非 complete 状态阻止“全部/所有 Session 已读取、没有遗漏”等声明；Locator Gate 要求 fact
+  存在于 gold、至少一个 locator、三元组匹配且能回到固定 fixture 消息；Secret Gate覆盖 token、AWS key、邮箱和用户路径。
+- CLI 以全部 case 的全部门禁决定退出码：v3 smoke 输出 `hard_gates=pass` 且 exit 0；v0 基线输出
+  `hard_gates=fail` 且 exit 1，避免失败实验被 CI 或脚本误报为成功。
+- 五个反向 fixture 分别删除 source、删除 processing、注入虚假完整声明、破坏 messageIndex 和泄漏 synthetic token，
+  每个只需命中对应门禁即可定位回归。
+- `simplify` 复核保留一个 `evaluateCase` 纯函数和具名 gate 结果，不生成聚合总分，也不把门禁藏进 Variant 实现。
+- Evals 2 suites / 11 tests、`tsc --noEmit`、v3 成功 smoke、v0 非零退出 smoke 与 `git diff --check` 通过。
+- 提交信息：`feat: 增加 Session Evidence 硬门禁`

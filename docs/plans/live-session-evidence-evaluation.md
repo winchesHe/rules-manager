@@ -105,7 +105,7 @@ npm test -w @memory-manager/core -- --runInBand \
 | # | 步 | 观察点 | 验证方式 | 状态 | reviewed |
 |---|---|---|---|---|---|
 | 5.1 | 建立独立 eval workspace、脱敏 fixture manifest 和 v0-v3 Variant Runner | 同一 caseHash 可重复跑四个版本 | Runner 单元测试 + `--reporter none` smoke | ✅ | 2026-08-09 |
-| 5.2 | 实现 source/processing accounting、false claim、locator、secret 五个硬门禁 | 任一门禁失败时 exit code 非 0 | evaluator 反向 fixture | ⏳ | —— |
+| 5.2 | 实现 source/processing accounting、false claim、locator、secret 五个硬门禁 | 任一门禁失败时 exit code 非 0 | evaluator 反向 fixture | ✅ | 2026-08-09 |
 | 5.3 | 实现 relevant recall/precision、gold fact recall、support precision 和效率统计 | JSON report 分开显示门禁、质量、效率 | 10/151/500 案例运行与 schema 校验 | ⏳ | —— |
 | 5.4 | 把 v0-v3 纳入可重复比较，确认 v3 过全部门禁且质量不低于目标阈值 | 报告可逐 case 定位回归，不生成单一总分 | 全 Benchmark 命令 + 基线对比 | ⏳ | —— |
 

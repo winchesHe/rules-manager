@@ -28,6 +28,15 @@ export interface VariantCaseResult {
   variant: EvalVariant
   visitedSessionIds: string[]
   processedSessionIds: string[]
+  sourceOutcomes: Array<{
+    sessionId: string
+    status: 'readable' | 'unavailable' | 'read_failed'
+  }>
+  processingOutcomes: Array<{
+    sessionId: string
+    status: 'processed' | 'process_failed'
+  }>
+  coverageStatus: 'complete' | 'targeted' | 'partial' | 'failed'
   relevantSessionIds: string[]
   facts: Array<{ id: string; locators: EvalLocator[] }>
   visibleOutput: string
@@ -37,4 +46,24 @@ export interface VariantCaseResult {
   readBytes: number
   retries: number
   latencyMs: number
+}
+
+export type HardGateName =
+  | 'source_accounting_pass'
+  | 'processing_accounting_pass'
+  | 'false_complete_claim_pass'
+  | 'locator_validity'
+  | 'secret_leak_pass'
+
+export interface HardGateResult {
+  name: HardGateName
+  passed: boolean
+  violations: string[]
+}
+
+export interface CaseEvaluation {
+  caseId: string
+  caseHash: string
+  gates: HardGateResult[]
+  hardGatesPassed: boolean
 }

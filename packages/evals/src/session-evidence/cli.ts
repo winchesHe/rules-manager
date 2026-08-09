@@ -12,4 +12,5 @@ const reporter = valueAfter('--reporter') ?? 'none'
 if (!EVAL_VARIANTS.includes(variant)) throw new Error(`unsupported variant: ${variant}`)
 if (reporter !== 'none') throw new Error(`unsupported reporter: ${reporter}`)
 const run = runSessionEvidenceEval(variant)
-console.log(`variant=${run.variant} reporter=${reporter} cases=${run.results.length} case_hashes=stable`)
+console.log(`variant=${run.variant} reporter=${reporter} cases=${run.results.length} case_hashes=stable hard_gates=${run.hardGatesPassed ? 'pass' : 'fail'}`)
+if (!run.hardGatesPassed) process.exitCode = 1
