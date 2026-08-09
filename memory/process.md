@@ -3043,3 +3043,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Evidence、Context、Reader 和四组 Rules Generation/Publish 定向 7 suites / 58 tests 通过；Core 全量
   32 suites / 322 tests、Core build 与 `git diff --check` 通过，build 只保留既有 tsdown `define` warning。
 - 提交信息：`refactor: Evidence 统一复用 Source Reader`
+
+## Session Source 动态读取水位（2026-08-09）
+
+- Chunk 2.1 为 JSONL 在读取前冻结排序后的文件集合、每个文件的 byte size 与 mtime；Reader 使用初始
+  byte end 读取，结束后复查水位。运行中追加行或新增目录文件不进入本轮，并设置 `changedDuringRun=true`。
+- OpenCode 与 Copilot `session-store.db` 按 `{kind, dbPath}` 聚合，同一路径的 selected Session 在一个短
+  `BEGIN` 只读事务中完成标准化；事务开始先建立 snapshot，提交后用 `PRAGMA data_version` 与文件 stat
+  复查变化，不在后续模型阶段持有连接或事务。
+- 每个成功、empty 或事务内单 Session 失败结果都携带 `SourceRevision`，只暴露 SHA-256 fingerprint、类型与
+  changed 标志，不暴露路径；组内某个 Session 格式错误不吞掉其他 Session 的结果。
+- 红测先因第三个 deps 参数和 `sourceRevision` 不存在得到 `TS2554/TS2339`；实现后真实追加 JSONL 与 WAL
+  并发写入均证明本轮边界稳定，两个同库 OpenCode Session 只建立一次事务。
+- `simplify` 复核删除不可达的 Copilot 单 Session SQLite 回退，并统一 SQLite group key；行为保持不变。
+- 水位、Evidence、Coverage 与 sessions show 定向 4 suites / 44 tests 通过；Core 全量 32 suites / 324 tests、
+  Core build 与 `git diff --check` 通过，build 只保留既有 tsdown `define` warning。
+- 提交信息：`feat: 固定 Session Source 动态读取水位`

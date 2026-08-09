@@ -111,6 +111,15 @@ describe('session source reader', () => {
     expect(results.map(({ agent, sessionId, status }) => ({ agent, sessionId, status }))).toEqual(
       references.map(({ agent, id }) => ({ agent, sessionId: id, status: 'readable' })),
     )
+    expect(results.map((result) => result.sourceRevision?.kind)).toEqual([
+      'jsonl-watermark',
+      'jsonl-watermark',
+      'jsonl-watermark',
+      'jsonl-watermark',
+      'jsonl-watermark',
+      'sqlite-transaction',
+    ])
+    expect(results.every((result) => result.sourceRevision?.changedDuringRun === false)).toBe(true)
     for (const { agent, id } of references) {
       expectReadable(
         results.find((result) => result.sessionId === id)!,
@@ -213,5 +222,101 @@ describe('session source reader', () => {
       { status: 'failed', errorCode: 'SOURCE_FORMAT_INVALID' },
       { status: 'failed', errorCode: 'SOURCE_READ_FAILED' },
     ])
+    expect(results.map((result) => result.sourceRevision?.kind)).toEqual([
+      'jsonl-watermark',
+      'sqlite-transaction',
+    ])
+  })
+
+  it('JSONL 固定开始时的文件集合与字节边界，并记录运行中变化', async () => {
+    const sessionId = 'changing-jsonl'
+    const sourcePath = path.join(home, sessionId)
+    const initialPath = path.join(sourcePath, 'initial.jsonl')
+    fs.mkdirSync(sourcePath, { recursive: true })
+    fs.writeFileSync(initialPath, `${JSON.stringify({ role: 'user', content: 'initial' })}\n`)
+    addSession(sessionId, 'claude', sourcePath)
+
+    const [result] = await readSessionSources(
+      [{ agent: 'claude', id: sessionId }],
+      { homeDir: home },
+      {
+        afterJsonlSnapshot: () => {
+          fs.appendFileSync(initialPath, `${JSON.stringify({ role: 'user', content: 'appended' })}\n`)
+          fs.writeFileSync(
+            path.join(sourcePath, 'new.jsonl'),
+            `${JSON.stringify({ role: 'user', content: 'new file' })}\n`,
+          )
+        },
+      },
+    )
+
+    expect(result.messages.map((message) => message.content)).toEqual(['initial'])
+    expect(result.sourceRevision).toMatchObject({
+      kind: 'jsonl-watermark',
+      changedDuringRun: true,
+      fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })
+  })
+
+  it('OpenCode 同路径 Session 在一个短事务快照中批量读取并披露并发写入', async () => {
+    const sourcePath = path.join(home, 'changing-opencode.db')
+    const source = new Database(sourcePath)
+    source.pragma('journal_mode = WAL')
+    source.exec(`
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE part (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+    `)
+    const insertMessage = source.prepare('INSERT INTO message VALUES (?, ?, ?, ?)')
+    const insertPart = source.prepare('INSERT INTO part VALUES (?, ?, ?)')
+    for (const id of ['open-1', 'open-2']) {
+      insertMessage.run(`${id}-initial`, id, 1, JSON.stringify({ role: 'user' }))
+      insertPart.run(`${id}-part-initial`, `${id}-initial`, JSON.stringify({ text: `${id} initial` }))
+      addSession(id, 'opencode', sourcePath)
+    }
+    source.close()
+    let transactionCount = 0
+
+    const results = await readSessionSources(
+      [
+        { agent: 'opencode', id: 'open-1' },
+        { agent: 'opencode', id: 'open-2' },
+      ],
+      { homeDir: home },
+      {
+        afterSqliteSnapshot: () => {
+          transactionCount++
+          const writer = new Database(sourcePath)
+          writer.prepare('INSERT INTO message VALUES (?, ?, ?, ?)').run(
+            'open-1-appended', 'open-1', 2, JSON.stringify({ role: 'user' }),
+          )
+          writer.prepare('INSERT INTO part VALUES (?, ?, ?)').run(
+            'open-1-part-appended', 'open-1-appended', JSON.stringify({ text: 'appended' }),
+          )
+          writer.close()
+        },
+      },
+    )
+
+    expect(transactionCount).toBe(1)
+    expect(results.map((result) => result.messages.map((message) => message.content))).toEqual([
+      ['open-1 initial'],
+      ['open-2 initial'],
+    ])
+    expect(results.every((result) => result.sourceRevision?.kind === 'sqlite-transaction')).toBe(true)
+    expect(results.every((result) => result.sourceRevision?.changedDuringRun)).toBe(true)
+    const verify = new Database(sourcePath, { readonly: true })
+    expect(verify.prepare(
+      "SELECT COUNT(*) AS count FROM message WHERE id = 'open-1-appended'",
+    ).pluck().get()).toBe(1)
+    verify.close()
   })
 })
