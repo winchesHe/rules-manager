@@ -316,7 +316,13 @@ export function App() {
             }`}
             key={activeView}
           >
-            <div className="sidebar-collapse-toggle">
+            <div
+              className={`sidebar-collapse-toggle ${
+                activeView === 'chat' || activeView === 'settings'
+                  ? 'sidebar-collapse-toggle--topbar'
+                  : 'sidebar-collapse-toggle--page-title'
+              }`}
+            >
               <Tooltip>
                 <Button
                   aria-label={sidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')}

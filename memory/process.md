@@ -3497,3 +3497,18 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`fix: 下移 Chat History 开关`
+
+## 侧栏按钮与页面 Title 同层（2026-08-09）
+
+- 用户指出普通页面的侧栏折叠按钮停在窗口顶栏，而 Page Title 从 `py-12` 内容区开始，二者错开一行；本轮只
+  修正垂直层级，不调整按钮横向归属、折叠行为或页面标题结构。
+- 新增两种定位语义：Scan、Projects、Rules 等普通页面使用 `sidebar-collapse-toggle--page-title`（`top: 3rem`），
+  使按钮与 Page Title 同层；Chat、Settings 使用 `sidebar-collapse-toggle--topbar`（`top: 0.5rem`），继续匹配
+  自身固定顶栏。两类定位均复用原 no-drag 热区和内容区横向坐标。
+- 新增 `docs/plans/agent-dashboard-sidebar-toggle-title-alignment.md`，同步 `DESIGN.md`、折叠计划及 App Shell / 拖拽
+  合同，锁定路由条件与两个定位值。
+- Computer Use 在真实 Electron 中复验 Scan、Projects 的标题对齐，以及 Chat、Settings 固定顶栏；检查后恢复
+  浅色、展开侧栏和扫描页。
+- App 全量 43 suites / 269 tests、production build 与 `git diff --check` 通过；build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`fix: 对齐侧栏按钮与页面标题`
