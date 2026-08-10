@@ -54,9 +54,15 @@ export type ScanStartResult =
   | { started: true; runId: string }
   | { started: false; reason: 'already-running' }
 
+interface ScanWaiter {
+  resolve: (summary: ScanSummary) => void
+  reject: (error: Error) => void
+}
+
 export class ScanController {
   private state: ScanStatus = { running: false, state: 'idle', lastSeq: 0 }
   private worker: ScanWorkerLike | undefined
+  private readonly waiters = new Map<string, ScanWaiter[]>()
 
   constructor(
     private readonly createWorker: (request: ScanWorkerRequest) => ScanWorkerLike,
@@ -117,6 +123,7 @@ export class ScanController {
           completedAt: new Date().toISOString(),
         }
         this.emitWithSeq({ type: 'done', summary: message.summary })
+        this.settleWaiters(runId)
       } else if (message.type === 'cancelled') {
         this.worker = undefined
         this.state = {
@@ -132,6 +139,7 @@ export class ScanController {
           completedAt: new Date().toISOString(),
         }
         this.emitWithSeq({ type: 'cancelled', summary: message.summary })
+        this.settleWaiters(runId)
       } else {
         this.fail(message.message)
       }
@@ -146,6 +154,21 @@ export class ScanController {
     })
 
     return { started: true, runId }
+  }
+
+  async runToCompletion(
+    agents: AgentName[] = [],
+    sinceDays?: number,
+  ): Promise<ScanSummary> {
+    const active = this.status()
+    if (isActiveRun(active.state) && active.runId) {
+      const summary = await this.waitForCompletion(active.runId)
+      if (sameScanScope(active, agents, sinceDays)) return summary
+    }
+
+    const started = this.start(agents, sinceDays)
+    if (!started.started) return this.runToCompletion(agents, sinceDays)
+    return this.waitForCompletion(started.runId)
   }
 
   status(): ScanStatus {
@@ -181,6 +204,7 @@ export class ScanController {
   }
 
   private fail(message: string): void {
+    const runId = this.state.runId
     this.worker = undefined
     this.state = {
       running: false,
@@ -193,6 +217,45 @@ export class ScanController {
       sinceDays: this.state.sinceDays,
     }
     this.emitWithSeq({ type: 'failed', message })
+    if (runId) this.settleWaiters(runId)
+  }
+
+  private waitForCompletion(runId: string): Promise<ScanSummary> {
+    const terminal = this.terminalResult(runId)
+    if (terminal) return terminal
+    return new Promise((resolve, reject) => {
+      const waiters = this.waiters.get(runId) ?? []
+      waiters.push({ resolve, reject })
+      this.waiters.set(runId, waiters)
+    })
+  }
+
+  private terminalResult(runId: string): Promise<ScanSummary> | undefined {
+    if (this.state.runId !== runId || isActiveRun(this.state.state)) return undefined
+    if (this.state.state === 'completed' && this.state.summary) {
+      return Promise.resolve(this.state.summary)
+    }
+    if (this.state.state === 'cancelled') {
+      return Promise.reject(new Error('扫描已取消'))
+    }
+    if (this.state.state === 'failed') {
+      return Promise.reject(new Error(this.state.error ?? '扫描失败'))
+    }
+    return undefined
+  }
+
+  private settleWaiters(runId: string): void {
+    const waiters = this.waiters.get(runId)
+    if (!waiters) return
+    this.waiters.delete(runId)
+    if (this.state.state === 'completed' && this.state.summary) {
+      for (const waiter of waiters) waiter.resolve(this.state.summary)
+      return
+    }
+    const message = this.state.state === 'cancelled'
+      ? '扫描已取消'
+      : this.state.error ?? '扫描失败'
+    for (const waiter of waiters) waiter.reject(new Error(message))
   }
 
   private emitWithSeq(
@@ -209,4 +272,16 @@ export class ScanController {
       at: new Date().toISOString(),
     } as ScanControllerEvent)
   }
+}
+
+function sameScanScope(
+  status: ScanStatus,
+  agents: AgentName[],
+  sinceDays?: number,
+): boolean {
+  if (status.sinceDays !== sinceDays) return false
+  const currentAgents = [...(status.selectedAgents ?? [])].sort()
+  const requestedAgents = [...agents].sort()
+  return currentAgents.length === requestedAgents.length
+    && currentAgents.every((agent, index) => agent === requestedAgents[index])
 }

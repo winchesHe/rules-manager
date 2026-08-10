@@ -9,7 +9,7 @@ import {
   planSessionEvidence,
   type SessionEvidenceRequestMode,
 } from '../../core/src/live-evidence-planner.js'
-import type { AgentName } from '../../core/src/types.js'
+import type { AgentName, ScanSummary } from '../../core/src/types.js'
 import {
   candidateRulesOutputSchema,
   parseCandidateRulesOutput,
@@ -81,6 +81,7 @@ export interface NativeChatControllerOptions {
   enableSessionEvidence?: boolean
   sessionEvidenceHomeDir?: string
   sessionEvidenceTempParentDir?: string
+  scanSessions?: (sinceDays: number) => Promise<ScanSummary>
 }
 
 export interface NativeRulesStartResult {
@@ -411,6 +412,7 @@ export class NativeChatController {
     let contextRevision = 0
     let contextSelected: NativeSessionReference[] = []
     try {
+      await runRulesGenerationPreflight(input.request, this.options.scanSessions)
       await runRulesGenerate({
         ...generationEvidenceOptions(input.request),
         runId: input.runId,
@@ -643,6 +645,17 @@ export function rulesGenerationCoreBridge(
   return { provider, ...(model ? { model } : {}) }
 }
 
+export async function runRulesGenerationPreflight(
+  request: GenerationRequest,
+  scanSessions?: (sinceDays: number) => Promise<ScanSummary>,
+): Promise<void> {
+  if (request.mode !== 'changed7d' || !scanSessions) return
+  const summary = await scanSessions(7)
+  if (summary.errors > 0) {
+    throw new Error(`生成前扫描存在 ${summary.errors} 个错误，请在“扫描”页面查看详情后重试`)
+  }
+}
+
 function evidenceAgent(value: string): AgentName {
   if (
     value === 'claude'
@@ -753,7 +766,7 @@ function evidenceSnapshot(
   }
 }
 
-function evidenceReferences(bundles: EvidenceBundle[]): NativeSessionReference[] {
+export function evidenceReferences(bundles: EvidenceBundle[]): NativeSessionReference[] {
   const agents = new Map<string, string>()
   for (const bundle of bundles) {
     for (const excerpt of bundle.excerpts) {
@@ -761,7 +774,10 @@ function evidenceReferences(bundles: EvidenceBundle[]): NativeSessionReference[]
     }
   }
   return [...new Set(bundles.flatMap((bundle) => bundle.sourceSessions))]
-    .map((id) => ({ id, agent: agents.get(id) ?? 'unknown' }))
+    .flatMap((id) => {
+      const agent = agents.get(id)
+      return agent ? [{ id, agent }] : []
+    })
 }
 
 function rulesTitle(request: GenerationRequest): string {

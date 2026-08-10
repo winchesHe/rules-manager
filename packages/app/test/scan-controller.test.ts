@@ -149,4 +149,69 @@ describe('ScanController', () => {
       seq: expect.any(Number),
     }))
   })
+
+  it('可等待扫描完成并复用相同范围的活跃 Worker', async () => {
+    const worker = new FakeWorker()
+    const factory = jest.fn(() => worker)
+    const controller = new ScanController(factory, () => undefined)
+    controller.start([], 7)
+
+    const completed = controller.runToCompletion([], 7)
+    expect(factory).toHaveBeenCalledTimes(1)
+    worker.emit('message', {
+      type: 'done',
+      summary: { total: 3, new: 1, updated: 1, unchanged: 1, missing: 0, errors: 0 },
+    })
+
+    await expect(completed).resolves.toMatchObject({ total: 3, new: 1 })
+    expect(factory).toHaveBeenCalledTimes(1)
+  })
+
+  it('已有其他范围扫描时串行执行生成所需范围', async () => {
+    const first = new FakeWorker()
+    const second = new FakeWorker()
+    const factory = jest
+      .fn<() => ScanWorkerLike>()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second)
+    const controller = new ScanController(factory, () => undefined)
+    controller.start(['codex'], 1)
+
+    const completed = controller.runToCompletion([], 7)
+    first.emit('message', {
+      type: 'done',
+      summary: { total: 1, new: 0, updated: 0, unchanged: 1, missing: 0, errors: 0 },
+    })
+    await Promise.resolve()
+    expect(factory).toHaveBeenCalledTimes(2)
+    expect(factory).toHaveBeenLastCalledWith(expect.objectContaining({ agents: [], sinceDays: 7 }))
+    second.emit('message', {
+      type: 'done',
+      summary: { total: 2, new: 1, updated: 1, unchanged: 0, missing: 0, errors: 0 },
+    })
+
+    await expect(completed).resolves.toMatchObject({ total: 2 })
+  })
+
+  it('可等待入口透传扫描失败与取消', async () => {
+    const failedWorker = new FakeWorker()
+    const cancelledWorker = new FakeWorker()
+    const controller = new ScanController(
+      jest.fn<() => ScanWorkerLike>()
+        .mockReturnValueOnce(failedWorker)
+        .mockReturnValueOnce(cancelledWorker),
+      () => undefined,
+    )
+
+    const failed = controller.runToCompletion([], 7)
+    failedWorker.emit('error', new Error('scan boom'))
+    await expect(failed).rejects.toThrow('scan boom')
+
+    const cancelled = controller.runToCompletion([], 7)
+    const active = controller.status()
+    if (!active.runId) throw new Error('scan should be active')
+    controller.cancel(active.runId)
+    cancelledWorker.emit('message', { type: 'cancelled' })
+    await expect(cancelled).rejects.toThrow('扫描已取消')
+  })
 })

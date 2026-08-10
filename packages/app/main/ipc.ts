@@ -98,6 +98,13 @@ const chatRuntime = new ChatRuntimeManager((provider) => {
   if (provider === 'opencode') return new OpenCodeChatAdapter()
   return new PiChatAdapter()
 })
+const scanController = new ScanController(
+  (request) =>
+    new Worker(join(import.meta.dirname, 'scan-worker.js'), {
+      workerData: request,
+    }),
+  broadcastScanEvent,
+)
 const nativeChatController = new NativeChatController({
   store: chatStore,
   runtime: chatRuntime,
@@ -106,14 +113,8 @@ const nativeChatController = new NativeChatController({
   onEvent: broadcastNativeChatEvent,
   onThreadChanged: broadcastNativeChatChanged,
   onTurnCompleted: recordChatCompletion,
+  scanSessions: (sinceDays) => scanController.runToCompletion([], sinceDays),
 })
-const scanController = new ScanController(
-  (request) =>
-    new Worker(join(import.meta.dirname, 'scan-worker.js'), {
-      workerData: request,
-    }),
-  broadcastScanEvent,
-)
 const generationController = new GenerationController(
   (request) =>
     new Worker(join(import.meta.dirname, 'generation-worker.js'), {

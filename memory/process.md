@@ -3706,3 +3706,22 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   reduced motion 以及跨页面验收清单；原布局段只保留入口，避免两处规范长期漂移。
 - 本轮仅修改文档，不改变运行时代码；使用 `git diff --check` 和文档结构检查作为替代验证。
 - 提交信息：`docs: 总结页面错峰入场规范`
+
+## 最近 7 天规则生成前置扫描与空 Session Context 修复（2026-08-10）
+
+- 用户确认 `new / updated` Session 应基于最新扫描进入规则生成范围，并要求给 `changed7d` 增加扫描功能。
+  生成入口现在通过同一个 `ScanController` 在 Evidence 提取前执行全 Agent 最近 7 天扫描，不在 Electron
+  主线程或 Rules 模块复制第二套扫描实现。
+- `ScanController.runToCompletion` 为既有 Worker 生命周期增加可等待合同：同范围活跃扫描直接复用，其他
+  范围先等待再串行执行；Worker 失败或取消明确拒绝。扫描返回非零 errors 时规则生成停止，并在 Chat 提示
+  前往扫描页查看详情，避免用不完整索引静默生成。
+- 修复 `evidenceReferences` 从 `sourceSessions` 反推 agent 的缺陷：Snapshot 继续保留全部已读取来源用于审计，
+  Session Context 只包含实际产生 excerpt 的 Session。空 Copilot Session、纯基线或内部生成 Session 不再
+  产生 `agent: unknown`，有效引用仍按 Session 去重。
+- 新增 `docs/plans/rules-generation-preflight-scan.md`；Scan Controller 测试覆盖等待、同范围复用、异范围串行、
+  失败与取消，Native Rules 测试覆盖 changed7d 扫描门禁、partial scan 阻断和空 Session Context。
+- 本机真实最近 7 天扫描处理 143 个 Session（16 new / 6 updated / 121 unchanged / 0 errors）；Evidence
+  143 个来源中 8 个无 excerpt Session 被排除出 Context，135 个 Context 引用均为受支持 Agent，未调用模型。
+- App 全量 45 suites / 282 tests、Core 全量 36 suites / 359 tests、App/Core production build 与
+  `git diff --check` 通过；App build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 生成规则前自动扫描最近 Session`
