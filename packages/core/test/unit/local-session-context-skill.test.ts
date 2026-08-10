@@ -16,21 +16,30 @@ describe('local-session-context Skill', () => {
     expect(skill).toContain('全量读取最近一段时间的 Session')
     expect(skill).toContain('coverage.unknown > 0')
     expect(skill).toContain('part=1..partCount')
-    expect(skill).toContain('readParts=expectedParts')
+    expect(skill).toContain('event_segment')
+    expect(skill).toContain('context sessions <runId>')
+    expect(skill).toContain('context outcomes <runId> --status unknown')
+    expect(skill).toContain('context proofs')
+    expect(skill).toContain('context locate')
+    expect(skill).toContain('证据上下文')
     expect(skill).toContain('context close <runId>')
     expect(skill).toContain('references/cli-contract.md')
   })
 
-  it('reference 提供工具 OR/AND、最近 7 天全量配方和 coverage 恒等式', () => {
+  it('reference 提供 v2 验收配方、最近 7 天全量配方和 coverage 恒等式', () => {
     const reference = fs.readFileSync(path.join(skillRoot, 'references/cli-contract.md'), 'utf8')
 
-    expect(reference).toContain('工具或关键词任一命中')
-    expect(reference).toContain('使用过工具且提到指定问题')
+    expect(reference).toContain('"version": 2')
+    expect(reference).toContain('"usedTool"')
+    expect(reference).toContain('"mentions"')
+    expect(reference).toContain('tool_usage')
+    expect(reference).toContain('nested-ast')
     expect(reference).toContain('"lastDays": 7')
     expect(reference).toContain('不要添加 `where`')
     expect(reference).toContain('candidates = inspected + unknown')
     expect(reference).toContain('inspected = matched + notMatched')
-    expect(reference).toContain('system/platform/Skill catalog 不参与')
+    expect(reference).toContain('unknown = unknownSource + unknownOrigin + unknownToolParse')
+    expect(reference).toContain('补丁、字符串、注释')
   })
 
   it('agents/openai.yaml 与 Skill 名称和默认触发提示一致', () => {

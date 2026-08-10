@@ -98,6 +98,122 @@ describe('Session Event Reader', () => {
     })
   })
 
+  it('Codex 区分真人消息、宿主注入、Skill 指令、内部任务与运行时事件', async () => {
+    const sourcePath = writeJsonl('codex-origins', [
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'developer', content: 'You are Codex.' },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: '# AGENTS.md instructions for /tmp/demo' },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: '<skills_instructions>chrome-use</skills_instructions>' },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: '[memory-manager:live-evidence-map] 内部索引任务' },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: '<session_message>历史转发</session_message>' },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: '请总结 chrome-use 联调踩坑' },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'assistant', content: '先检查登录态。' },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'custom_tool_call', call_id: 'call-1', name: 'exec', input: 'pwd' },
+      },
+    ])
+    addSession('codex-origins', 'codex', sourcePath)
+
+    const [result] = await readSessionEventSources(
+      [{ id: 'codex-origins', agent: 'codex' }],
+      { homeDir: home },
+    )
+
+    expect(result.events.map(({ origin, originEvidence }) => ({ origin, originEvidence }))).toEqual([
+      { origin: 'developer_instruction', originEvidence: 'source-envelope' },
+      { origin: 'host_context', originEvidence: 'explicit-marker' },
+      { origin: 'skill_instruction', originEvidence: 'explicit-marker' },
+      { origin: 'internal_job', originEvidence: 'explicit-marker' },
+      { origin: 'historical_forward', originEvidence: 'explicit-marker' },
+      { origin: 'human_user', originEvidence: 'source-envelope' },
+      { origin: 'assistant_output', originEvidence: 'source-envelope' },
+      { origin: 'tool_runtime', originEvidence: 'source-envelope' },
+    ])
+  })
+
+  it('Codex 丢弃重复宿主遥测，并移除 reasoning 密文和 tool search 定义正文', async () => {
+    const sourcePath = writeJsonl('codex-compact-metadata', [
+      {
+        type: 'event_msg',
+        payload: { type: 'mcp_tool_call_end', output: 'duplicate-output'.repeat(10_000) },
+      },
+      {
+        type: 'turn_context',
+        payload: { developer_instructions: 'host-context'.repeat(10_000) },
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'reasoning',
+          id: 'reasoning-1',
+          summary: [{ type: 'summary_text', text: '检查页面状态' }],
+          encrypted_content: 'ciphertext'.repeat(10_000),
+        },
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'tool_search_output',
+          call_id: 'search-1',
+          tools: [{ name: 'mcp__computer_use__computer', description: 'definition'.repeat(10_000) }],
+        },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: '保留这条真人消息' },
+      },
+    ])
+    addSession('codex-compact-metadata', 'codex', sourcePath)
+
+    const [result] = await readSessionEventSources(
+      [{ id: 'codex-compact-metadata', agent: 'codex' }],
+      { homeDir: home },
+    )
+
+    expect(result.events).toHaveLength(3)
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        kind: 'metadata',
+        role: 'assistant',
+        content: { type: 'reasoning', id: 'reasoning-1', summary: ['检查页面状态'] },
+      }),
+      expect.objectContaining({
+        kind: 'metadata',
+        content: { type: 'tool_search_output', callId: 'search-1' },
+      }),
+      expect.objectContaining({
+        kind: 'message',
+        role: 'user',
+        origin: 'human_user',
+        content: '保留这条真人消息',
+      }),
+    ])
+    expect(JSON.stringify(result.events)).not.toContain('ciphertext')
+    expect(JSON.stringify(result.events)).not.toContain('duplicate-output')
+    expect(JSON.stringify(result.events)).not.toContain('definition')
+  })
+
   it.each([
     ['claude', [
       {

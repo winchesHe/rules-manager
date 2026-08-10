@@ -3878,3 +3878,27 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 36 suites / 365 tests、App 全量 45 suites / 289 tests、Core/App production build 与
   `git diff --check` 通过；build 仅保留既有 tsdown `define` 和 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 修复 OpenCode Evidence 无限加载`
+
+## Session Query v2 准确性与有界上下文修复（2026-08-10）
+
+- 用户以“最近 30 天 computer-use、chrome-use、联调经验复盘”为最终验收，指出 v1 会把 patch、测试 fixture、
+  AGENTS/Skill 注入和内部索引任务中的工具名误判为真实使用，同时 512 KiB 分片仍可能被宿主输出截断。
+- Query 升级为 v2：`usedTool` 与 `mentions` 分型，默认 mention 只接受 `human_user / assistant_output`；谓词使用
+  matched / not_matched / unknown 三态，并把 source、origin、nested tool parse 未知分别计入 coverage。v1 继续兼容。
+- `SessionEvent` 增加 origin 与判定依据。工具识别改为 Babel AST：支持 direct MCP、`node_repl` 中的嵌套调用、
+  `@oai/sky` Computer Use 和 Chrome browser-client；字符串、注释、patch 和 fixture 不再产生 `tool_usage`。
+- Codex Reader 以 `response_item` 为权威消息 / 调用 / 结果，压缩 session metadata 和 reasoning 摘要，去除
+  `event_msg / turn_context / compacted / world_state` 的重复宿主视图、token 计数、工具定义和 encrypted reasoning。
+  “完整上下文”明确指固定水位内的标准化语义事件流，而非原始 JSONL 逐字节镜像。
+- Context schema 升为 v3：默认 part 上限 16 KiB，超大事件按 Unicode 安全边界拆为可校验 segment；同一 Session
+  的 part 写入单一 gzip-member 私有容器并通过 offset / length 随机读取。prepare/status 只返回有界摘要，新增
+  `sessions / outcomes / proofs / locate` 分页与证据定位命令。
+- `local-session-context` Skill 使用精确配方：`(真实使用或可信消息提及目标工具) AND 可信消息提及联调`；默认按
+  proof → locate → 邻接 part 读取证据上下文，只有读完全部 part / segment 才允许声称完整 Session，且始终披露 unknown。
+- 真实最近 30 天回放：875 candidates、872 inspected、14 matched、858 not matched、3 unknown（1 个 missing Claude、
+  2 个损坏 Codex archived JSONL）。真实 Chrome proof `eventIndex=678` 定位并读回 part 183 中
+  `agent.browsers.get("chrome")` 调用；同一 Session 的真人“联调”消息定位并读回 part 1。14 个 Session 共
+  20,600 个有界 part，私有压缩上下文约 123 MiB，修复前约 598 MiB；验收 run 已成功 close。
+- Core 全量 41 suites / 402 tests、production build、TypeScript noEmit、Skill validator 与 `git diff --check`
+  通过；build 仅保留既有 tsdown `define` warning。
+- 提交信息：`fix: 提升 Session 联调检索准确性`

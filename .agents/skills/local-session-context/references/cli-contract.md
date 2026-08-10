@@ -1,13 +1,4 @@
-# CLI 与 Query 合同
-
-## 目录
-
-- CLI 入口
-- Query JSON v1
-- 配方一：工具使用复盘
-- 配方二：最近 7 天全量总结
-- Coverage 与读取账本
-- 错误处理
+# CLI 与 Query v2 合同
 
 ## CLI 入口
 
@@ -26,37 +17,41 @@ node packages/core/dist/cli.js <command>
 
 不要绕过 CLI 直接读取 Session 源；Query 与 Context 必须共享同一次固定水位。
 
-四个 Context 命令：
-
 ```bash
 memory-manager context prepare --query-json '<json>'
 memory-manager context prepare --query-file /absolute/path/query.json
-memory-manager context read <run-id> --session <session-id> --part <n>
 memory-manager context status <run-id>
+memory-manager context sessions <run-id> [--cursor <cursor>] [--limit <1-200>]
+memory-manager context outcomes <run-id> [--status matched|not_matched|unknown] [--cursor <cursor>] [--limit <1-200>]
+memory-manager context proofs <run-id> --session <session-id> [--cursor <cursor>] [--limit <1-200>]
+memory-manager context locate <run-id> --session <session-id> --event <index>
+memory-manager context read <run-id> --session <session-id> --part <n>
 memory-manager context close <run-id>
 ```
 
-`--query-json` 与 `--query-file` 互斥。
+`--query-json` 与 `--query-file` 互斥。分页响应存在 `nextCursor` 时继续请求，直到该字段消失。
 
-## Query JSON v1
+## Query JSON v2
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "time": { "lastDays": 30 },
   "scope": {
     "agents": ["claude", "codex", "copilot", "cursor", "opencode", "pi"],
     "projects": ["optional-project-slug"],
-    "statuses": ["new", "updated", "unchanged"]
+    "statuses": ["new", "updated", "unchanged"],
+    "includeInternal": false
   },
   "where": {
     "all": [
-      { "tool": { "families": ["computer-use", "chrome-use"] } },
+      { "usedTool": { "families": ["computer-use", "chrome-use"] } },
       {
-        "keyword": {
-          "terms": ["联调", "permission denied"],
+        "mentions": {
+          "terms": ["联调"],
           "mode": "any",
-          "fields": ["user", "assistant", "tool_call_input", "tool_result_output"],
+          "fields": ["message"],
+          "origins": ["human_user", "assistant_output"],
           "caseSensitive": false
         }
       }
@@ -65,98 +60,98 @@ memory-manager context close <run-id>
 }
 ```
 
-时间：
+时间：`lastDays` 为正整数；也可使用 ISO 8601 `since` / `until`，但不能和 `lastDays` 混用。
 
-- `lastDays` 为正整数。
-- 或使用 ISO 8601 `since` / `until`。
-- `lastDays` 不能和 `since` / `until` 同时出现。
+范围：`scope` 可省略；Agent 只允许 `claude|codex|copilot|cursor|opencode|pi`。`includeInternal` 默认 false。未明确要求状态限制时，不要自行添加 `statuses`。
 
-范围：
+布尔谓词：
 
-- `scope` 全部可省略；省略表示不限制。
-- Agent 只允许 `claude|codex|copilot|cursor|opencode|pi`。
-- 未要求限制状态时不要默认排除 `new|updated|unchanged`；`missing|error` 会进入 unknown 证明。
+- `all`：任一子项未命中则未命中；没有未命中但存在 unknown 时为 unknown。
+- `any`：任一子项命中即命中；无命中但存在 unknown 时为 unknown。
+- `not`：保留 unknown，不把无法判断翻转成命中。
+- 省略 `where`：时间/范围内所有可读 Session 都命中。
 
-谓词：
+`usedTool` 表示结构化工具使用：
 
-- `{"all":[...]}`：全部条件成立。
-- `{"any":[...]}`：任一条件成立。
-- `{"not":{...}}`：子条件不成立。
-- `{"tool":{...}}`：结构化工具调用。
-- `{"keyword":{...}}`：字段化关键词。
-- 省略 `where`：时间/范围内全部 Session。
-
-工具字段：
-
-- `families`：常用值为 `computer-use`、`chrome-use`。
+- `families`：常用值 `computer-use`、`chrome-use`。
 - `names`：精确工具名。
 - `operations`：如 `click`、`screenshot`、`navigate`。
-- `provenance`：`direct|nested|capability-derived`。
+- `provenance`：`direct|nested-ast|capability-derived`。
 - 同一字段内 OR，不同字段间 AND。
+- `nested-ast` 只认 AST 调用表达式；补丁、字符串、注释、fixture 不命中。疑似调用但代码无法解析时返回 unknown。
 
-关键词字段：
+`mentions` 表示文本提及：
 
-- `fields`：`user|assistant|tool_call_input|tool_result_output|title`。
-- `mode`：`any|all`。
-- 默认字段为以上全部；system/platform/Skill catalog 不参与。
+- `terms` 的 `mode` 为 `any|all`。
+- `fields` 为 `message|tool_call_input|tool_result_output|title`，默认只有 `message`。
+- `origins` 默认只有 `human_user|assistant_output`。
+- 其他可显式指定的 origin：`tool_runtime|developer_instruction|host_context|skill_instruction|internal_job|historical_forward|unknown`。一般不要扩到注入来源。
 
-## 配方一：工具使用复盘
+## 配方一：computer-use / chrome-use / 联调复盘
 
-只找真实使用过 computer-use 或 chrome-use 的最近 30 天 Session：
-
-```json
-{
-  "version": 1,
-  "time": { "lastDays": 30 },
-  "where": {
-    "tool": { "families": ["computer-use", "chrome-use"] }
-  }
-}
-```
-
-工具或关键词任一命中：
+用户问“找到最近 30 天 computer-use、chrome-use、联调相关的 session，并总结踩坑与快速联调经验”时使用：
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "time": { "lastDays": 30 },
   "where": {
-    "any": [
-      { "tool": { "families": ["computer-use", "chrome-use"] } },
+    "all": [
       {
-        "keyword": {
-          "terms": ["浏览器联调", "chrome extension"],
-          "mode": "any"
-        }
-      }
+        "any": [
+          { "usedTool": { "families": ["computer-use", "chrome-use"] } },
+          {
+            "mentions": {
+              "terms": ["computer-use", "chrome-use"],
+              "mode": "any"
+            }
+          }
+        ]
+      },
+      { "mentions": { "terms": ["联调"], "mode": "any" } }
     ]
   }
 }
 ```
 
-要求“使用过工具且提到指定问题”时把 `any` 改成 `all`。不要擅自决定二者关系；从用户措辞判断，不明确时在执行说明中写明采用的关系。
+这个配方要求 Session 同时与目标工具和“联调”相关，避免把所有普通浏览器操作都召回；工具相关性可以来自真实调用，也可以来自真人/助手消息里的明确讨论。汇总时必须按 proof 区分：
 
-读取完成后重点关联：
+- `tool_usage`：可以写“实际使用”。
+- `mention`：只能写“讨论/提到”，需要从上下文确认是否真的操作过。
 
-- tool call 与同 `toolCallId` 的 result。
-- 同一步骤重复调用和相同错误。
-- 阻止任务继续的权限、环境、页面状态、工具限制或源缺失。
-- 失败后的恢复动作和最终是否恢复。
+若用户只要真实调用，使用：
+
+```json
+{
+  "version": 2,
+  "time": { "lastDays": 30 },
+  "where": {
+    "usedTool": { "families": ["computer-use", "chrome-use"] }
+  }
+}
+```
+
+读取完成后重点关联同 `toolCallId` 的 call/result、相同步骤的重试、相同错误、阻塞任务继续的权限/环境/页面状态/工具限制，以及失败后的有效恢复动作。
 
 ## 配方二：最近 7 天全量总结
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "time": { "lastDays": 7 }
 }
 ```
 
-不要添加 `where`。prepare 返回的所有 `sessions` 都必须读取全部 part；`outcomes` 中的 unknown 必须列入限制。
+不要添加 `where`。必须分页读完 `context sessions` 的所有 Session，并读取每个 Session 的所有 part；`coverage.unknown` 对应项通过 `context outcomes --status unknown` 读完并列入限制。
 
-## Coverage 与读取账本
+## Coverage、分页与完整读取
 
-prepare 的关键字段：
+这里的“完整读取”是指读取固定水位内的全部标准化语义事件，不是逐字节复制 Agent 的底层存储。消息、工具调用、
+工具结果、媒体引用及必要 metadata 会保序提供；Codex Reader 以 `response_item` 为权威记录，去除 `event_msg`、
+`turn_context` 等重复宿主视图，以及 token 计数、工具定义和 encrypted reasoning。每个保留事件都有
+`sourceLocator`，需要审计时可回查原始源。
+
+prepare/status 只返回有界摘要：
 
 ```json
 {
@@ -167,41 +162,57 @@ prepare 的关键字段：
     "matched": 0,
     "notMatched": 0,
     "unknown": 0,
+    "unknownSource": 0,
+    "unknownOrigin": 0,
+    "unknownToolParse": 0,
     "changedDuringRun": 0
   },
-  "sessions": [
-    {
-      "id": "...",
-      "agent": "codex",
-      "eventCount": 0,
-      "partCount": 0,
-      "proofs": []
-    }
-  ],
+  "sessionCount": 0,
   "limitations": []
 }
 ```
 
-核对恒等式：
+核对：
 
 ```text
 candidates = inspected + unknown
 inspected = matched + notMatched
+unknown = unknownSource + unknownOrigin + unknownToolParse
 ```
 
-维护读取账本：
+`context sessions`、`context outcomes` 和 `context proofs` 返回：
+
+```json
+{
+  "total": 1,
+  "returned": 1,
+  "cursor": "0",
+  "nextCursor": "50",
+  "items": []
+}
+```
+
+`nextCursor` 缺失才表示分页结束。维护两个账本：
 
 ```text
 session_id | expected_parts | read_parts | complete
+event_hash | expected_segments | read_segments | complete
 ```
 
-只有所有非空 Session 的 `read_parts=expected_parts` 时，才称“完整读取命中上下文”。读取过程中可用 `context status` 恢复 part 计划。
+每个 `context read` part 都带 `payloadBytes` 和 `payloadHash`，CLI 读取时会验证落盘内容完整性。普通事件直接出现在 `events`；超大事件以 `event_segment` 跨 part 连续出现，按 `segmentIndex` 收齐，不能把单个 segment 当成完整 event。
+临时 run 内部把一个 Session 的所有 part 压缩在单一私有容器中；这是存储细节，不改变 part 编号和读取命令。
+
+`context sessions` 为防止 proof 数量导致输出截断，只返回 `proofCount`、按 kind 聚合的 `proofKinds` 和 `toolFamilies`；完整 proof 必须通过 `context proofs` 分页读取。`context locate` 把 proof 的 event index 映射到 `firstPart..lastPart`，并给出包含前后邻接上下文的 `suggestedFromPart..suggestedToPart`。
+
+联调复盘允许只读取全部相关 proof 的合并邻域，但必须称为“证据上下文”；最近 7 天全量总结或用户明确要求完整 Session 时，仍须读取所有 part。
 
 ## 错误处理
 
 - scan 有错误：记录扫描不完整，不声称候选集合完整。
-- prepare `unknown>0`：继续读取已命中项，限制选择完整性声明。
-- read 失败：重试一次；仍失败则记录具体 Session/part，最终报告为未读。
-- `changedDuringRun>0`：说明本轮使用冻结水位，源在读取期间发生过变化。
-- 输出过大：继续逐 part 读取；不要用 `head`、抽样或批量拼接截断。
-- 任意失败后仍执行 `context close`；close 失败时报告临时 run id 以便人工清理。
+- `unknownSource>0`：来源缺失、损坏或不支持；读取 unknown outcome 的错误码。
+- `unknownOrigin>0`：关键词只出现在无法判定来源的消息；不当作命中或未命中。
+- `unknownToolParse>0`：疑似嵌套工具调用无法解析；不当作未命中。
+- read 失败：重试一次；仍失败则记录 Session/part，最终报告未读范围。
+- `changedDuringRun>0`：本轮使用冻结水位，源在读取期间发生变化。
+- 输出过大：继续逐 part/逐页读取；禁止 `head`、抽样或批量拼接截断。
+- 任意失败后仍执行 `context close`；close 失败时报告 run id 供人工清理。

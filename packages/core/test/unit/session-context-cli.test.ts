@@ -67,8 +67,8 @@ describe('context CLI', () => {
   it('prepare → status → read all parts → close 形成可脚本消费的完整链路', () => {
     addCodexSession()
     const query = JSON.stringify({
-      version: 1,
-      where: { tool: { families: ['chrome-use'] } },
+      version: 2,
+      where: { usedTool: { families: ['chrome-use'] } },
     })
     const prepare = runCli([
       'context',
@@ -84,7 +84,8 @@ describe('context CLI', () => {
     const prepared = JSON.parse(prepare.stdout) as {
       runId: string
       coverage: { candidates: number; matched: number; unknown: number }
-      sessions: Array<{ id: string; partCount: number; proofs: Array<{ family: string }> }>
+      sessionCount: number
+      sessionsCommand: string
       closeCommand: string
     }
     expect(prepared.coverage).toEqual({
@@ -93,13 +94,34 @@ describe('context CLI', () => {
       matched: 1,
       notMatched: 0,
       unknown: 0,
+      unknownSource: 0,
+      unknownOrigin: 0,
+      unknownToolParse: 0,
       changedDuringRun: 0,
     })
-    expect(prepared.sessions).toEqual([
+    expect(prepared.sessionCount).toBe(1)
+    expect(prepared).not.toHaveProperty('sessions')
+    expect(prepared.sessionsCommand).toContain(prepared.runId)
+    const sessionsResult = runCli([
+      'context', 'sessions', prepared.runId, '--limit', '1', '--workspace', workspaceParent,
+    ])
+    expect(sessionsResult.status).toBe(0)
+    const sessions = JSON.parse(sessionsResult.stdout) as {
+      total: number
+      items: Array<{
+        id: string
+        partCount: number
+        proofCount: number
+        toolFamilies: string[]
+      }>
+    }
+    expect(sessions.total).toBe(1)
+    expect(sessions.items).toEqual([
       expect.objectContaining({
         id: 'cli-context',
         partCount: 1,
-        proofs: [expect.objectContaining({ family: 'chrome-use' })],
+        proofCount: 1,
+        toolFamilies: ['chrome-use'],
       }),
     ])
     expect(prepared.closeCommand).toContain(prepared.runId)
@@ -131,10 +153,45 @@ describe('context CLI', () => {
       part: 1,
       partCount: 1,
       events: [
-        expect.objectContaining({ kind: 'message', role: 'user' }),
+        expect.objectContaining({ kind: 'message', role: 'user', origin: 'human_user' }),
         expect.objectContaining({ kind: 'tool_call', toolName: 'mcp__chrome__navigate' }),
         expect.objectContaining({ kind: 'tool_result', toolCallId: 'call-1' }),
       ],
+    })
+
+    const proofs = runCli([
+      'context', 'proofs', prepared.runId, '--session', 'cli-context',
+      '--workspace', workspaceParent,
+    ])
+    expect(proofs.status).toBe(0)
+    expect(JSON.parse(proofs.stdout)).toMatchObject({
+      total: 1,
+      items: [expect.objectContaining({
+        kind: 'tool_usage',
+        eventIndex: 1,
+        family: 'chrome-use',
+      })],
+    })
+
+    const locate = runCli([
+      'context', 'locate', prepared.runId, '--session', 'cli-context', '--event', '1',
+      '--workspace', workspaceParent,
+    ])
+    expect(locate.status).toBe(0)
+    expect(JSON.parse(locate.stdout)).toMatchObject({
+      sessionId: 'cli-context',
+      eventIndex: 1,
+      firstPart: 1,
+      lastPart: 1,
+    })
+
+    const outcomes = runCli([
+      'context', 'outcomes', prepared.runId, '--status', 'matched', '--workspace', workspaceParent,
+    ])
+    expect(outcomes.status).toBe(0)
+    expect(JSON.parse(outcomes.stdout)).toMatchObject({
+      total: 1,
+      items: [expect.objectContaining({ sessionId: 'cli-context', selectionStatus: 'matched' })],
     })
 
     const close = runCli([
@@ -180,5 +237,17 @@ describe('context CLI', () => {
     ])
     expect(invalidPart.status).not.toBe(0)
     expect(invalidPart.stderr).toContain('part 必须是从 1 开始的整数')
+
+    const invalidStatus = runCli([
+      'context',
+      'outcomes',
+      '00000000-0000-4000-8000-000000000000',
+      '--status',
+      'maybe',
+      '--workspace',
+      workspaceParent,
+    ])
+    expect(invalidStatus.status).not.toBe(0)
+    expect(invalidStatus.stderr).toContain('--status 必须是')
   })
 })

@@ -6,8 +6,12 @@ import { runScanCommand } from './commands/scan.js'
 import { runSessionsShow } from './commands/sessions.js'
 import {
   runContextClose,
+  runContextLocate,
+  runContextOutcomes,
   runContextPrepare,
+  runContextProofs,
   runContextRead,
+  runContextSessions,
   runContextStatus,
 } from './commands/context.js'
 import { runRulesList, runRulesShow } from './commands/rules.js'
@@ -117,6 +121,51 @@ context
   .description('查看 Context run 的 coverage 与分片状态')
   .action((runId: string) => {
     runContextStatus(runId)
+  })
+
+context
+  .command('sessions <run-id>')
+  .description('分页列出命中的 Session 与上下文分片信息')
+  .option('--cursor <cursor>', '下一页游标（默认 0）')
+  .option('--limit <n>', '每页数量（1-200）', (value: string) => Number(value))
+  .action((runId: string, opts: { cursor?: string; limit?: number }) => {
+    runContextSessions(runId, opts)
+  })
+
+context
+  .command('outcomes <run-id>')
+  .description('分页列出候选 Session 的命中、未命中或未知结果')
+  .option('--status <status>', 'matched / not_matched / unknown')
+  .option('--cursor <cursor>', '下一页游标（默认 0）')
+  .option('--limit <n>', '每页数量（1-200）', (value: string) => Number(value))
+  .action((runId: string, opts: {
+    status?: 'matched' | 'not_matched' | 'unknown'
+    cursor?: string
+    limit?: number
+  }) => {
+    if (opts.status && !['matched', 'not_matched', 'unknown'].includes(opts.status)) {
+      throw new Error('--status 必须是 matched、not_matched 或 unknown')
+    }
+    runContextOutcomes(runId, opts)
+  })
+
+context
+  .command('proofs <run-id>')
+  .description('分页列出一个命中 Session 的全部匹配证明')
+  .requiredOption('--session <session-id>', '目标 Session ID')
+  .option('--cursor <cursor>', '下一页游标（默认 0）')
+  .option('--limit <n>', '每页数量（1-200）', (value: string) => Number(value))
+  .action((runId: string, opts: { session: string; cursor?: string; limit?: number }) => {
+    runContextProofs(runId, opts)
+  })
+
+context
+  .command('locate <run-id>')
+  .description('定位一个 event 所在的上下文分片')
+  .requiredOption('--session <session-id>', '目标 Session ID')
+  .requiredOption('--event <index>', '从 0 开始的 event index', (value: string) => Number(value))
+  .action((runId: string, opts: { session: string; event: number }) => {
+    runContextLocate(runId, opts)
   })
 
 context

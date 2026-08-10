@@ -7,8 +7,13 @@ import {
   createSessionContextRun,
   createSessionContextRunWriter,
   getSessionContextStatus,
+  listSessionContextOutcomes,
+  listSessionContextProofs,
+  listSessionContextSessions,
+  locateSessionContextEvent,
   partitionSessionEvents,
   readSessionContextPart,
+  reassembleSessionContextItems,
 } from '../../src/session-context-run'
 import type { SessionEventReadResult } from '../../src/session-events'
 import type { SessionQueryExecution } from '../../src/session-query'
@@ -26,6 +31,8 @@ function execution(): SessionQueryExecution {
         kind: 'message',
         role: 'user',
         content: 'first message',
+        origin: 'human_user',
+        originEvidence: 'source-envelope',
         sourceLocator: 'fixture:1',
       },
       {
@@ -35,6 +42,8 @@ function execution(): SessionQueryExecution {
         toolName: 'mcp__chrome__navigate',
         toolCallId: 'call-1',
         content: { url: 'https://example.com' },
+        origin: 'tool_runtime',
+        originEvidence: 'source-envelope',
         sourceLocator: 'fixture:2',
       },
       {
@@ -43,6 +52,8 @@ function execution(): SessionQueryExecution {
         role: 'tool',
         toolCallId: 'call-1',
         content: 'done',
+        origin: 'tool_runtime',
+        originEvidence: 'source-envelope',
         sourceLocator: 'fixture:3',
       },
     ],
@@ -62,6 +73,9 @@ function execution(): SessionQueryExecution {
       matched: 1,
       notMatched: 0,
       unknown: 1,
+      unknownSource: 1,
+      unknownOrigin: 0,
+      unknownToolParse: 0,
       changedDuringRun: 0,
     },
     outcomes: [
@@ -116,14 +130,19 @@ describe('Session Context Run', () => {
       parentDir,
       now: new Date('2026-08-10T00:00:00.000Z'),
       ttlMs: 60_000,
-      maxPartBytes: 180,
+      maxPartBytes: 512,
     })
     const rootDir = path.join(parentDir, `memory-manager-context-${summary.runId}`)
     expect(fs.statSync(parentDir).mode & 0o777).toBe(0o700)
     expect(fs.statSync(rootDir).mode & 0o777).toBe(0o700)
     expect(fs.statSync(path.join(rootDir, 'manifest.json')).mode & 0o777).toBe(0o600)
+    const storageFiles = fs.readdirSync(path.join(rootDir, 'sessions'))
+    expect(storageFiles).toEqual(['session-0001.parts.gz'])
+    expect(fs.statSync(path.join(rootDir, 'sessions', storageFiles[0])).mode & 0o777).toBe(0o600)
     expect(summary.coverage.unknown).toBe(1)
-    expect(summary.outcomes).toEqual(expect.arrayContaining([
+    expect(listSessionContextOutcomes(summary.runId, {
+      status: 'unknown',
+    }, parentDir).items).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sessionId: 'missing',
         selectionStatus: 'unknown',
@@ -133,15 +152,35 @@ describe('Session Context Run', () => {
     expect(summary.limitations).toContain(
       '1 个候选 Session 无法检查，不能声明已找到全部相关 Session',
     )
-    expect(summary.sessions).toEqual([
-      expect.objectContaining({ id: 'session-1', eventCount: 3, partCount: 3 }),
+    const sessions = listSessionContextSessions(summary.runId, {}, parentDir).items
+    expect(sessions).toEqual([
+      expect.objectContaining({
+        id: 'session-1',
+        eventCount: 3,
+        proofCount: 1,
+        proofKinds: { tool: 1 },
+        toolFamilies: ['chrome-use'],
+      }),
     ])
+    expect(sessions[0]).not.toHaveProperty('proofs')
+    expect(sessions[0]).not.toHaveProperty('eventParts')
+    expect(sessions[0].partCount).toBeGreaterThan(0)
 
-    const events = Array.from({ length: summary.sessions[0].partCount }, (_, index) => (
+    const events = Array.from({ length: sessions[0].partCount }, (_, index) => (
       readSessionContextPart(summary.runId, 'session-1', index + 1, parentDir)
     )).flatMap((part) => part.events)
-    expect(events.map((event) => event.index)).toEqual([0, 1, 2])
-    expect(events.filter((event) => event.index === 1)).toHaveLength(1)
+    const reassembled = reassembleSessionContextItems(events)
+    expect(reassembled.map((event) => event.index)).toEqual([0, 1, 2])
+    expect(reassembled.filter((event) => event.index === 1)).toHaveLength(1)
+    expect(listSessionContextProofs(summary.runId, 'session-1', {}, parentDir).items).toEqual([
+      expect.objectContaining({ kind: 'tool', eventIndex: 1, family: 'chrome-use' }),
+    ])
+    expect(locateSessionContextEvent(summary.runId, 'session-1', 1, parentDir)).toMatchObject({
+      sessionId: 'session-1',
+      eventIndex: 1,
+      firstPart: expect.any(Number),
+      lastPart: expect.any(Number),
+    })
     expect(getSessionContextStatus(summary.runId, parentDir)).toMatchObject({
       runId: summary.runId,
       queryHash: 'b'.repeat(64),
@@ -159,16 +198,55 @@ describe('Session Context Run', () => {
     })
   })
 
-  it('单个超大事件独立成片但不截断，空事件不制造空分片', () => {
+  it('单个超大事件拆成可校验片段并能逐字节还原，空事件不制造空分片', () => {
     const large = {
       index: 0,
       kind: 'message' as const,
       role: 'user' as const,
-      content: 'x'.repeat(2_000),
+      content: `前缀-${'x\\"😀'.repeat(2_000)}-后缀`,
+      origin: 'human_user' as const,
+      originEvidence: 'source-envelope' as const,
       sourceLocator: 'fixture:1',
     }
-    expect(partitionSessionEvents([large], 100)).toEqual([[large]])
-    expect(partitionSessionEvents([], 100)).toEqual([])
+    const parts = partitionSessionEvents([large], 512)
+    expect(parts.length).toBeGreaterThan(1)
+    expect(parts.every((part) => Buffer.byteLength(JSON.stringify(part), 'utf8') <= 514)).toBe(true)
+    expect(reassembleSessionContextItems(parts.flat())).toEqual([large])
+    expect(partitionSessionEvents([], 512)).toEqual([])
+  })
+
+  it('Session 与 outcome 都通过有界游标分页读取', () => {
+    const summary = createSessionContextRun(execution(), { parentDir, maxPartBytes: 10_000 })
+    expect(summary).toMatchObject({ sessionCount: 1 })
+    expect(summary).not.toHaveProperty('sessions')
+    expect(summary).not.toHaveProperty('outcomes')
+
+    expect(listSessionContextSessions(summary.runId, { limit: 1 }, parentDir)).toMatchObject({
+      total: 1,
+      returned: 1,
+      cursor: '0',
+    })
+    expect(listSessionContextOutcomes(summary.runId, {
+      cursor: '0',
+      limit: 1,
+    }, parentDir)).toMatchObject({
+      total: 2,
+      returned: 1,
+      cursor: '0',
+      nextCursor: '1',
+    })
+    expect(listSessionContextOutcomes(summary.runId, {
+      status: 'unknown',
+      limit: 10,
+    }, parentDir).items).toEqual([
+      expect.objectContaining({ sessionId: 'missing', selectionStatus: 'unknown' }),
+    ])
+    expect(() => listSessionContextSessions(summary.runId, {
+      cursor: '../1',
+    }, parentDir)).toThrow('cursor 必须是非负整数')
+    expect(() => listSessionContextSessions(summary.runId, {
+      limit: 201,
+    }, parentDir)).toThrow('limit 必须是 1-200 的整数')
   })
 
   it('拒绝 run/session/part 路径穿越和 manifest 越界目录', () => {
@@ -187,9 +265,9 @@ describe('Session Context Run', () => {
       'manifest.json',
     )
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
-      sessions: Array<{ directory: string }>
+      sessions: Array<{ storageFile: string }>
     }
-    manifest.sessions[0].directory = '../outside'
+    manifest.sessions[0].storageFile = '../outside'
     fs.writeFileSync(manifestPath, JSON.stringify(manifest))
     expect(() => readSessionContextPart(summary.runId, 'session-1', 1, parentDir)).toThrow(
       'context manifest 包含越界路径',

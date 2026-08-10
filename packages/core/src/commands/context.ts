@@ -4,6 +4,10 @@ import {
   closeSessionContextRun,
   createSessionContextRunWriter,
   getSessionContextStatus,
+  listSessionContextProofs,
+  listSessionContextOutcomes,
+  listSessionContextSessions,
+  locateSessionContextEvent,
   readSessionContextPart,
 } from '../session-context-run.js'
 import { runSessionQuery } from '../session-query.js'
@@ -18,6 +22,15 @@ interface ContextCommandDeps {
   homeDir?: string
   now?: Date
   writeOutput?: (value: unknown) => void
+}
+
+interface ContextPageOptions {
+  cursor?: string
+  limit?: number
+}
+
+interface ContextOutcomeOptions extends ContextPageOptions {
+  status?: 'matched' | 'not_matched' | 'unknown'
 }
 
 function writeJson(value: unknown): void {
@@ -68,6 +81,10 @@ export async function runContextPrepare(
   output(deps, {
     ...summary,
     readCommand: 'memory-manager context read <run-id> --session <session-id> --part <part>',
+    sessionsCommand: `memory-manager context sessions ${summary.runId}`,
+    outcomesCommand: `memory-manager context outcomes ${summary.runId}`,
+    proofsCommand: `memory-manager context proofs ${summary.runId} --session <session-id>`,
+    locateCommand: `memory-manager context locate ${summary.runId} --session <session-id> --event <index>`,
     statusCommand: `memory-manager context status ${summary.runId}`,
     closeCommand: `memory-manager context close ${summary.runId}`,
   })
@@ -93,6 +110,52 @@ export function runContextStatus(
 ): void {
   cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
   output(deps, getSessionContextStatus(runId, deps.parentDir))
+}
+
+export function runContextSessions(
+  runId: string,
+  options: ContextPageOptions,
+  deps: ContextCommandDeps = {},
+): void {
+  cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
+  output(deps, listSessionContextSessions(runId, options, deps.parentDir))
+}
+
+export function runContextOutcomes(
+  runId: string,
+  options: ContextOutcomeOptions,
+  deps: ContextCommandDeps = {},
+): void {
+  cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
+  output(deps, listSessionContextOutcomes(runId, options, deps.parentDir))
+}
+
+export function runContextProofs(
+  runId: string,
+  options: ContextPageOptions & { session: string },
+  deps: ContextCommandDeps = {},
+): void {
+  cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
+  output(deps, listSessionContextProofs(
+    runId,
+    options.session,
+    options,
+    deps.parentDir,
+  ))
+}
+
+export function runContextLocate(
+  runId: string,
+  options: { session: string; event: number },
+  deps: ContextCommandDeps = {},
+): void {
+  cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
+  output(deps, locateSessionContextEvent(
+    runId,
+    options.session,
+    options.event,
+    deps.parentDir,
+  ))
 }
 
 export function runContextClose(

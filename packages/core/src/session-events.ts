@@ -19,6 +19,22 @@ export type SessionEventKind =
 
 export type SessionEventRole = 'user' | 'assistant' | 'system' | 'tool'
 
+export type SessionEventOrigin =
+  | 'human_user'
+  | 'assistant_output'
+  | 'tool_runtime'
+  | 'developer_instruction'
+  | 'host_context'
+  | 'skill_instruction'
+  | 'internal_job'
+  | 'historical_forward'
+  | 'unknown'
+
+export type SessionEventOriginEvidence =
+  | 'source-envelope'
+  | 'explicit-marker'
+  | 'legacy-inferred'
+
 export interface SessionEvent {
   index: number
   kind: SessionEventKind
@@ -27,6 +43,8 @@ export interface SessionEvent {
   content: unknown
   toolCallId?: string
   toolName?: string
+  origin: SessionEventOrigin
+  originEvidence: SessionEventOriginEvidence
   sourceLocator: string
 }
 
@@ -78,7 +96,7 @@ interface JsonlWatermark {
   files: JsonlFileWatermark[]
 }
 
-interface EventDraft extends Omit<SessionEvent, 'index'> {}
+interface EventDraft extends Omit<SessionEvent, 'index' | 'origin' | 'originEvidence'> {}
 
 interface EventReadAttempt {
   events: SessionEvent[]
@@ -134,6 +152,49 @@ function normalizeRole(value: unknown): SessionEventRole | undefined {
   }
   if (value === 'developer') return 'system'
   return undefined
+}
+
+function originSearchText(value: unknown): string {
+  if (typeof value === 'string') return value.trimStart()
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return ''
+  }
+}
+
+function classifyOrigin(draft: EventDraft): Pick<SessionEvent, 'origin' | 'originEvidence'> {
+  if (draft.kind === 'tool_call' || draft.kind === 'tool_result') {
+    return { origin: 'tool_runtime', originEvidence: 'source-envelope' }
+  }
+  if (draft.role === 'assistant') {
+    return { origin: 'assistant_output', originEvidence: 'source-envelope' }
+  }
+  if (draft.role === 'system') {
+    return { origin: 'developer_instruction', originEvidence: 'source-envelope' }
+  }
+  if (draft.role !== 'user') {
+    return { origin: 'unknown', originEvidence: 'legacy-inferred' }
+  }
+
+  const text = originSearchText(draft.content)
+  if (/^\[memory-manager:[^\]]+\]/i.test(text)) {
+    return { origin: 'internal_job', originEvidence: 'explicit-marker' }
+  }
+  if (/^<(?:skill|skills_instructions)(?:\s|>)/i.test(text)) {
+    return { origin: 'skill_instruction', originEvidence: 'explicit-marker' }
+  }
+  if (
+    /^# AGENTS\.md instructions for /i.test(text)
+    || /^<(?:app-context|environment_context|permissions instructions|collaboration_mode)(?:\s|>)/i.test(text)
+    || /^Side conversation boundary\./i.test(text)
+  ) {
+    return { origin: 'host_context', originEvidence: 'explicit-marker' }
+  }
+  if (/^<session_message(?:\s|>)/i.test(text)) {
+    return { origin: 'historical_forward', originEvidence: 'explicit-marker' }
+  }
+  return { origin: 'human_user', originEvidence: 'source-envelope' }
 }
 
 function sha256(value: unknown): string {
@@ -300,6 +361,41 @@ function messageDrafts(
   return contentDrafts(content, role, timestamp, sourceLocator)
 }
 
+function compactCodexMetadata(
+  type: string,
+  value: Record<string, unknown>,
+  timestamp: string | undefined,
+  sourceLocator: string,
+): EventDraft {
+  const summary = Array.isArray(value.summary)
+    ? value.summary.flatMap((item) => {
+      const record = asRecord(item)
+      return typeof record?.text === 'string' ? [record.text] : []
+    })
+    : []
+  const git = asRecord(value.git)
+  return {
+    kind: 'metadata',
+    ...(type === 'reasoning' ? { role: 'assistant' as const } : {}),
+    ...(timestamp ? { timestamp } : {}),
+    content: {
+      type,
+      ...(asString(value.id) ? { id: asString(value.id) } : {}),
+      ...(asString(value.cwd) ? { cwd: asString(value.cwd) } : {}),
+      ...(asString(value.call_id) ? { callId: asString(value.call_id) } : {}),
+      ...(summary.length > 0 ? { summary } : {}),
+      ...(git ? {
+        git: {
+          ...(asString(git.repository_url) ? { repositoryUrl: asString(git.repository_url) } : {}),
+          ...(asString(git.branch) ? { branch: asString(git.branch) } : {}),
+          ...(asString(git.commit_hash) ? { commitHash: asString(git.commit_hash) } : {}),
+        },
+      } : {}),
+    },
+    sourceLocator,
+  }
+}
+
 function recordDrafts(
   value: Record<string, unknown>,
   agent: AgentName,
@@ -321,7 +417,17 @@ function recordDrafts(
     if (TOOL_RESULT_TYPES.has(payloadType)) {
       return [toolResultDraft(payload, timestamp, `${sourceLocator}.payload`)]
     }
-    return contentDrafts(payload, undefined, timestamp, `${sourceLocator}.payload`)
+    return [compactCodexMetadata(
+      payloadType || 'response_item',
+      payload,
+      timestamp,
+      `${sourceLocator}.payload`,
+    )]
+  }
+
+  if (agent === 'codex' && type === 'session_meta') {
+    const payload = asRecord(value.payload) ?? value
+    return [compactCodexMetadata('session_meta', payload, timestamp, sourceLocator)]
   }
 
   if (type === 'user' || type === 'assistant' || type === 'system') {
@@ -366,6 +472,14 @@ function recordDrafts(
       : messageDrafts(value, normalizeRole(value.role), timestamp, sourceLocator)
   }
 
+  if (agent === 'codex') {
+    // event_msg、turn_context、compacted 与 world_state 都是 response_item 的宿主遥测或重复视图；
+    // 其中 mcp_tool_call_end 会再次嵌入完整工具输出，encrypted reasoning 也无法供 AI 解释。
+    // 权威消息、调用和结果已经由 response_item 保留，因此不把这些副本放入上下文。
+    // 仍保留上方显式的普通消息与 tool.execution_* 兼容格式。
+    return []
+  }
+
   return [{
     kind: 'metadata',
     ...(timestamp ? { timestamp } : {}),
@@ -375,7 +489,11 @@ function recordDrafts(
 }
 
 function assignIndexes(drafts: EventDraft[]): SessionEvent[] {
-  return drafts.map((draft, index) => ({ ...draft, index }))
+  return drafts.map((draft, index) => ({
+    ...draft,
+    ...classifyOrigin(draft),
+    index,
+  }))
 }
 
 function sourceMissing(agent: AgentName, sourcePath: string): SessionEventReaderError {
