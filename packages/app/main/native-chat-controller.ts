@@ -89,6 +89,12 @@ export interface NativeRulesStartResult {
   runId: string
 }
 
+interface RulesContextReadiness {
+  promise: Promise<void>
+  resolve: () => void
+  reject: (error: unknown) => void
+}
+
 export class NativeChatController {
   private readonly createId: () => string
   private readonly now: () => string
@@ -365,7 +371,7 @@ export class NativeChatController {
     }
   }
 
-  startRulesGeneration(request: GenerationRequest): NativeRulesStartResult {
+  async startRulesGeneration(request: GenerationRequest): Promise<NativeRulesStartResult> {
     const chatId = this.createId()
     const runId = chatId
     const createdAt = this.now()
@@ -395,10 +401,12 @@ export class NativeChatController {
     }))
     startRunMetadata(runId, request, createdAt, this.options.sessionEvidenceHomeDir)
     const abortController = new AbortController()
+    const contextReadiness = createRulesContextReadiness()
     this.activeRulesRuns.set(chatId, abortController)
     void this.runRulesGeneration({
-      chatId, runId, request, provider, config, abortController,
+      chatId, runId, request, provider, config, abortController, contextReadiness,
     })
+    await contextReadiness.promise
     return { chatId, runId }
   }
 
@@ -409,6 +417,7 @@ export class NativeChatController {
     provider: NativeChatProvider
     config: NativeTurnConfig
     abortController: AbortController
+    contextReadiness: RulesContextReadiness
   }): Promise<void> {
     let nativeSessionId: string | null = null
     let evidence: EvidenceSnapshot | undefined
@@ -422,6 +431,7 @@ export class NativeChatController {
       await runRulesGenerationPreflight(input.request, this.options.scanSessions, signal)
       await runRulesGenerate({
         ...generationEvidenceOptions(input.request),
+        homeDir: this.options.sessionEvidenceHomeDir,
         runId: input.runId,
         ...rulesGenerationCoreBridge(input.provider, input.config.model),
         effort: input.config.effort,
@@ -442,6 +452,7 @@ export class NativeChatController {
             homeDir: this.options.sessionEvidenceHomeDir,
           })
           this.options.onThreadChanged?.(input.chatId)
+          input.contextReadiness.resolve()
         },
         onProjectResponse: (response) => {
           projectResponses.push(response)
@@ -543,6 +554,7 @@ export class NativeChatController {
       })
       this.options.onTurnCompleted?.(input.chatId)
     } catch (error) {
+      input.contextReadiness.reject(error)
       const cancelled = signal.aborted || isRunCancelledError(error)
       const message = errorMessage(error)
       const failedAt = this.now()
@@ -693,6 +705,29 @@ export function rulesGenerationCoreBridge(
     return { provider: 'codex', model: model ?? 'opencode:default' }
   }
   return { provider, ...(model ? { model } : {}) }
+}
+
+function createRulesContextReadiness(): RulesContextReadiness {
+  let settled = false
+  let resolvePromise: (() => void) | undefined
+  let rejectPromise: ((error: unknown) => void) | undefined
+  const promise = new Promise<void>((resolve, reject) => {
+    resolvePromise = resolve
+    rejectPromise = reject
+  })
+  return {
+    promise,
+    resolve: () => {
+      if (settled) return
+      settled = true
+      resolvePromise?.()
+    },
+    reject: (error) => {
+      if (settled) return
+      settled = true
+      rejectPromise?.(error)
+    },
+  }
 }
 
 export async function runRulesGenerationPreflight(

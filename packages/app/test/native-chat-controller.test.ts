@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from '@jest/globals'
 import Database from 'better-sqlite3'
 import { initDatabase } from '../../core/src/db.js'
+import type { ScanSummary } from '../../core/src/types.js'
 import { ChatStore } from '../main/chat-store.js'
 import {
   ChatRuntimeManager,
@@ -942,13 +943,15 @@ describe('NativeChatController', () => {
       mode: 'changed7d', projects: [], provider: 'opencode',
       effort: 'medium', fastMode: false,
     })
+    const rejected = expect(started).rejects.toThrow('扫描等待已停止')
     expect(receivedSignal?.aborted).toBe(false)
 
-    await controller.interrupt(started.chatId)
+    await controller.interrupt('rules-cancel-preflight')
+    await rejected
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     expect(receivedSignal?.aborted).toBe(true)
-    expect(store.readThread(started.chatId)).toMatchObject({
+    expect(store.readThread('rules-cancel-preflight')).toMatchObject({
       status: 'interrupted',
       lastError: null,
       messages: [{ role: 'user' }],
@@ -957,10 +960,72 @@ describe('NativeChatController', () => {
       readonly: true,
     })
     try {
-      expect(db.prepare('SELECT status FROM run_metadata WHERE id = ?').get(started.runId))
+      expect(db.prepare('SELECT status FROM run_metadata WHERE id = ?')
+        .get('rules-cancel-preflight'))
         .toEqual({ status: 'cancelled' })
     } finally {
       db.close()
     }
+  })
+
+  it('Rules 启动等待扫描与 Session Context 持久化后才进入 Chat', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-rules-context-ready-'))
+    roots.push(root)
+    createEvidenceSession(root)
+    const store = new ChatStore(path.join(root, '.memory-manager', 'chats'))
+    let resolveScan: ((summary: ScanSummary) => void) | undefined
+    const scanReady = new Promise<ScanSummary>((resolve) => { resolveScan = resolve })
+    let rejectProvider: ((error: Error) => void) | undefined
+    const controller = new NativeChatController({
+      store,
+      runtime: new ChatRuntimeManager((): ChatProviderAdapter => ({
+        start: async () => new Promise((_resolve, reject) => { rejectProvider = reject }),
+        resume: async () => { throw new Error('provider 不应恢复') },
+        interrupt: async () => { rejectProvider?.(new Error('provider 已停止')) },
+        readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+        archive: async () => undefined,
+        unarchive: async () => undefined,
+        delete: async () => undefined,
+        close: async () => undefined,
+      })),
+      workingDirectory: root,
+      sessionEvidenceHomeDir: root,
+      createId: () => 'rules-context-ready',
+      now: () => '2026-08-10T04:00:00.000Z',
+      scanSessions: () => scanReady,
+    })
+
+    let contextReady = false
+    const started = controller.startRulesGeneration({
+      mode: 'changed7d', projects: [], provider: 'opencode',
+      effort: 'medium', fastMode: false,
+    }).then((result) => {
+      contextReady = true
+      return result
+    })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(contextReady).toBe(false)
+    expect(store.readThread('rules-context-ready')).toMatchObject({
+      sessionContext: { revision: 0, selected: [] },
+    })
+
+    resolveScan?.({
+      total: 1, new: 0, updated: 1, unchanged: 0, missing: 0, errors: 0,
+      changes: { new: [], updated: [], missing: [] },
+    })
+    await expect(started).resolves.toEqual({
+      chatId: 'rules-context-ready', runId: 'rules-context-ready',
+    })
+    expect(store.readThread('rules-context-ready')).toMatchObject({
+      status: 'running',
+      sessionContext: {
+        revision: 1,
+        selected: [{ agent: 'codex', id: 'session-evidence' }],
+      },
+    })
+
+    await controller.interrupt('rules-context-ready')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(store.readThread('rules-context-ready')).toMatchObject({ status: 'interrupted' })
   })
 })

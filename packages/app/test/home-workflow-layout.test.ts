@@ -852,7 +852,7 @@ describe('home workflow layout', () => {
     expect(historySource).toContain('projects: value.projects.flatMap')
   })
 
-  it('Start Generate 直接进入 Chat 并在对话中选择 Evidence scope', () => {
+  it('Start Generate 先准备 Session Context，再进入 Chat', () => {
     const source = read('views/RulesView.tsx')
     const chatSource = read('views/ChatView.tsx')
 
@@ -861,6 +861,11 @@ describe('home workflow layout', () => {
     expect(source).toContain("labelKey: 'generate.modes.recent.label'")
     expect(source).toContain("'rules.chat.start'")
     expect(source).toContain('onStarted(result.chatId)')
+    expect(source.indexOf("'rules.chat.start'"))
+      .toBeLessThan(source.indexOf('onStarted(result.chatId)'))
+    expect(source).toContain('data-generation-context-loading="true"')
+    expect(source).toContain("tr('generate.scanningContext')")
+    expect(source).toContain("tr('generate.contextReadyNavigation')")
     expect(chatSource).toContain('thread.rulesArtifact')
     expect(source).toContain("tr('generate.agent')")
     expect(source).toContain("tr('generate.model')")

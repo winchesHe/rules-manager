@@ -237,7 +237,9 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
 
 - 主导航按 Workspace 的 Scan / Projects / Chat 与 Knowledge 的「规则管理 / Agent 上下文」组织；
   Rules 内部页面继续由四个知识库叶子入口承载。
-- Rules 负责选择 Evidence scope、审核和发布；生成开始后创建 Chat Thread 并切换到 Chat。
+- Rules 负责选择 Evidence scope、审核和发布；点击生成后先停留在配置页，以操作区局部 Loading 完成
+  Session 扫描、Evidence 提取和 Context 持久化，再切换到 Chat。Chat 第一帧必须已经携带本次相关
+  Session；Provider 后续生成继续在 Chat 内运行。
 - Chat 使用 Thread Rail + Conversation + Context 三段布局；窄窗口时 Context 下沉，不产生页面级横向滚动。
 - 用户请求使用右侧轻量气泡，Assistant 使用无气泡正文，Candidate 使用结构化 Artifact。
 - 第一版不提供 Composer、通用 New chat、连续追问或 Session Summary。

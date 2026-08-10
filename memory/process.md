@@ -3746,3 +3746,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   99 tests 通过；App `typecheck` 仍被既有跨包 `rootDir / file list` 和旧 UI Button 类型错误阻塞，build 仅有既有
   `markstream-react` PURE comment warning。
 - 提交信息：`fix: 修复规则对话停止与上下文刷新`
+
+## Rules 生成等待 Session Context 就绪后进入 Chat（2026-08-10）
+
+- 用户进一步明确生成交互顺序：如果 Rules 需要先扫描 Session，就不能先进入空 Context 的 Chat；应停留在
+  Rules 配置页展示局部 Loading，扫描和 Context 处理完成后再自动进入对话。
+- `NativeChatController.startRulesGeneration` 改为异步就绪合同：Thread 与后台 Run 仍立即创建，但启动 IPC 只在
+  Evidence 回调完成 `sessionContext` 持久化后返回。扫描、Evidence 或 Context 写入在此之前失败时，Rules 页面
+  保持原位并展示错误；就绪后的 Provider 生成继续在 Chat 中运行。
+- Rules 配置页在启动期间显示“正在扫描 Session 并准备上下文”和自动进入说明，锁定本次配置；进入 Chat 的
+  第一帧直接从已持久化 Thread 读取相关 Session，不再依赖后续 `chat.changed` 或切页刷新。
+- 同步给 Evidence 提取显式传入 Controller 的 `sessionEvidenceHomeDir`，避免隔离测试意外读取真实用户工作区；
+  生产环境未配置时仍沿用既有默认 Home。
+- 自动化覆盖“扫描未完成时启动 Promise 不返回、Context 写入后才返回、就绪前取消拒绝启动、首帧布局合同”。
+  App 定向 3 suites / 74 tests、App 全量 45 suites / 287 tests、Core 全量 36 suites / 359 tests 与 App/Core
+  production build 通过；App build 仅有既有 `markstream-react` PURE comment warning。
+- Computer Use 在真实 Electron 中使用 OpenCode changed7d 验证：点击后仍在 Rules 页显示局部 Loading；自动
+  跳转的 Chat 第一屏已显示 `Session Context 151`；点击停止后最新任务变为“已中断”。
+- 提交信息：`fix: 在上下文就绪后进入规则对话`

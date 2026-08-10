@@ -2539,6 +2539,9 @@ function GenerateRulesPage({
     : mode === 'full'
       ? tr('generate.scopeFull', { count: projects.length })
       : tr('generate.scopeRecent', { count: projects.length })
+  const startingStatus = mode === 'changed7d'
+    ? tr('generate.scanningContext')
+    : tr('generate.preparingContext')
 
   return (
     <PageShell archetype="task" width="wide">
@@ -2760,17 +2763,30 @@ function GenerateRulesPage({
               data-generation-action="true"
             >
               <p className="mb-3 text-xs text-muted">{scopeSummary}</p>
+              {starting && (
+                <div
+                  aria-live="polite"
+                  className="mb-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2.5"
+                  data-generation-context-loading="true"
+                  role="status"
+                >
+                  <p className="text-xs font-medium text-foreground">{startingStatus}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    {tr('generate.contextReadyNavigation')}
+                  </p>
+                </div>
+              )}
               <Button
                 className="w-full gap-2 bg-primary text-primary-foreground"
                 isDisabled={!config || starting || (mode === 'projects' && selectedProjects.length === 0)}
                 onPress={() => void generate()}
               >
                 {starting ? (
-                  <Spinner aria-label={tr('generate.startingLabel')} color="current" size="sm" />
+                  <Spinner aria-label={startingStatus} color="current" size="sm" />
                 ) : (
                   <Sparkles aria-hidden="true" size={17} />
                 )}
-                {starting ? tr('actions.starting') : tr('actions.continueChat')}
+                {starting ? tr('status.preparing') : tr('actions.continueChat')}
               </Button>
             </div>
           </div>
