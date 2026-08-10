@@ -3777,3 +3777,17 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 定向 App Shell 1 suite / 4 tests、App 全量 45 suites / 287 tests、Core 全量 36 suites / 359 tests 与
   Electron production build 通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 调整侧栏导航条目间距`
+
+## 纠正侧栏主导航为横向内容留白（2026-08-10）
+
+- 用户补充截图明确指出目标不是条目之间的垂直间距，而是图标与热区背景左边缘贴得太近。上一轮 6px 垂直
+  间距已完整撤回，Scan / Projects / Chat 恢复原有 2px 垂直节奏。
+- 展开态主导航内容的横向内边距从 8px 增加到 16px，图标与文字之间仍为 8px；选中 / 悬浮背景范围、34px
+  条目高度、点击热区和收起态居中规则不变。
+- 修正 `DESIGN.md` 与既有侧栏间距计划的范围、观察点和验收参数。纯样式修改不新增只断言 Tailwind class 的
+  测试，使用现有合同测试、全量回归、production build 和真实 Electron 视觉检查替代。
+- 真实 Electron 重载后检查 Projects 选中态，确认背景不变而内容向右增加 8px；收起态图标仍居中且无溢出，
+  验收后恢复展开侧栏的 Projects 页面。
+- App 全量 45 suites / 287 tests、Core 全量 36 suites / 359 tests、Electron production build 与
+  `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 调整侧栏导航横向留白`

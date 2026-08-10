@@ -154,7 +154,7 @@ export function App() {
                     {t('workspace')}
                   </p>
                 )}
-                <div aria-label={t('workspace')} className="grid gap-1.5">
+                <div aria-label={t('workspace')} className="grid gap-0.5">
                   {workspaceNavigation.map(({ id, labelKey, icon: Icon }) => {
                     const active = activeView === id
                     return (
@@ -162,7 +162,7 @@ export function App() {
                         aria-label={sidebarCollapsed ? t(labelKey) : undefined}
                         aria-current={active ? 'page' : undefined}
                         className={`h-[2.125rem] text-[13px] ${
-                          sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-2 px-2'
+                          sidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-2 px-4'
                         } ${
                           active
                             ? 'bg-surface-hover text-foreground'
