@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { z } from 'zod'
 import { isRunCancelledError, throwIfAborted } from './abort.js'
 import {
@@ -28,7 +29,10 @@ export interface SessionEvidencePlan {
   reason: string
   batchByteBudget: number
   maxConcurrency: number
+  targetedSessionLimit?: number
 }
+
+const MAX_MAP_CHUNK_BYTES = 64 * 1024
 
 export interface CurrentNativeChat {
   chatId: string
@@ -92,6 +96,7 @@ export interface EvidenceModelRunner {
   runMap(input: EvidenceMapInput): Promise<SessionCapsule>
   runReduceBatch(input: EvidenceReduceBatchInput): Promise<EvidenceReduceBatchResult>
   runReduce(input: EvidenceReduceInput): Promise<SessionEvidenceSynthesis>
+  interrupt?(): Promise<void>
 }
 
 export type ClaimGateViolation =
@@ -156,6 +161,30 @@ export interface SessionEvidenceProgress {
   mode: SessionEvidenceMode
   coverage?: SessionEvidenceCoverageSummary
 }
+
+export class EvidenceProcessingCircuitOpenError extends Error {
+  readonly code = 'EVIDENCE_PROCESSING_CIRCUIT_OPEN'
+
+  constructor(
+    readonly signature: string,
+    readonly failures: number,
+    cause: unknown,
+  ) {
+    super(`Evidence Map 连续 ${failures} 次出现同类错误，已停止剩余处理：${signature}`, { cause })
+    this.name = 'EvidenceProcessingCircuitOpenError'
+  }
+}
+
+const MAP_FAILURE_CIRCUIT_THRESHOLD = 3
+const DEFAULT_TARGETED_SESSION_LIMIT = 24
+const TARGETED_FALLBACK_SESSION_LIMIT = 8
+const TARGETED_CHUNK_LIMIT = 4
+const TARGETED_STOP_TERMS = new Set([
+  'session', 'sessions', 'find', 'from', 'history', 'specific', 'what', 'which',
+  '一下', '以及', '什么', '全部', '所有', '总结', '有关', '相关', '帮我', '需要',
+  '怎么', '如何', '完成', '快速', '避免', '下次', '经验', '里面', '之前',
+])
+const TARGETED_HAN_BREAKS = /(?:一下|以及|什么|全部|所有|总结|有关|相关|帮我|需要|怎么|如何|完成|快速|避免|下次|经验|里面|之前|找出|查找)/u
 
 const COMPLETE_CLAIM = /(?:全部(?:读取|处理|总结|覆盖)|完整(?:读取|处理|总结|覆盖)|所有会话(?:都|均)?(?:已)?(?:读取|处理|总结|覆盖)|(?:已)?(?:读取|处理|总结|覆盖)(?:了)?(?:全部|所有)(?:会话|sessions?)|没有遗漏|无遗漏|all sessions|complete coverage|reviewed all sessions|no omissions?)/i
 const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'opencode', 'pi'])
@@ -230,6 +259,10 @@ function validatePlan(plan: SessionEvidencePlan): void {
   if (!Number.isInteger(plan.maxConcurrency) || plan.maxConcurrency <= 0) {
     throw new Error('session evidence max concurrency must be a positive integer')
   }
+  if (plan.targetedSessionLimit !== undefined
+    && (!Number.isInteger(plan.targetedSessionLimit) || plan.targetedSessionLimit <= 0)) {
+    throw new Error('session evidence targeted session limit must be a positive integer')
+  }
 }
 
 export function sessionEvidenceCoverageSummary(
@@ -286,11 +319,19 @@ async function runWithConcurrency<T, R>(
   maxConcurrency: number,
   task: (value: T) => Promise<R>,
   signal?: AbortSignal,
+  circuit?: {
+    threshold: number
+    signature: (error: unknown) => string
+    onOpen?: () => Promise<void>
+  },
 ): Promise<Array<PromiseSettledResult<R>>> {
   const results = new Array<PromiseSettledResult<R>>(values.length)
   let nextIndex = 0
+  let circuitError: EvidenceProcessingCircuitOpenError | undefined
+  let previousFailureSignature: string | undefined
+  let consecutiveFailures = 0
   async function worker(): Promise<void> {
-    while (nextIndex < values.length) {
+    while (!circuitError && nextIndex < values.length) {
       throwIfAborted(signal)
       const index = nextIndex
       nextIndex += 1
@@ -300,6 +341,19 @@ async function runWithConcurrency<T, R>(
         throwIfAborted(signal)
         if (isRunCancelledError(error)) throw error
         results[index] = { status: 'rejected', reason: error }
+        if (circuit) {
+          const signature = circuit.signature(error)
+          consecutiveFailures = signature === previousFailureSignature ? consecutiveFailures + 1 : 1
+          previousFailureSignature = signature
+          if (consecutiveFailures >= circuit.threshold && !circuitError) {
+            circuitError = new EvidenceProcessingCircuitOpenError(
+              signature,
+              consecutiveFailures,
+              error,
+            )
+            await circuit.onOpen?.().catch(() => undefined)
+          }
+        }
       }
     }
   }
@@ -307,7 +361,82 @@ async function runWithConcurrency<T, R>(
     { length: Math.min(maxConcurrency, values.length) },
     () => worker(),
   ))
+  if (circuitError) throw circuitError
   return results
+}
+
+function processingFailureSignature(error: unknown): string {
+  const values: string[] = []
+  let current: unknown = error
+  for (let depth = 0; depth < 3 && current; depth += 1) {
+    if (current instanceof Error) {
+      const code = typeof (current as Error & { code?: unknown }).code === 'string'
+        ? (current as Error & { code: string }).code
+        : ''
+      values.push([current.name, code, current.message].filter(Boolean).join(':'))
+      current = current.cause
+    } else {
+      values.push(String(current))
+      break
+    }
+  }
+  return values.join(' <- ').slice(0, 500)
+}
+
+function targetedQueryTerms(question: string): string[] {
+  const normalized = question.toLowerCase()
+  const terms = normalized.match(/[a-z0-9][a-z0-9._-]{1,}|[\p{Script=Han}]{2,}/gu) ?? []
+  const expanded = terms.flatMap((term) => {
+    if (!/[\p{Script=Han}]/u.test(term)) return [term]
+    return term.split(TARGETED_HAN_BREAKS)
+  })
+  return [...new Set(expanded
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 2 && !TARGETED_STOP_TERMS.has(term)))]
+}
+
+function targetedSources(
+  question: string,
+  sources: SessionSourceReadResult[],
+  limit: number,
+): SessionSourceReadResult[] {
+  const readable = sources.filter((source) => source.status === 'readable')
+  const terms = targetedQueryTerms(question)
+  if (terms.length === 0) return readable.slice(0, TARGETED_FALLBACK_SESSION_LIMIT)
+  const scored = readable.map((source, index) => {
+    const text = JSON.stringify(source.messages.map((message) => message.content)).toLowerCase()
+    const score = terms.reduce((total, term) => text.includes(term)
+      ? total + Math.min(term.length, 12)
+      : total, 0)
+    return { source, index, score }
+  }).filter((item) => item.score > 0)
+  if (scored.length === 0) return readable.slice(0, TARGETED_FALLBACK_SESSION_LIMIT)
+  return scored
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, limit)
+    .map((item) => item.source)
+}
+
+function targetedChunks(
+  question: string,
+  chunkPaths: string[],
+): Array<{ chunkPath: string; chunkIndex: number }> {
+  const chunks = chunkPaths.map((chunkPath, chunkIndex) => ({ chunkPath, chunkIndex }))
+  const terms = targetedQueryTerms(question)
+  if (terms.length === 0) return chunks.slice(0, TARGETED_CHUNK_LIMIT)
+  const scored = chunks.map((chunk) => {
+    const text = fs.readFileSync(chunk.chunkPath, 'utf8').toLowerCase()
+    const score = terms.reduce((total, term) => {
+      const occurrences = text.split(term).length - 1
+      return total + Math.min(occurrences, 5) * Math.min(term.length, 12)
+    }, 0)
+    return { ...chunk, score }
+  }).filter((chunk) => chunk.score > 0)
+  if (scored.length === 0) return chunks.slice(0, TARGETED_CHUNK_LIMIT)
+  return scored
+    .sort((left, right) => right.score - left.score || left.chunkIndex - right.chunkIndex)
+    .slice(0, TARGETED_CHUNK_LIMIT)
+    .map(({ chunkPath, chunkIndex }) => ({ chunkPath, chunkIndex }))
 }
 
 function partitionReduceMaterials(
@@ -493,6 +622,25 @@ export async function runLiveSessionEvidence(
       ...(source.errorMessage ? { errorMessage: source.errorMessage } : {}),
     })
   }
+  const processingSources = plan.mode === 'targeted'
+    ? targetedSources(
+        query.question,
+        sourceResults,
+        plan.targetedSessionLimit ?? DEFAULT_TARGETED_SESSION_LIMIT,
+      )
+    : sourceResults.filter((source) => source.status === 'readable')
+  if (plan.mode === 'targeted') {
+    const required = new Set(processingSources.map((source) => `${source.agent}\0${source.sessionId}`))
+    for (const source of sourceResults) {
+      if (source.status !== 'readable' || required.has(`${source.agent}\0${source.sessionId}`)) continue
+      coverageState = recordProcessingOutcome(coverageState, {
+        id: source.sessionId,
+        agent: source.agent,
+        status: 'not_required',
+        relevant: false,
+      })
+    }
+  }
 
   return withLiveEvidenceContext({
     runId: plan.runId,
@@ -500,10 +648,10 @@ export async function runLiveSessionEvidence(
     selected: plan.selected,
   }, {
     parentDir: options.tempParentDir,
-    maxChunkBytes: plan.batchByteBudget,
+    maxChunkBytes: Math.min(plan.batchByteBudget, MAX_MAP_CHUNK_BYTES),
   }, async (context) => {
     const capsules: SessionCapsule[] = []
-    const readableCount = sourceResults.filter((source) => source.status === 'readable').length
+    const readableCount = processingSources.length
     let processedSessionCount = 0
     options.onProgress?.({
       stage: 'processing', completed: 0, total: readableCount, mode: plan.mode,
@@ -512,13 +660,15 @@ export async function runLiveSessionEvidence(
       source: SessionSourceReadResult
       jobs: EvidenceMapInput[]
     }> = []
-    for (const source of sourceResults) {
-      if (source.status !== 'readable') continue
+    for (const source of processingSources) {
       try {
         const sessionSource = context.writeSessionChunks(source)
+        const chunks = plan.mode === 'targeted'
+          ? targetedChunks(query.question, sessionSource.chunkPaths)
+          : sessionSource.chunkPaths.map((chunkPath, chunkIndex) => ({ chunkPath, chunkIndex }))
         sessions.push({
           source,
-          jobs: sessionSource.chunkPaths.map((chunkPath, chunkIndex) => ({
+          jobs: chunks.map(({ chunkPath, chunkIndex }) => ({
             runId: plan.runId,
             question: query.question,
             sessionId: source.sessionId,
@@ -558,6 +708,11 @@ export async function runLiveSessionEvidence(
         return capsule
       },
       options.signal,
+      {
+        threshold: MAP_FAILURE_CIRCUIT_THRESHOLD,
+        signature: processingFailureSignature,
+        onOpen: async () => runner.interrupt?.(),
+      },
     )
     const resultByJob = new Map(jobs.map((job, index) => [job, mapResults[index]]))
     for (const { source, jobs: sessionJobs } of sessions) {

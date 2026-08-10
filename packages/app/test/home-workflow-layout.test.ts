@@ -343,6 +343,7 @@ describe('home workflow layout', () => {
     const source = read('views/ChatView.tsx')
 
     expect(source).toContain("event.type === 'evidence_progress'")
+    expect(source).toContain('liveEvidenceProgress ?? thread.activeEvidenceProgress')
     expect(source).toContain('data-evidence-progress')
     expect(source).toContain('data-evidence-coverage')
     expect(source).toContain('summary.visited')

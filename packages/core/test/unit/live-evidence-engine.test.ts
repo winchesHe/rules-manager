@@ -172,6 +172,57 @@ describe('Live Session Evidence Engine', () => {
     }
   })
 
+  it('即使 Reduce 批次预算较大，Map 的超大单消息仍限制为 64 KiB 分片', async () => {
+    const fixture = createSessionFixture(1, 1)
+    fs.writeFileSync(path.join(fixture.home, 'session-1.jsonl'), `${JSON.stringify({
+      role: 'user',
+      content: 'loading 与 OpenCode '.repeat(30_000),
+      timestamp: '2026-08-09T00:00:00Z',
+    })}\n`)
+    let mapCalls = 0
+    const runner: EvidenceModelRunner = {
+      runMap: async (input) => {
+        mapCalls += 1
+        expect(fs.statSync(input.chunkPath).size).toBeLessThanOrEqual(64 * 1024)
+        return {
+          sessionId: input.sessionId,
+          agent: input.agent,
+          chunkIndex: input.chunkIndex,
+          chunkCount: input.chunkCount,
+          summary: '',
+          facts: [],
+          relevant: false,
+        }
+      },
+      runReduceBatch: async () => ({ summary: '', evidenceFactIds: [] }),
+      runReduce: async () => ({ answerMarkdown: '无相关事实', claims: [], limitations: [] }),
+    }
+
+    try {
+      await expect(runLiveSessionEvidence({
+        question: '找出 loading 和 OpenCode 的问题',
+        currentChat: { chatId: 'chat-large-map' },
+      }, {
+        runId: 'run-large-map',
+        mode: 'targeted',
+        selected: fixture.selected,
+        reason: '超大单消息回归',
+        batchByteBudget: 512 * 1024,
+        maxConcurrency: 2,
+      }, runner, {
+        homeDir: fixture.home,
+        tempParentDir: fixture.tempParent,
+      })).resolves.toMatchObject({
+        synthesis: { answerMarkdown: '无相关事实' },
+      })
+      expect(mapCalls).toBeGreaterThan(1)
+      expect(mapCalls).toBeLessThanOrEqual(4)
+    } finally {
+      fs.rmSync(fixture.home, { recursive: true, force: true })
+      fs.rmSync(fixture.tempParent, { recursive: true, force: true })
+    }
+  })
+
   it('10 个 Session 多 chunk 使用有界并发、分层 Reduce，并逐 Session 记录失败', async () => {
     const fixture = createSessionFixture(10, 4)
     let activeMaps = 0
@@ -249,6 +300,135 @@ describe('Live Session Evidence Engine', () => {
       expect(result.coverage.rows.find((row) => row.sessionId === 'session-4')).toMatchObject({
         processingStatus: 'failed', errorCode: 'MAP_FAILED',
       })
+    } finally {
+      fs.rmSync(fixture.home, { recursive: true, force: true })
+      fs.rmSync(fixture.tempParent, { recursive: true, force: true })
+    }
+  })
+
+  it('targeted 只处理本地词项命中的 Session，其余 readable 来源记为 not_required', async () => {
+    const fixture = createSessionFixture(12, 1)
+    fs.writeFileSync(path.join(fixture.home, 'session-3.jsonl'), `${JSON.stringify({
+      role: 'user', content: 'computer-use 联调时需要等待窗口稳定', timestamp: '2026-08-09',
+    })}\n`)
+    fs.writeFileSync(path.join(fixture.home, 'session-9.jsonl'), `${JSON.stringify({
+      role: 'assistant', content: 'chrome-use 的坑是登录态和页面加载', timestamp: '2026-08-09',
+    })}\n`)
+    const mapped: string[] = []
+    const runner: EvidenceModelRunner = {
+      runMap: async (input) => {
+        mapped.push(input.sessionId)
+        return {
+          sessionId: input.sessionId,
+          agent: input.agent,
+          chunkIndex: input.chunkIndex,
+          chunkCount: input.chunkCount,
+          summary: input.sessionId,
+          facts: [],
+          relevant: true,
+        }
+      },
+      runReduceBatch: async () => { throw new Error('不应触发中间 Reduce') },
+      runReduce: async (input) => {
+        expect(input.coverage.rows.filter((row) => row.processingStatus === 'not_required')).toHaveLength(10)
+        return { answerMarkdown: '目标检索完成。', claims: [], limitations: [] }
+      },
+    }
+
+    try {
+      const result = await runLiveSessionEvidence({
+        question: '找出 computer-use 和 chrome-use 联调踩坑经验',
+        currentChat: { chatId: 'chat-targeted' },
+      }, {
+        runId: 'run-targeted',
+        mode: 'targeted',
+        selected: fixture.selected,
+        reason: '目标检索',
+        batchByteBudget: 64 * 1024,
+        maxConcurrency: 2,
+        targetedSessionLimit: 4,
+      }, runner, { homeDir: fixture.home, tempParentDir: fixture.tempParent })
+
+      expect(mapped.sort()).toEqual(['session-3', 'session-9'])
+      expect(result.coverage).toMatchObject({
+        status: 'targeted', selected: 12, visited: 12, readable: 12, processed: 2,
+      })
+    } finally {
+      fs.rmSync(fixture.home, { recursive: true, force: true })
+      fs.rmSync(fixture.tempParent, { recursive: true, force: true })
+    }
+  })
+
+  it('相同 Map 错误连续三次后熔断、停止分配剩余 job 并中断 Runner', async () => {
+    const fixture = createSessionFixture(20, 1)
+    let mapCalls = 0
+    let interrupts = 0
+    const runner: EvidenceModelRunner = {
+      runMap: async () => {
+        mapCalls += 1
+        await new Promise((resolve) => setImmediate(resolve))
+        throw new Error('Expected OutputFormatJsonSchema at info.format')
+      },
+      runReduceBatch: async () => { throw new Error('熔断后不应 Reduce') },
+      runReduce: async () => { throw new Error('熔断后不应 Reduce') },
+      interrupt: async () => { interrupts += 1 },
+    }
+
+    try {
+      await expect(runLiveSessionEvidence({
+        question: '总结全部 Session',
+        currentChat: { chatId: 'chat-circuit' },
+      }, {
+        runId: 'run-circuit',
+        mode: 'complete',
+        selected: fixture.selected,
+        reason: '熔断回归',
+        batchByteBudget: 64 * 1024,
+        maxConcurrency: 3,
+      }, runner, {
+        homeDir: fixture.home,
+        tempParentDir: fixture.tempParent,
+      })).rejects.toMatchObject({
+        code: 'EVIDENCE_PROCESSING_CIRCUIT_OPEN',
+        failures: 3,
+        signature: expect.stringContaining('OutputFormatJsonSchema'),
+      })
+      expect(mapCalls).toBeLessThanOrEqual(5)
+      expect(interrupts).toBe(1)
+      expect(fs.readdirSync(fixture.tempParent)).toEqual([])
+    } finally {
+      fs.rmSync(fixture.home, { recursive: true, force: true })
+      fs.rmSync(fixture.tempParent, { recursive: true, force: true })
+    }
+  })
+
+  it('交替出现的不同 Map 错误不触发同签名熔断，仍按 partial Coverage 收口', async () => {
+    const fixture = createSessionFixture(6, 1)
+    let mapCalls = 0
+    let reduceCalls = 0
+    const runner: EvidenceModelRunner = {
+      runMap: async () => {
+        mapCalls += 1
+        throw new Error(mapCalls % 2 === 0 ? 'provider error B' : 'provider error A')
+      },
+      runReduceBatch: async () => { throw new Error('不应触发中间 Reduce') },
+      runReduce: async () => {
+        reduceCalls += 1
+        return { answerMarkdown: '没有可用 Capsule。', claims: [], limitations: ['Map 全部失败'] }
+      },
+    }
+
+    try {
+      const result = await runLiveSessionEvidence({
+        question: '总结全部 Session', currentChat: { chatId: 'chat-no-circuit' },
+      }, {
+        runId: 'run-no-circuit', mode: 'complete', selected: fixture.selected,
+        reason: '不同错误回归', batchByteBudget: 64 * 1024, maxConcurrency: 1,
+      }, runner, { homeDir: fixture.home, tempParentDir: fixture.tempParent })
+
+      expect(mapCalls).toBe(6)
+      expect(reduceCalls).toBe(1)
+      expect(result.coverage).toMatchObject({ status: 'partial', processFailed: 6 })
     } finally {
       fs.rmSync(fixture.home, { recursive: true, force: true })
       fs.rmSync(fixture.tempParent, { recursive: true, force: true })

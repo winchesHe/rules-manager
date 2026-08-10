@@ -18,6 +18,7 @@ const COMPLETE_INTENT = /(?:全部|所有|完整|总结(?:这些|所有)?\s*(?:s
 const TARGETED_INTENT = /(?:找(?:一下|出)?|查(?:一下|找)?|哪(?:个|条)|某个|具体|例子|曾经|之前.{0,12}(?:什么|哪个|如何)|find|look up|which|specific|example|where did|what did)/i
 const DEFAULT_BATCH_BYTE_BUDGET = 512 * 1024
 const DEFAULT_MAX_CONCURRENCY = 4
+const DEFAULT_TARGETED_SESSION_LIMIT = 24
 
 export function planSessionEvidence(
   input: SessionEvidencePlanningInput,
@@ -35,6 +36,7 @@ export function planSessionEvidence(
     reason: planningReason(requestedMode, mode),
     batchByteBudget: input.batchByteBudget ?? DEFAULT_BATCH_BYTE_BUDGET,
     maxConcurrency: input.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
+    targetedSessionLimit: DEFAULT_TARGETED_SESSION_LIMIT,
   }
 }
 

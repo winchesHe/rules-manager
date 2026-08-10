@@ -28,9 +28,11 @@ interface ActiveTurn {
   toolPolicy: NonNullable<NativeTurnRequest['toolPolicy']>
   structuredOutput?: unknown
   contextUsage?: { usedTokens: number; maxTokens: number }
+  responseDriven?: boolean
+  failure?: Error
   onEvent?: NativeTurnRequest['onEvent']
-  resolve: (result: NativeTurnResult) => void
-  reject: (error: Error) => void
+  resolve?: (result: NativeTurnResult) => void
+  reject?: (error: Error) => void
 }
 
 export class OpenCodeChatAdapter implements ChatProviderAdapter {
@@ -135,6 +137,9 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
       ? request.nativeSessionId
       : await this.createSession(client, request.workingDirectory, request.toolPolicy ?? 'full')
     if (!sessionId) throw new Error('OpenCode session id 不可用')
+    if (request.outputSchema) {
+      return this.runStructuredPrompt(client, sessionId, request, resuming)
+    }
     await this.ensureEventStream(client)
 
     const completion = new Promise<NativeTurnResult>((resolve, reject) => {
@@ -156,14 +161,46 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
       system: resuming ? undefined : HOST_SESSION_POLICY,
       ...(model ? { model } : {}),
       ...(request.config.thinkingOptionId ? { variant: request.config.thinkingOptionId } : {}),
-      ...(request.outputSchema
-        ? { format: { type: 'json_schema' as const, schema: request.outputSchema } }
-        : {}),
     })
     if (response.error) {
       this.failActive(new Error(`OpenCode prompt 失败：${JSON.stringify(response.error)}`))
     }
     return completion
+  }
+
+  private async runStructuredPrompt(
+    client: OpenCodeClient,
+    sessionId: string,
+    request: NativeTurnRequest,
+    resuming: boolean,
+  ): Promise<NativeTurnResult> {
+    const active: ActiveTurn = {
+      sessionId,
+      directory: request.workingDirectory,
+      content: '',
+      toolPolicy: request.toolPolicy ?? 'full',
+      responseDriven: true,
+      ...(request.onEvent ? { onEvent: request.onEvent } : {}),
+    }
+    this.active = active
+    try {
+      const model = parseModel(request.config.model)
+      const response = await client.session.prompt({
+        sessionID: sessionId,
+        directory: request.workingDirectory,
+        parts: [{ type: 'text', text: openCodeJsonPrompt(request.message, request.outputSchema!) }],
+        system: resuming ? undefined : HOST_SESSION_POLICY,
+        ...(model ? { model } : {}),
+        ...(request.config.thinkingOptionId ? { variant: request.config.thinkingOptionId } : {}),
+      })
+      if (response.error) {
+        throw new Error(`OpenCode prompt 失败：${JSON.stringify(response.error)}`)
+      }
+      if (active.failure) throw active.failure
+      return structuredPromptResult(sessionId, response.data, active)
+    } finally {
+      if (this.active === active) this.active = null
+    }
   }
 
   private async createSession(
@@ -299,8 +336,9 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
       return
     }
     if (event.type === 'session.idle') {
+      if (active.responseDriven) return
       this.active = null
-      active.resolve({
+      active.resolve?.({
         nativeSessionId: active.sessionId,
         nativeSessionHandle: { sessionId: active.sessionId, nativeHandle: active.sessionId },
         content: active.content,
@@ -315,8 +353,45 @@ export class OpenCodeChatAdapter implements ChatProviderAdapter {
   private failActive(error: Error): void {
     const active = this.active
     if (!active) return
+    if (active.responseDriven) {
+      active.failure = error
+      return
+    }
     this.active = null
-    active.reject(error)
+    active.reject?.(error)
+  }
+}
+
+function openCodeJsonPrompt(message: string, schema: Record<string, unknown>): string {
+  return [
+    message,
+    '',
+    '结构化输出要求：只返回一个严格 JSON 值，不要 Markdown 代码块，不要解释文字。',
+    `JSON Schema：${JSON.stringify(schema)}`,
+  ].join('\n')
+}
+
+function structuredPromptResult(
+  sessionId: string,
+  value: unknown,
+  active: ActiveTurn,
+): NativeTurnResult {
+  const data = asRecord(value)
+  const info = asRecord(data.info)
+  if (info.error !== undefined) {
+    throw new Error(`OpenCode turn 失败：${JSON.stringify(info.error)}`)
+  }
+  const parts = Array.isArray(data.parts) ? data.parts.map(asRecord) : []
+  const content = parts
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text as string)
+    .join('') || active.content
+  const structuredOutput = info.structured ?? active.structuredOutput
+  return {
+    nativeSessionId: sessionId,
+    nativeSessionHandle: { sessionId, nativeHandle: sessionId },
+    content,
+    ...(structuredOutput !== undefined ? { structuredOutput } : {}),
   }
 }
 

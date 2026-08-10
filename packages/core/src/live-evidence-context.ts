@@ -15,7 +15,8 @@ import type {
 import type { AgentName } from './types.js'
 
 const CONTEXT_PREFIX = 'memory-manager-live-evidence-'
-const DEFAULT_MAX_CHUNK_BYTES = 512 * 1024
+const CHUNK_HEADER = '# Session Evidence\n\n'
+const DEFAULT_MAX_CHUNK_BYTES = 64 * 1024
 const DEFAULT_STALE_AGE_MS = 24 * 60 * 60 * 1_000
 
 export interface LiveEvidenceLocator {
@@ -167,6 +168,8 @@ function renderMessage(
   result: SessionSourceReadResult,
   message: SessionSourceMessage,
   messageIndex: number,
+  serializedContent = JSON.stringify(message.content) ?? 'null',
+  segment?: { index: number; count: number },
 ): RenderedMessage {
   const locator: LiveEvidenceLocator = {
     sessionId: result.sessionId,
@@ -181,19 +184,67 @@ function renderMessage(
       '<session_message>',
       `locator: ${JSON.stringify(locator)}`,
       `role: ${message.role}`,
-      `content: ${JSON.stringify(message.content) ?? 'null'}`,
+      ...(segment ? [`segment: ${segment.index + 1}/${segment.count}`] : []),
+      `content: ${serializedContent}`,
       '</session_message>',
       '',
     ].join('\n'),
   }
 }
 
+function splitUtf8(text: string, maxBytes: number): string[] {
+  const parts: string[] = []
+  let current = ''
+  let currentBytes = 0
+  for (const character of text) {
+    const characterBytes = Buffer.byteLength(character, 'utf8')
+    if (current && currentBytes + characterBytes > maxBytes) {
+      parts.push(current)
+      current = ''
+      currentBytes = 0
+    }
+    current += character
+    currentBytes += characterBytes
+  }
+  if (current) parts.push(current)
+  return parts
+}
+
+function renderMessageParts(
+  result: SessionSourceReadResult,
+  message: SessionSourceMessage,
+  messageIndex: number,
+  maxMessageBytes: number,
+): RenderedMessage[] {
+  const serializedContent = JSON.stringify(message.content) ?? 'null'
+  const rendered = renderMessage(result, message, messageIndex, serializedContent)
+  if (Buffer.byteLength(rendered.content, 'utf8') <= maxMessageBytes) return [rendered]
+
+  const envelopeBytes = Buffer.byteLength(renderMessage(
+    result,
+    message,
+    messageIndex,
+    '',
+    { index: 999_998, count: 999_999 },
+  ).content, 'utf8')
+  const contentBudget = maxMessageBytes - envelopeBytes
+  if (contentBudget <= 0) return [rendered]
+  const fragments = splitUtf8(serializedContent, contentBudget)
+  return fragments.map((fragment, index) => renderMessage(
+    result,
+    message,
+    messageIndex,
+    fragment,
+    { index, count: fragments.length },
+  ))
+}
+
 function partitionMessages(
   result: SessionSourceReadResult,
   maxChunkBytes: number,
 ): RenderedMessage[][] {
-  const rendered = result.messages.map((message, index) =>
-    renderMessage(result, message, index))
+  const rendered = result.messages.flatMap((message, index) =>
+    renderMessageParts(result, message, index, maxChunkBytes))
   const chunks: RenderedMessage[][] = []
   let current: RenderedMessage[] = []
   let currentBytes = 0
@@ -279,13 +330,16 @@ export function createLiveEvidenceContext(
     }
     const directory = path.join(rootDir, sessionManifest.directory)
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
-    const chunks = partitionMessages(result, maxChunkBytes)
+    const chunks = partitionMessages(
+      result,
+      Math.max(1, maxChunkBytes - Buffer.byteLength(CHUNK_HEADER, 'utf8')),
+    )
     const chunkPaths = chunks.map((messages, chunkIndex) => {
       const filePath = path.join(
         directory,
         `chunk-${String(chunkIndex + 1).padStart(4, '0')}.md`,
       )
-      const content = `# Session Evidence\n\n${messages.map((message) => message.content).join('')}`
+      const content = `${CHUNK_HEADER}${messages.map((message) => message.content).join('')}`
       fs.writeFileSync(filePath, content, { encoding: 'utf8', mode: 0o600 })
       sessionManifest.chunks.push({
         path: path.relative(rootDir, filePath),

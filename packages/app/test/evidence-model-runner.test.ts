@@ -6,6 +6,7 @@ import type { CoverageLedger } from '../../core/src/evidence-coverage.js'
 import type { SessionCapsule } from '../../core/src/live-evidence-context.js'
 import {
   EvidenceStructuredOutputError,
+  EvidenceStructuredTimeoutError,
   NativeEvidenceModelRunner,
 } from '../main/evidence-model-runner.js'
 import {
@@ -27,15 +28,16 @@ describe('NativeEvidenceModelRunner', () => {
     const requests: NativeTurnRequest[] = []
     const closed: string[] = []
     const capsule: SessionCapsule = {
-      sessionId: 'session-1',
-      agent: 'codex',
-      chunkIndex: 0,
-      chunkCount: 1,
+      sessionId: 'model-invented-session',
+      agent: 'claude',
+      chunkIndex: 7,
+      chunkCount: 9,
       summary: 'summary',
       facts: [{
         id: 'fact-1', text: 'fact', kind: 'explicit',
         locators: [{
-          sessionId: 'session-1', agent: 'codex', messageIndex: 0, sourceRevision: 'revision-1',
+          sessionId: 'model-invented-session', agent: 'claude', messageIndex: 0,
+          sourceRevision: 'model-invented-revision',
         }],
       }],
       relevant: true,
@@ -90,6 +92,20 @@ describe('NativeEvidenceModelRunner', () => {
     const mapped = await runner.runMap({
       runId: 'run-1', question: 'question', sessionId: 'session-1', agent: 'codex',
       chunkIndex: 0, chunkCount: 1, chunkPath, sourceRevision: 'revision-1',
+    })
+    expect(mapped).toMatchObject({
+      sessionId: 'session-1',
+      agent: 'codex',
+      chunkIndex: 0,
+      chunkCount: 1,
+      facts: [{
+        locators: [{
+          sessionId: 'session-1',
+          agent: 'codex',
+          messageIndex: 0,
+          sourceRevision: 'revision-1',
+        }],
+      }],
     })
     const reduced = await runner.runReduceBatch({
       runId: 'run-1', question: 'question', level: 0, batchIndex: 0, batchCount: 1,
@@ -279,5 +295,42 @@ describe('NativeEvidenceModelRunner', () => {
       attempts,
     })
     expect(calls).toBe(attempts)
+  })
+
+  it('结构化调用悬挂时主动 interrupt，并以稳定超时错误结束且关闭内部 Chat', async () => {
+    const interrupted: string[] = []
+    const closed: string[] = []
+    const runtime = new ChatRuntimeManager((_provider, chatId): ChatProviderAdapter => ({
+      start: async () => new Promise(() => undefined),
+      resume: async () => new Promise(() => undefined),
+      interrupt: async () => { interrupted.push(chatId) },
+      readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+      archive: async () => undefined,
+      unarchive: async () => undefined,
+      delete: async () => undefined,
+      close: async () => { closed.push(chatId) },
+    }))
+    const runner = new NativeEvidenceModelRunner({
+      runtime,
+      provider: 'opencode',
+      workingDirectory: '/workspace',
+      config: { effort: 'medium', fastMode: false },
+      structuredTurnTimeoutMs: 5,
+    })
+
+    await expect(runner.runMap({
+      runId: 'run-timeout', question: 'question', sessionId: 'session-timeout',
+      agent: 'codex', chunkIndex: 0, chunkCount: 1, chunkPath: sharedChunkPath,
+      sourceRevision: 'revision-1',
+    })).rejects.toMatchObject({
+      name: EvidenceStructuredTimeoutError.name,
+      code: 'EVIDENCE_STRUCTURED_TURN_TIMEOUT',
+      provider: 'opencode',
+      stage: 'map',
+      timeoutMs: 5,
+    })
+    expect(interrupted).toEqual([expect.stringMatching(/^run-timeout:map:/)])
+    expect(closed).toEqual([expect.stringMatching(/^run-timeout:map:/)])
+    expect(runner.activeChatIds()).toEqual([])
   })
 })
