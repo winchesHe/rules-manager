@@ -25,7 +25,7 @@ describe('Live Evidence Query Planner', () => {
     'Find the specific command from history',
   ])('单点历史查询使用 targeted：%s', (question) => {
     expect(planSessionEvidence({ runId: 'run-2', question, selected })).toMatchObject({
-      mode: 'targeted', selected,
+      mode: 'targeted', selected, targetedSessionLimit: 24,
     })
   })
 

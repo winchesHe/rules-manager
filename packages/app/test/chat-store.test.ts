@@ -177,6 +177,39 @@ describe('ChatStore', () => {
     })
   })
 
+  it('持久化 Evidence 进度，并让无原生 Session 的中断、重试和失败进入稳定 nativeState', () => {
+    const { store } = createStore()
+    store.createNativeThread({
+      id: 'chat-evidence-state', provider: 'opencode', origin: 'chat', title: 'Evidence',
+      createdAt: '2026-08-10T00:00:00.000Z',
+      defaultTurnConfig: { effort: 'medium', fastMode: false },
+    })
+    store.updateNativeEvidenceProgress('chat-evidence-state', {
+      stage: 'processing', completed: 10, total: 30, mode: 'targeted',
+    }, '2026-08-10T00:00:01.000Z')
+    expect(store.readThread('chat-evidence-state')).toMatchObject({
+      nativeState: 'starting', status: 'running',
+      activeEvidenceProgress: { stage: 'processing', completed: 10, total: 30 },
+    })
+
+    store.markNativeTurnInterrupted('chat-evidence-state', '2026-08-10T00:00:02.000Z')
+    expect(store.readThread('chat-evidence-state')).toMatchObject({
+      nativeState: 'interrupted', status: 'interrupted', activeEvidenceProgress: null,
+    })
+
+    store.markNativeTurnRunning('chat-evidence-state', {
+      effort: 'medium', fastMode: false,
+    }, '2026-08-10T00:00:03.000Z')
+    expect(store.readThread('chat-evidence-state')).toMatchObject({
+      nativeState: 'starting', status: 'running', activeEvidenceProgress: null,
+    })
+
+    store.markNativeTurnFailed('chat-evidence-state', 'provider failed', '2026-08-10T00:00:04.000Z')
+    expect(store.readThread('chat-evidence-state')).toMatchObject({
+      nativeState: 'start-failed', status: 'failed', lastError: 'provider failed',
+    })
+  })
+
   it('Session Context 只在集合变化时递增 revision，并独立记录最后成功注入集合', () => {
     const { store } = createStore()
     store.createNativeThread({

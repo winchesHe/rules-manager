@@ -1613,7 +1613,7 @@ function NativeConversation({
       {thread.status === 'running' && (
         <LiveTurn
           chatId={thread.id}
-          evidenceProgress={liveEvidenceProgress}
+          evidenceProgress={liveEvidenceProgress ?? thread.activeEvidenceProgress}
           startedAt={assistantTurnStartedAt(thread.messages, thread.messages.length) ?? liveStartedAt ?? undefined}
           timeline={liveTimeline}
         />

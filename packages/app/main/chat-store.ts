@@ -9,7 +9,10 @@ import type { ProjectGenerationResponse } from '../../core/src/commands/rules-ge
 import type { RunState } from './background-run.js'
 import type { NativeToolActivity, NativeTurnTimelineItem } from './chat-runtime.js'
 import { canonicalReferences } from './session-context-prompt.js'
-import type { SessionEvidenceCoverageSummary } from '../../core/src/live-evidence-engine.js'
+import type {
+  SessionEvidenceCoverageSummary,
+  SessionEvidenceProgress,
+} from '../../core/src/live-evidence-engine.js'
 import {
   collectSessionExclusions,
   recordInternalSessionExclusion,
@@ -102,7 +105,7 @@ export interface NativeChatThreadSummary {
   provider: NativeChatProvider
   nativeSessionId: string | null
   nativeSessionHandle: NativeSessionHandle | null
-  nativeState: 'starting' | 'ready' | 'resume-failed' | 'deleted'
+  nativeState: 'starting' | 'ready' | 'start-failed' | 'resume-failed' | 'interrupted' | 'deleted'
   status: 'running' | 'ready' | 'failed' | 'interrupted'
   createdAt: string
   updatedAt: string
@@ -121,6 +124,7 @@ export interface NativeChatThreadSummary {
     updatedAt: string
   } | null
   lastError: string | null
+  activeEvidenceProgress?: SessionEvidenceProgress | null
   runId?: string
   intent?: 'chat' | 'rules-generation'
   rulesArtifact?: {
@@ -245,6 +249,7 @@ export class ChatStore {
       },
       contextUsage: null,
       lastError: null,
+      activeEvidenceProgress: null,
       ...(input.runId ? { runId: input.runId } : {}),
       ...(input.intent ? { intent: input.intent } : {}),
     }
@@ -275,6 +280,7 @@ export class ChatStore {
       status: 'ready',
       updatedAt: at,
       lastError: null,
+      activeEvidenceProgress: null,
     } satisfies NativeChatThreadFile)
   }
 
@@ -283,9 +289,27 @@ export class ChatStore {
     atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
       ...thread,
       status: 'running',
+      nativeState: thread.nativeSessionId ? thread.nativeState : 'starting',
       updatedAt: at,
       defaultTurnConfig: { ...config },
       lastError: null,
+      activeEvidenceProgress: null,
+    } satisfies NativeChatThreadFile)
+  }
+
+  updateNativeEvidenceProgress(
+    threadId: string,
+    progress: SessionEvidenceProgress,
+    at: string,
+  ): void {
+    const thread = this.requireNativeThread(threadId)
+    atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
+      ...thread,
+      updatedAt: at,
+      activeEvidenceProgress: {
+        ...progress,
+        ...(progress.coverage ? { coverage: { ...progress.coverage } } : {}),
+      },
     } satisfies NativeChatThreadFile)
   }
 
@@ -294,9 +318,10 @@ export class ChatStore {
     atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
       ...thread,
       status: 'failed',
-      nativeState: thread.nativeSessionId ? 'resume-failed' : thread.nativeState,
+      nativeState: thread.nativeSessionId ? 'resume-failed' : 'start-failed',
       updatedAt: at,
       lastError: error,
+      activeEvidenceProgress: null,
     } satisfies NativeChatThreadFile)
   }
 
@@ -305,8 +330,10 @@ export class ChatStore {
     atomicWriteJson(path.join(this.threadDirectory(threadId), THREAD_FILE), {
       ...thread,
       status: 'interrupted',
+      nativeState: thread.nativeSessionId ? thread.nativeState : 'interrupted',
       updatedAt: at,
       lastError: null,
+      activeEvidenceProgress: null,
     } satisfies NativeChatThreadFile)
   }
 

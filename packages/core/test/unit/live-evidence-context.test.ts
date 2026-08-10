@@ -103,6 +103,43 @@ describe('LiveEvidenceContext', () => {
     }
   })
 
+  it('超大单条消息按 UTF-8 字节安全切分，所有默认模型分片都不超过预算', () => {
+    const parentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-live-context-large-'))
+    const maxChunkBytes = 1_024
+    try {
+      const context = createLiveEvidenceContext({
+        runId: 'large-message',
+        mode: 'targeted',
+        selected: [{ agent: 'opencode', id: 'session-large' }],
+      }, { parentDir, maxChunkBytes })
+      const source = context.writeSessionChunks({
+        sessionId: 'session-large',
+        agent: 'opencode',
+        projectSlug: 'demo',
+        status: 'readable',
+        messageCount: 1,
+        messages: [{ role: 'user', content: '加载🙂'.repeat(2_000) }],
+        sourceRevision: {
+          kind: 'sqlite-transaction',
+          fingerprint: 'b'.repeat(64),
+          changedDuringRun: false,
+        },
+      })
+
+      expect(source.chunkCount).toBeGreaterThan(1)
+      for (const chunkPath of source.chunkPaths) {
+        const content = fs.readFileSync(chunkPath, 'utf8')
+        expect(Buffer.byteLength(content, 'utf8')).toBeLessThanOrEqual(maxChunkBytes)
+        expect(content).toContain('"messageIndex":0')
+        expect(content).toMatch(/segment: \d+\/\d+/)
+        expect(content).not.toContain('\uFFFD')
+      }
+      context.cleanup()
+    } finally {
+      fs.rmSync(parentDir, { recursive: true, force: true })
+    }
+  })
+
   it.each([
     ['success', false, false],
     ['failure', true, false],

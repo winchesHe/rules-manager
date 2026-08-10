@@ -31,6 +31,7 @@ import type {
 const HOST_MAP_MARKER = '[memory-manager:live-evidence-map]'
 const HOST_REDUCE_MARKER = '[memory-manager:live-evidence-reduce]'
 const PI_MAX_STRUCTURED_ATTEMPTS = 2
+const DEFAULT_STRUCTURED_TURN_TIMEOUT_MS = 120_000
 
 export class EvidenceStructuredOutputError extends Error {
   readonly code = 'EVIDENCE_STRUCTURED_OUTPUT_INVALID'
@@ -46,6 +47,19 @@ export class EvidenceStructuredOutputError extends Error {
   }
 }
 
+export class EvidenceStructuredTimeoutError extends Error {
+  readonly code = 'EVIDENCE_STRUCTURED_TURN_TIMEOUT'
+
+  constructor(
+    readonly provider: NativeChatProvider,
+    readonly stage: 'map' | 'reduce-batch' | 'reduce',
+    readonly timeoutMs: number,
+  ) {
+    super(`${provider} ${stage} 超过 ${Math.ceil(timeoutMs / 1_000)} 秒未返回，已主动中断`)
+    this.name = 'EvidenceStructuredTimeoutError'
+  }
+}
+
 export interface NativeEvidenceModelRunnerOptions {
   runtime: ChatRuntimeManager
   provider: NativeChatProvider
@@ -54,6 +68,7 @@ export interface NativeEvidenceModelRunnerOptions {
   onReduceEvent?: (event: NativeChatEvent) => void
   onReduceResult?: (result: NativeTurnResult) => void
   onInternalSession?: (result: NativeTurnResult) => void
+  structuredTurnTimeoutMs?: number
   signal?: AbortSignal
 }
 
@@ -141,6 +156,28 @@ function internalChatId(runId: string, kind: string, identity: string): string {
   return `${runId}:${kind}:${jobHash}`
 }
 
+function stampCapsuleIdentity(
+  capsule: SessionCapsule,
+  input: EvidenceMapInput,
+): SessionCapsule {
+  return {
+    ...capsule,
+    sessionId: input.sessionId,
+    agent: input.agent,
+    chunkIndex: input.chunkIndex,
+    chunkCount: input.chunkCount,
+    facts: capsule.facts.map((fact) => ({
+      ...fact,
+      locators: fact.locators.map((locator) => ({
+        ...locator,
+        sessionId: input.sessionId,
+        agent: input.agent,
+        sourceRevision: input.sourceRevision,
+      })),
+    })),
+  }
+}
+
 export class NativeEvidenceModelRunner implements EvidenceModelRunner {
   private readonly active = new Set<string>()
 
@@ -175,7 +212,7 @@ export class NativeEvidenceModelRunner implements EvidenceModelRunner {
       this.active.add(input.chatId)
       let result: NativeTurnResult
       try {
-        result = await this.options.runtime.sendTurn({
+        const request: NativeTurnRequest = {
           chatId: input.chatId,
           provider: this.options.provider,
           ...(nativeSessionId ? { nativeSessionId } : {}),
@@ -189,7 +226,8 @@ export class NativeEvidenceModelRunner implements EvidenceModelRunner {
           ...(input.toolPolicy ? { toolPolicy: input.toolPolicy } : {}),
           ...(input.mentions ? { mentions: input.mentions } : {}),
           ...(input.onEvent ? { onEvent: input.onEvent } : {}),
-        })
+        }
+        result = await this.sendTurnWithTimeout(request, input.stage)
       } finally {
         this.active.delete(input.chatId)
       }
@@ -211,6 +249,27 @@ export class NativeEvidenceModelRunner implements EvidenceModelRunner {
     )
   }
 
+  private async sendTurnWithTimeout(
+    request: NativeTurnRequest,
+    stage: 'map' | 'reduce-batch' | 'reduce',
+  ): Promise<NativeTurnResult> {
+    const timeoutMs = this.options.structuredTurnTimeoutMs ?? DEFAULT_STRUCTURED_TURN_TIMEOUT_MS
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        this.options.runtime.sendTurn(request),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            void this.options.runtime.interrupt(request.chatId).catch(() => undefined)
+            reject(new EvidenceStructuredTimeoutError(this.options.provider, stage, timeoutMs))
+          }, timeoutMs)
+        }),
+      ])
+    } finally {
+      if (timeout) clearTimeout(timeout)
+    }
+  }
+
   async runMap(input: EvidenceMapInput): Promise<SessionCapsule> {
     const chatId = internalChatId(
       input.runId,
@@ -226,7 +285,7 @@ export class NativeEvidenceModelRunner implements EvidenceModelRunner {
         toolPolicy: 'none',
         parse: parseSessionCapsule,
       })
-      return value
+      return stampCapsuleIdentity(value, input)
     } finally {
       await this.options.runtime.close(chatId)
     }

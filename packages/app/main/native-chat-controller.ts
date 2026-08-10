@@ -4,6 +4,7 @@ import { isRunCancelledError, throwIfAborted } from '../../core/src/abort.js'
 import {
   runLiveSessionEvidence,
   type SessionEvidenceCoverageSummary,
+  type SessionEvidenceProgress,
 } from '../../core/src/live-evidence-engine.js'
 import {
   planSessionEvidence,
@@ -183,6 +184,7 @@ export class NativeChatController {
     let evidenceSummary: SessionEvidenceCoverageSummary | undefined
     let evidenceMode: 'complete' | 'targeted' | undefined
     let evidenceAbortController: AbortController | undefined
+    let persistedEvidenceProgress: SessionEvidenceProgress | undefined
     try {
       const evidencePlan = this.options.enableSessionEvidence && pastedTextAttachments.length === 0
         ? planSessionEvidence({
@@ -233,6 +235,11 @@ export class NativeChatController {
           signal: evidenceAbortController.signal,
           onProgress: (progress) => {
             if (progress.coverage) evidenceSummary = progress.coverage
+            if (shouldPersistEvidenceProgress(persistedEvidenceProgress, progress)) {
+              this.options.store.updateNativeEvidenceProgress(chatId, progress, this.now())
+              persistedEvidenceProgress = progress
+              this.options.onThreadChanged?.(chatId)
+            }
             this.options.onEvent?.({
               chatId,
               event: { type: 'evidence_progress', progress },
@@ -852,6 +859,16 @@ function evidenceSnapshot(
     totalSessions: new Set(bundles.flatMap((bundle) => bundle.sourceSessions)).size,
     createdAt,
   }
+}
+
+function shouldPersistEvidenceProgress(
+  previous: SessionEvidenceProgress | undefined,
+  next: SessionEvidenceProgress,
+): boolean {
+  return !previous
+    || previous.stage !== next.stage
+    || next.completed >= next.total
+    || next.completed - previous.completed >= 10
 }
 
 export function evidenceReferences(bundles: EvidenceBundle[]): NativeSessionReference[] {

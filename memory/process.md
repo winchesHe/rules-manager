@@ -3857,3 +3857,24 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 41 suites / 387 tests、production build、TypeScript noEmit、Skill validator 与 `git diff --check`
   通过；build 仅有既有 tsdown `define` warning。
 - 提交信息：`feat: 支持查询并完整读取本地 Session 上下文`
+
+## Chat Live Evidence · OpenCode 无限 Loading 修复（2026-08-10）
+
+- 真实故障链路确认包含四层问题：OpenCode `promptAsync + json_schema` 触发上游结构化输出编码缺陷；模型会
+  改写 Host 已知的 capsule 身份；512 KiB chunk 与超大单消息可触发上下文溢出；Provider 调用悬挂时既有
+  熔断器无法收到失败并结束任务。
+- OpenCode Evidence 结构化调用改走同步 `session.prompt`，Schema 作为严格 JSON 指令注入且由本地 Zod 校验，
+  不再向上游发送 `format`；普通 Chat 仍保留 `promptAsync + SSE`。Session / Agent / Chunk / source revision
+  由 Host 在校验后覆盖模型输出，避免非确定性身份破坏 Claim Gate。
+- Map 增加三次连续同签名失败熔断并 interrupt 活跃 Provider job；单次 Map / Reduce 超过 120 秒也主动
+  interrupt 并返回稳定超时错误。任务因此只会完成或明确失败 / 中断，不再无限 Loading。
+- Map chunk 独立限制为 64 KiB，超大单消息按 UTF-8 边界切分；targeted 模式仍权威读取全部选择并保留
+  Coverage，但最多选择 24 个命中 Session、每个 Session 最多 4 个本地命中 chunk，complete 模式不裁剪。
+- Thread 持久化 Evidence 阶段与计数，阶段变化、每 10 条和完成时落盘；Renderer 在实时事件缺失或重载后
+  回退到持久化进度。无原生 Session 的失败 / 中断分别落为 `start-failed` / `interrupted`，重试恢复 starting。
+- 真实 Electron + OpenCode 用同一 2.3 MiB Session 验证：39 个 Host 分片最大 65,528 bytes，targeted 只调度
+  4 个相关 Map；被污染的旧验证对话在 Reduce 120 秒后明确失败，干净新对话在 40 秒内进入就绪，Coverage
+  显示已访问 1/1、已处理 1/1。该轮模型引用了未知 fact id，Claim Gate 按既有安全合同隐藏回答。
+- Core 全量 36 suites / 365 tests、App 全量 45 suites / 289 tests、Core/App production build 与
+  `git diff --check` 通过；build 仅保留既有 tsdown `define` 和 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 修复 OpenCode Evidence 无限加载`

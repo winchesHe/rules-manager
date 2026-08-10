@@ -3,34 +3,35 @@ import { OpenCodeChatAdapter } from '../main/opencode-chat-adapter.js'
 import type { NativeChatEvent } from '../main/chat-runtime.js'
 
 describe('OpenCodeChatAdapter', () => {
-  it('创建持久 Session，自动批准权限并转译流式/工具/结构化输出', async () => {
-    const permissionReply = jest.fn(async () => ({ data: true }))
-    const events = [
-      { type: 'permission.asked', data: { id: 'permission-1', sessionID: 'oc-1' } },
-      { type: 'message.part.delta', data: { sessionID: 'oc-1', partID: 'text-1', field: 'text', delta: 'hello' } },
-      { type: 'message.part.updated', data: { sessionID: 'oc-1', part: { id: 'tool-1', type: 'tool', tool: 'bash', state: { status: 'completed', input: { command: 'pwd' } } } } },
-      { type: 'message.updated', data: { sessionID: 'oc-1', info: { role: 'assistant', structured: { candidates: [] }, tokens: { total: 12 } } } },
-      { type: 'session.idle', data: { sessionID: 'oc-1' } },
-    ]
-    const client = fakeClient(events, { permissionReply })
+  it('结构化请求使用同步纯文本 JSON prompt，不发送上游 format', async () => {
+    const prompt = jest.fn(async (_value: unknown) => ({
+      data: {
+        info: { role: 'assistant', tokens: { total: 12 } },
+        parts: [{ type: 'text', text: '{"candidates":[]}' }],
+      },
+    }))
+    const promptAsync = jest.fn(async () => ({ data: true }))
+    const client = fakeClient([], { prompt, promptAsync })
     const adapter = new OpenCodeChatAdapter({
       acquireServer: async () => ({ url: 'http://fake', release: async () => undefined }),
       createClient: () => client as never,
     })
-    const emitted: NativeChatEvent[] = []
     const result = await adapter.start({
       chatId: 'chat-oc', provider: 'opencode', message: 'go', workingDirectory: '/tmp',
       config: { model: 'openai/gpt-test', effort: 'high', fastMode: false },
-      outputSchema: { type: 'object' }, onEvent: (event) => emitted.push(event),
+      outputSchema: { type: 'object' },
     })
 
     expect(result).toMatchObject({
       nativeSessionId: 'oc-1',
       nativeSessionHandle: { sessionId: 'oc-1', nativeHandle: 'oc-1' },
-      content: 'hello', structuredOutput: { candidates: [] },
+      content: '{"candidates":[]}',
     })
-    expect(permissionReply).toHaveBeenCalledWith(expect.objectContaining({ reply: 'always' }))
-    expect(emitted).toContainEqual(expect.objectContaining({ type: 'tool_activity' }))
+    const request = prompt.mock.calls[0][0] as { format?: unknown; parts: Array<{ text: string }> }
+    expect(request.format).toBeUndefined()
+    expect(request.parts[0].text).toContain('只返回一个严格 JSON 值')
+    expect(request.parts[0].text).toContain('JSON Schema：{"type":"object"}')
+    expect(promptAsync).not.toHaveBeenCalled()
   })
 
   it('none 工具策略创建全拒绝 Session，并拒绝兜底权限请求', async () => {
@@ -187,6 +188,7 @@ function fakeClient(
     permissionReply?: (value: unknown) => Promise<unknown>
     questionReply?: (value: unknown) => Promise<unknown>
     create?: (value: unknown) => Promise<unknown>
+    prompt?: (value: unknown) => Promise<unknown>
     promptAsync?: (value: unknown) => Promise<unknown>
     abort?: (value: unknown) => Promise<unknown>
     update?: (value: unknown) => Promise<unknown>
@@ -196,6 +198,9 @@ function fakeClient(
   return {
     session: {
       create: callbacks.create ?? (async () => ({ data: { id: 'oc-1' } })),
+      prompt: callbacks.prompt ?? (async () => ({
+        data: { info: { role: 'assistant' }, parts: [] },
+      })),
       promptAsync: callbacks.promptAsync ?? (async () => ({ data: true })),
       abort: callbacks.abort ?? (async () => ({ data: true })),
       messages: async () => ({ data: [] }),

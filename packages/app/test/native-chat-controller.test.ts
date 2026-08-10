@@ -319,6 +319,10 @@ describe('NativeChatController', () => {
     while (runtime.activeChatIds().length === 0) {
       await new Promise((resolve) => setImmediate(resolve))
     }
+    expect(store.readThread('chat-evidence-cancel')).toMatchObject({
+      status: 'running',
+      activeEvidenceProgress: { stage: 'processing', completed: 0, total: 1 },
+    })
 
     await controller.interrupt('chat-evidence-cancel')
     await rejected
@@ -329,6 +333,8 @@ describe('NativeChatController', () => {
     expect(progressStages.at(-1)).toBe('cancelled')
     expect(store.readThread('chat-evidence-cancel')).toMatchObject({
       status: 'interrupted',
+      nativeState: 'interrupted',
+      activeEvidenceProgress: null,
       lastError: null,
       sessionContext: { revision: 1, lastInjectedRevision: 0 },
       messages: [{ role: 'user' }],

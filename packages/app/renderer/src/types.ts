@@ -470,7 +470,7 @@ export interface NativeChatThreadSummary {
   provider: ProviderId
   nativeSessionId: string | null
   nativeSessionHandle: NativeSessionHandle | null
-  nativeState: 'starting' | 'ready' | 'resume-failed' | 'deleted'
+  nativeState: 'starting' | 'ready' | 'start-failed' | 'resume-failed' | 'interrupted' | 'deleted'
   status: 'running' | 'ready' | 'failed' | 'interrupted'
   createdAt: string
   updatedAt: string
@@ -485,6 +485,7 @@ export interface NativeChatThreadSummary {
   }
   contextUsage: { usedTokens: number; maxTokens: number; updatedAt: string } | null
   lastError: string | null
+  activeEvidenceProgress?: SessionEvidenceProgress | null
   runId?: string
   intent?: 'chat' | 'rules-generation'
   rulesArtifact?: {

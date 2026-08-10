@@ -299,6 +299,9 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
   Renderer 或 Chat 文件。
 - 运行中显示 elapsed time；Conversation 仅在用户仍接近底部时自动跟随新事件，
   用户主动上滚后不得抢夺阅读位置。
+- Session Evidence 运行中必须展示当前阶段与 `completed / total`，不能只显示无上下文的 elapsed/loading。
+  实时事件用于逐条更新，Thread 在阶段变化、每 10 条及阶段完成时持久化一次进度，页面重载或事件缺失时回退
+  到持久化值；完成、失败和中断后清理活动进度。该进度只表达实际读取/处理状态，不得把 targeted 写成完整覆盖。
 - Project response 可以在 Main 中逐项目 checkpoint，但 Candidate Artifact 只有在
   Thread `completed` 后才一次性全部展示。取消、失败或中断不展示半成品 Rules。
 - Conversation 不显示 Assistant 头像、Assistant 标题或重复状态 Chip；Request 之后
