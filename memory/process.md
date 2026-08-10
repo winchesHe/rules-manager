@@ -3807,3 +3807,25 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 真实 Electron 验证顶部管理菜单和历史右键菜单均显示“复制 Session ID”；复制成功反馈为
   `ses_0164cc855ffeILjx33azZ8Gd1a`，与对应 Thread 文件中的 `nativeSessionId` 完全一致。
 - 提交信息：`feat: 支持复制会话 Session ID`
+
+## Rules 候选晋级硬门槛（2026-08-10）
+
+- 用户指出现有生成会把单次普通要求也提升为规则，例如只出现一次的“Composer 输入 `/` 唤起 Skills Picker”；
+  新语义要求候选至少满足跨 Session 重复、同一行为被明确纠正多次，或用户明确要求记住并持续遵循之一。
+- `generationPrompt` 同步收紧：单次普通要求、单次禁止和单次纠正即使被 Provider 判为 high 也不得输出；
+  `evidence_refs` 必须列出用于晋级的全部独立 locator，reasoning 必须说明命中的晋级类型。
+- Host 在既有 low / user_signal / Baseline / scope 校验之前增加确定性门禁：引用先按
+  `{sessionId,messageIndex}` 去重；至少两个 distinct Session 可通过，至少两个带明确中英文纠正表达的独立
+  locator 可通过，单条带“记住 / 记下来 / 写入规则或记忆 / 以后持续遵循 / from now on”等表达也可通过。
+- 任一无效或 Assistant locator 会拒绝整条候选；重复同一 ref 不增加证据数，通过后的 `evidence_refs` 只保留
+  首次出现的有效引用。Provider 继续负责判断多个引用是否在语义上共同支持同一规则，Host 不使用不透明的
+  本地语义相似度冒充该判断。
+- 该门槛只影响之后新生成的候选，不追溯改写已有 Draft / Accepted / Rejected；数据库 schema、Evidence
+  隐私、Scope 规范化、部分项目失败隔离和审核 UI 均未改变。
+- 新增 `docs/plans/rules-candidate-promotion-threshold.md`。定向测试用 8 个候选锁定只有三类合格项晋级，并把
+  截图中的 Skills Picker 单次要求作为拒绝回归；Core 全量 36 suites / 360 tests、App 全量 45 suites /
+  287 tests、Core/App production build 与 `git diff --check` 通过。build 仅保留既有 tsdown `define` 和
+  `markstream-react` PURE comment warning。
+- `simplify` 复核将 Evidence excerpt 类型收敛为具名类型，并保留显式的引用去重、无效引用和三类门槛分支，
+  没有为了缩短代码合并不同资格语义。
+- 提交信息：`fix: 收紧规则候选晋级门槛`

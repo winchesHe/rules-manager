@@ -6,7 +6,11 @@ import {
   type LlmProvider,
 } from '../config.js'
 import { initDatabase } from '../db.js'
-import { extractEvidence, type EvidenceBundle } from '../evidence.js'
+import {
+  extractEvidence,
+  type EvidenceBundle,
+  type EvidenceExcerpt,
+} from '../evidence.js'
 import {
   candidateRulesSchema,
   getStructuredResponse,
@@ -109,10 +113,13 @@ function generationPrompt(context: EvidenceProjectContext): string {
     'evidence_kind=assistant_context 仅帮助理解对话，不是用户偏好证据；Assistant 复述、总结或执行既有规则不能独立产出候选。',
     '用户消息中粘贴的文档、规范、日志或代码也不自动等于用户偏好；必须能定位到用户明确的要求、纠正或稳定选择。',
     '候选资格：必须是未来其他任务仍能指导 Agent 行为的持久 instruction。排除一次性任务、进度或状态描述、普通项目事实、示例内容、临时 workaround，以及仅由 Assistant 提出的做法。项目事实只有在用户明确要求 Agent 未来据此行动时才能成为规则。',
+    '候选晋级硬门槛：每条候选至少满足以下一项，否则不要生成：① 引用至少两个不同 Session 中共同支持该规则的 user_signal；② 引用至少两条独立的明确用户纠正，允许来自同一 Session，但 locator 必须不同；③ 引用至少一条明确要求“记住、写入规则或记忆、以后持续遵循”的 user_signal。',
+    '单次普通要求、单次禁止、单次纠正，即使措辞强烈或你认为 confidence=high，也不能成为候选；同一个 locator 重复写入 evidence_refs 不能算多次证据。',
+    'evidence_refs 必须包含用于通过晋级门槛的全部独立 locator；reasoning 必须说明命中“跨 Session 重复、重复纠正、明确记住”中的哪一类，并概述对应证据。',
     '每条候选只表达一个行为约束；把触发条件、动作和必要边界写在一起。不得把局部要求泛化为 Evidence 没有支持的绝对规则。',
     'scope 边界：当前是单项目 Evidence，默认只能产出 project rule，project_slug 必须等于当前项目。只有被引用的 user_signal 明确表达“所有项目/所有任务/跨项目/以后都”等全局意图或普遍交互偏好时，才允许产出 global rule；global 的 project_slug 必须为 null。',
     'frequency 是标准化后整条 user_signal 文本完全一致的跨 Session 次数，只是语义重复的保守下界。frequency=1 不代表没有同义改写；如主张语义重复，必须实际找到并引用各自 locator。',
-    '置信度判断：high=明确硬约束、纠正，或有多 Session 独立证据；medium=单次但明确、持久且没有歧义的用户要求。不要输出 low：单次推断、含义不清或仅有间接迹象时直接不生成。',
+    '置信度只描述已通过晋级门槛的证据强弱：high=明确记忆要求，或多次独立且一致的证据；medium=已通过门槛但仍有轻微语境依赖。不要输出 low：含义不清或仅有间接迹象时直接不生成。',
     'evidence_refs 必须引用 locator，不能编造 evidence。',
     '输出前逐条自检：是否持久、是否原子、是否由引用的 user_signal 直接支持、scope 是否没有越界、是否与 Baseline 重复。任一项不满足就删除该候选。',
     '完成 Evidence 分析后返回规则候选；最终响应必须符合 Provider 要求的结构化输出契约。',
@@ -191,6 +198,53 @@ function isExistingRuleDuplicate(ruleText: string, existingRules: string[]): boo
   })
 }
 
+function hasExplicitCorrection(text: string): boolean {
+  return [
+    /(?:^|[。！？!?\n])\s*(?:不对|错了|错误|有误|不是这样|你(?:理解错了|搞反了|弄错了))/u,
+    /不是.{0,80}(?:而是|应该是|要的是)/u,
+    /(?:我说的|我的意思|我指的|我要的)(?:是|不是)/u,
+    /(?:请)?(?:纠正|更正|改成|改为)(?:为|成)?/u,
+    /(?:^|[.!?\n])\s*no[,.:!]/i,
+    /\b(?:that(?:'s| is)|this is|you(?:'re| are)|you got it)\s+(?:wrong|incorrect)\b/i,
+    /\bi meant\b/i,
+    /\bnot\b.{0,80}\b(?:but|instead)\b/i,
+    /\b(?:correct|change)\s+(?:it|this)\s+(?:to|as)\b/i,
+    /\bshould be\b/i,
+  ].some((pattern) => pattern.test(text))
+}
+
+function hasExplicitMemoryIntent(text: string): boolean {
+  return [
+    /(?:请|帮我|务必|一定要|要)?记(?:住|得)(?:这(?:一点|条)?|以下|[：:,，\s]|$)/u,
+    /记下来/u,
+    /(?:把|将).{0,60}(?:写入|加入|保存到|记到).{0,30}(?:规则|记忆|memory)/iu,
+    /(?:作为|设为|保存为).{0,20}(?:规则|长期记忆|memory)/iu,
+    /(?:以后|今后|后续)(?:都|不要|别再|必须|务必|一律|始终|总是|每次)/u,
+    /(?:从现在开始|从今以后)/u,
+    /\bremember(?:\s+(?:that|to|this))?\b/i,
+    /\bkeep\s+(?:this|that)\s+in\s+mind\b/i,
+    /\b(?:save|record|add|store)\b.{0,60}\b(?:rule|memory)\b/i,
+    /\bfrom now on\b/i,
+    /\bgoing forward\b/i,
+    /\b(?:never|do not|don't)\b.{0,60}\bagain\b/i,
+  ].some((pattern) => pattern.test(text))
+}
+
+function meetsCandidatePromotionThreshold(
+  referencedUserSignals: EvidenceExcerpt[],
+): boolean {
+  const distinctSessions = new Set(
+    referencedUserSignals.map((excerpt) => excerpt.locator.sessionId),
+  )
+  if (distinctSessions.size >= 2) return true
+
+  const correctionCount = referencedUserSignals.filter((excerpt) =>
+    hasExplicitCorrection(excerpt.text)).length
+  if (correctionCount >= 2) return true
+
+  return referencedUserSignals.some((excerpt) => hasExplicitMemoryIntent(excerpt.text))
+}
+
 function qualifyCandidates(
   candidates: CandidateRule[],
   bundle: EvidenceBundle,
@@ -208,23 +262,39 @@ function qualifyCandidates(
   const existingRules = bundle.existingRules ?? []
   return candidates.flatMap<CandidateRule>((candidate): CandidateRule[] => {
     if (candidate.confidence_level === 'low') return []
-    const referencedUserSignals = candidate.evidence_refs.flatMap((reference) => {
+    const referencedUserSignalsByLocator = new Map<string, EvidenceExcerpt>()
+    const validReferencesByLocator = new Map<string, string>()
+    let hasInvalidReference = false
+    for (const reference of candidate.evidence_refs) {
       const key = referencedEvidenceKey(reference)
       const excerpt = key === undefined ? undefined : userSignalsByLocator.get(key)
-      return excerpt ? [excerpt] : []
-    })
+      if (!key || !excerpt) {
+        hasInvalidReference = true
+        continue
+      }
+      referencedUserSignalsByLocator.set(key, excerpt)
+      if (!validReferencesByLocator.has(key)) validReferencesByLocator.set(key, reference)
+    }
+    const referencedUserSignals = [...referencedUserSignalsByLocator.values()]
     if (
-      referencedUserSignals.length === 0
+      hasInvalidReference
+      || referencedUserSignals.length === 0
+      || !meetsCandidatePromotionThreshold(referencedUserSignals)
       || isExistingRuleDuplicate(candidate.rule_text, existingRules)
     ) return []
+
+    const qualifiedCandidate = {
+      ...candidate,
+      evidence_refs: [...validReferencesByLocator.values()],
+    }
 
     const hasExplicitGlobalIntent = referencedUserSignals.some((excerpt) =>
       hasGlobalIntent(excerpt.text))
     if (candidate.scope === 'global' && hasExplicitGlobalIntent) {
-      return [{ ...candidate, project_slug: null }]
+      return [{ ...qualifiedCandidate, project_slug: null }]
     }
     return [{
-      ...candidate,
+      ...qualifiedCandidate,
       scope: 'project' as const,
       project_slug: bundle.projectSlug,
     }]
@@ -388,7 +458,7 @@ export async function runRulesGenerate(
         const filteredCount = providerCandidates.length - candidates.length
         if (filteredCount > 0) {
           process.stderr.write(
-            `↳ 过滤 ${filteredCount} 条不符合 Evidence、置信度或 Baseline 资格的候选\n`,
+            `↳ 过滤 ${filteredCount} 条不符合 Evidence、晋级门槛、置信度或 Baseline 资格的候选\n`,
           )
         }
       } catch (error) {

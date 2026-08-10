@@ -16,7 +16,7 @@ const evidence: EvidenceBundle[] = [{
     locator: { sessionId: 's1', agent: 'claude', messageIndex: 0 },
     role: 'user',
     evidenceKind: 'user_signal',
-    text: 'Always run tests',
+    text: 'Remember this rule: always run tests',
     tools: [],
     frequency: 1,
   }],
@@ -126,6 +126,11 @@ describe('runRulesGenerate', () => {
     expect(prompt).toContain('保守下界')
     expect(prompt).toContain('默认只能产出 project rule')
     expect(prompt).toContain('一次性任务')
+    expect(prompt).toContain('至少两个不同 Session')
+    expect(prompt).toContain('至少两条独立的明确用户纠正')
+    expect(prompt).toContain('明确要求“记住、写入规则或记忆、以后持续遵循”')
+    expect(prompt).toContain('单次普通要求、单次禁止、单次纠正')
+    expect(prompt).toContain('同一个 locator 重复写入')
     expect(prompt).toContain('每条候选只表达一个行为约束')
     expect(prompt).toContain('不要输出 low')
     expect(prompt).not.toContain('Always run tests')
@@ -168,14 +173,14 @@ describe('runRulesGenerate', () => {
         locator: { sessionId: 's1', agent: 'claude', messageIndex: 0 },
         role: 'user',
         evidenceKind: 'user_signal',
-        text: '在这个项目中，修改代码前先运行测试。',
+        text: '请记住，在这个项目中，修改代码前先运行测试。',
         tools: [],
         frequency: 1,
       }, {
         locator: { sessionId: 's1', agent: 'claude', messageIndex: 1 },
         role: 'user',
         evidenceKind: 'user_signal',
-        text: '所有项目中都使用中文回复。',
+        text: '请记住，所有项目中都使用中文回复。',
         tools: [],
         frequency: 1,
       }],
@@ -238,6 +243,96 @@ describe('runRulesGenerate', () => {
         project_slug: null,
         rule_text: '所有项目都使用中文回复。',
       },
+    ])
+  })
+
+  it('只允许跨 Session 重复、重复纠正或明确记住的候选晋级', async () => {
+    const thresholdEvidence: EvidenceBundle[] = [{
+      projectSlug: 'demo',
+      sourceSessions: ['s1', 's2'],
+      roundCount: 6,
+      existingRules: [],
+      excerpts: [{
+        locator: { sessionId: 's1', agent: 'claude', messageIndex: 0 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: '修改代码前运行测试。',
+        tools: [],
+        frequency: 1,
+      }, {
+        locator: { sessionId: 's1', agent: 'claude', messageIndex: 1 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: '不对，不要跳过测试，应该先运行测试。',
+        tools: [],
+        frequency: 1,
+      }, {
+        locator: { sessionId: 's1', agent: 'claude', messageIndex: 2 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: '你理解错了，我说的是修改前运行测试。',
+        tools: [],
+        frequency: 1,
+      }, {
+        locator: { sessionId: 's1', agent: 'claude', messageIndex: 3 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: '请记住：以后修改代码前都要运行测试。',
+        tools: [],
+        frequency: 1,
+      }, {
+        locator: { sessionId: 's1', agent: 'claude', messageIndex: 4 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: 'Composer 中输入独立的 / 时应唤起 Skills Picker。',
+        tools: [],
+        frequency: 1,
+      }, {
+        locator: { sessionId: 's2', agent: 'codex', messageIndex: 0 },
+        role: 'user',
+        evidenceKind: 'user_signal',
+        text: '先跑测试，再修改代码。',
+        tools: [],
+        frequency: 1,
+      }],
+    }]
+    const candidate = (ruleText: string, evidenceRefs: string[]) => ({
+      ...generated[0],
+      rule_text: ruleText,
+      evidence_refs: evidenceRefs,
+    })
+
+    await runRulesGenerate({ homeDir: home }, {
+      extract: async () => thresholdEvidence,
+      generate: async () => [
+        candidate('Composer 中输入独立的 / 时应唤起 Skills Picker。', ['s1:4']),
+        candidate('重复同一引用不得晋级。', ['s1:0', 's1:0']),
+        candidate('同一 Session 的普通重复不得晋级。', ['s1:0', 's1:4']),
+        candidate('跨 Session 重复可以晋级。', ['s1:0', 's1:0', 's2:0']),
+        candidate('同一 Session 的多次纠正可以晋级。', ['s1:1', 's1:2']),
+        candidate('单次纠正不得晋级。', ['s1:1']),
+        candidate('明确要求记住可以晋级。', ['s1:3']),
+        candidate('混入无效 locator 不得晋级。', ['s1:3', 'missing:9']),
+      ],
+    })
+
+    const db = initDatabase(home)
+    const rows = db.prepare(`
+      SELECT rule_text, evidence_json
+      FROM rule_candidates
+      ORDER BY rule_text
+    `).all() as Array<{ rule_text: string; evidence_json: string }>
+    db.close()
+
+    expect(rows.map((row) => row.rule_text)).toEqual([
+      '同一 Session 的多次纠正可以晋级。',
+      '明确要求记住可以晋级。',
+      '跨 Session 重复可以晋级。',
+    ])
+    const crossSession = rows.find((row) => row.rule_text === '跨 Session 重复可以晋级。')
+    expect(JSON.parse(crossSession?.evidence_json ?? '{}').evidence_refs).toEqual([
+      's1:0',
+      's2:0',
     ])
   })
 
