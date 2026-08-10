@@ -73,6 +73,20 @@ describe('CLI workspace options', () => {
     expect(result.stdout).toContain('NDJSON')
   })
 
+  it('context 暴露 prepare/read/status/close 与 Query 输入选项', () => {
+    const context = runCli(['context', '--help'])
+    expect(context.status).toBe(0)
+    expect(context.stdout).toContain('prepare')
+    expect(context.stdout).toContain('read')
+    expect(context.stdout).toContain('status')
+    expect(context.stdout).toContain('close')
+
+    const prepare = runCli(['context', 'prepare', '--help'])
+    expect(prepare.status).toBe(0)
+    expect(prepare.stdout).toContain('--query-json')
+    expect(prepare.stdout).toContain('--query-file')
+  })
+
   it('sessions show --stream 的下游提前关闭时正常退出', async () => {
     const workspaceParent = path.join(tempDir, 'stream-workspace')
     expect(

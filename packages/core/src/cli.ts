@@ -4,6 +4,12 @@ import { runInit } from './commands/init.js'
 import { runStatus } from './commands/status.js'
 import { runScanCommand } from './commands/scan.js'
 import { runSessionsShow } from './commands/sessions.js'
+import {
+  runContextClose,
+  runContextPrepare,
+  runContextRead,
+  runContextStatus,
+} from './commands/context.js'
 import { runRulesList, runRulesShow } from './commands/rules.js'
 import { runRulesGenerate } from './commands/rules-generate.js'
 import { runRulesOutput } from './commands/rules-output.js'
@@ -82,6 +88,42 @@ sessions
       return
     }
     await runSessionsShow(sessionId)
+  })
+
+const context = program
+  .command('context')
+  .description('查询 Session 并提供可分页的完整上下文')
+
+context
+  .command('prepare')
+  .description('执行 Session Query 并创建私有临时上下文')
+  .option('--query-json <json>', '直接提供 Session Query JSON')
+  .option('--query-file <path>', '从文件读取 Session Query JSON')
+  .action(async (opts: { queryJson?: string; queryFile?: string }) => {
+    await runContextPrepare(opts)
+  })
+
+context
+  .command('read <run-id>')
+  .description('读取一个 Session 的一个上下文分片（JSON）')
+  .requiredOption('--session <session-id>', '目标 Session ID')
+  .requiredOption('--part <n>', '从 1 开始的分片编号', (value: string) => Number(value))
+  .action((runId: string, opts: { session: string; part: number }) => {
+    runContextRead(runId, opts)
+  })
+
+context
+  .command('status <run-id>')
+  .description('查看 Context run 的 coverage 与分片状态')
+  .action((runId: string) => {
+    runContextStatus(runId)
+  })
+
+context
+  .command('close <run-id>')
+  .description('删除 Context run 的临时正文')
+  .action((runId: string) => {
+    runContextClose(runId)
   })
 
 const rules = program

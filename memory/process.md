@@ -3829,3 +3829,31 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - `simplify` 复核将 Evidence excerpt 类型收敛为具名类型，并保留显式的引用去重、无效引用和三类门槛分支，
   没有为了缩短代码合并不同资格语义。
 - 提交信息：`fix: 收紧规则候选晋级门槛`
+
+## Session Query、完整上下文 CLI 与 Skill（2026-08-10）
+
+- 用户要求把本地最近 X 天 Session 作为 AI 上下文的能力做成 CLI + Skill，核心场景为：最近 30 天
+  `computer-use / chrome-use` 工具复盘（同时支持关键词索引），以及最近 7 天全部 Session 的工作总结。
+- 新增 Query JSON v1：时间、Agent、项目、状态和递归 `all / any / not` 组合；工具谓词只消费结构化 tool call，
+  通过版本化 registry 区分 direct、nested、capability-derived，避免 Skill catalog/工具说明造成误报；关键词按
+  user、assistant、tool input、tool result、title 字段匹配，默认排除 system/platform 注入。
+- 新增六 Agent `SessionEvent` Reader，把 message、tool call、tool result、media、metadata 保序标准化并附
+  source locator；JSONL 固定文件集合/字节水位，OpenCode/Copilot SQLite 使用短只读事务，missing、invalid、
+  empty 和运行中变化都有稳定终态。
+- 新增 `context prepare / read / status / close`。prepare 返回 candidates/inspected/matched/notMatched/unknown
+  覆盖账本和逐 Session proof；正文只写系统临时目录，run 为 0700、manifest/owner/part 为 0600，按事件边界分页，
+  支持 TTL、显式 close、路径穿越防护和 preparing run 中断清理。DB schema 不变，不保存对话、工具参数或结果。
+- 首次真实 30 天验收在 978 个候选上暴露约 4 GiB OOM：原骨架把全部候选事件留在内存。最终改为逐 Session
+  回源、判定、命中即写分片并释放正文，Query 只保留 outcome 元数据；增加流式回调和 owner marker 回归测试。
+- 使用 `skill-creator` 创建仓库级 `.agents/skills/local-session-context`，Skill 先扫描最新索引，再检查 selection
+  coverage，穷举每个 Session 的 `1..partCount`，维护读取账本并在 finally 语义下 close；reference 提供工具复盘、
+  工具 OR/AND 关键词和 7 天全量三个可直接编译的 Query 配方。Skill 结构校验通过。
+- 隔离 workspace 扫描六 Agent 共 2,149 Session，0 error。流式 30 天工具查询：978 candidates、976 inspected、
+  1 matched、2 unknown，命中 nested computer-use；6 parts / 728 events 不重不漏。字段化关键词查询命中 260；
+  proof 覆盖 user/assistant/tool input/tool result。
+- 真实最近 7 天全量查询：326 candidates / inspected / matched、0 unknown，2,477 parts / 105,592 events；逐
+  Session 核对 part 数、event index 连续/唯一和 eventCount 后 close。临时 Context 根为空，隔离 DB 仍只有
+  `llm_runs / rule_candidates / run_metadata / schema_meta / sessions`。
+- Core 全量 41 suites / 387 tests、production build、TypeScript noEmit、Skill validator 与 `git diff --check`
+  通过；build 仅有既有 tsdown `define` warning。
+- 提交信息：`feat: 支持查询并完整读取本地 Session 上下文`
