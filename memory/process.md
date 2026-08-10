@@ -3764,3 +3764,16 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Computer Use 在真实 Electron 中使用 OpenCode changed7d 验证：点击后仍在 Rules 页显示局部 Loading；自动
   跳转的 Chat 第一屏已显示 `Session Context 151`；点击停止后最新任务变为“已中断”。
 - 提交信息：`fix: 在上下文就绪后进入规则对话`
+
+## 调整侧栏主导航条目间距（2026-08-10）
+
+- 用户通过 Projects 选中态截图指出工作区各 item 的间距需要调整。本轮只把 Scan / Projects / Chat 三个主导航
+  条目的垂直间距从 2px 增加到 6px，保留 34px 条目高度、图标、文字、选中态、点击热区、知识库树和分组间距。
+- 同步 `DESIGN.md` 与 `docs/plans/agent-dashboard-sidebar-nav-item-spacing.md`，把 6px 记为工作区主导航的固定
+  条目间距。
+- 纯样式修改未新增只重复 Tailwind class 的测试；使用既有 App Shell 合同测试、production build 与真实 Electron
+  视觉检查作为替代验证。展开态 Projects 选中胶囊上下留白一致，收起态图标保持居中且无溢出，验收后恢复展开
+  侧栏的 Projects 页面。
+- 定向 App Shell 1 suite / 4 tests、App 全量 45 suites / 287 tests、Core 全量 36 suites / 359 tests 与
+  Electron production build 通过；build 仅有既有 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 调整侧栏导航条目间距`

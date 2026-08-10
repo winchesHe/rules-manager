@@ -154,7 +154,7 @@ export function App() {
                     {t('workspace')}
                   </p>
                 )}
-                <div aria-label={t('workspace')} className="grid gap-0.5">
+                <div aria-label={t('workspace')} className="grid gap-1.5">
                   {workspaceNavigation.map(({ id, labelKey, icon: Icon }) => {
                     const active = activeView === id
                     return (
