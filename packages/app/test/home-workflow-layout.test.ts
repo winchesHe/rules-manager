@@ -114,6 +114,8 @@ describe('home workflow layout', () => {
     expect(source).toContain('contextPaneOpen')
     expect(source).toContain('thread.sessionContext.revision')
     expect(source).toContain('[thread?.id, sessionContextRevision]')
+    expect(source).toContain('[contextProject, contextFrom, contextTo, thread?.id, sessionContextRevision]')
+    expect(source).toContain('refreshChangedThread(chatId)')
     expect(source).toContain('continueAsNewChat')
     expect(source).toContain('compactContextOpen')
     expect(source).toContain('max-[1279px]:fixed')

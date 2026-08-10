@@ -22,6 +22,16 @@ export function shouldShowNativeChatStop(
   return isSending || (thread?.kind === 'native-chat' && thread.status === 'running')
 }
 
+export function shouldApplySelectedThreadRead(input: {
+  requestVersion: number
+  latestVersion: number
+  requestedId: string
+  selectedId: string | null
+}): boolean {
+  return input.requestVersion === input.latestVersion
+    && input.requestedId === input.selectedId
+}
+
 export function normalizeThinkingMarkdown(content: string): string {
   return content.replace(/(\S)\*{4}(?=\S)/g, '$1**\n\n**')
 }

@@ -88,6 +88,7 @@ import {
   groupNativeTurnTimeline,
   mergeLiveTimeline,
   normalizeThinkingMarkdown,
+  shouldApplySelectedThreadRead,
   shouldShowNativeChatStop,
   toolActivityCounts,
 } from './chat-timeline-model'
@@ -185,6 +186,7 @@ export function ChatView({
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirmThread, setDeleteConfirmThread] = useState<Extract<ChatThread, { version: 2 }> | null>(null)
   const selectedIdRef = useRef<string | null>(selectedId)
+  const selectedThreadReadVersionRef = useRef(0)
   const liveChatIdRef = useRef<string | null>(null)
   const sendingRef = useRef(false)
   const queueRef = useRef<QueuedChatTurn[]>([])
@@ -332,7 +334,7 @@ export function ChatView({
 
   useEffect(() => {
     void loadContextSessions(false)
-  }, [contextProject, contextFrom, contextTo])
+  }, [contextProject, contextFrom, contextTo, thread?.id, sessionContextRevision])
 
   useEffect(() => {
     void window.api.invoke<ChatSkillOption[]>('chat.skills', provider)
@@ -385,6 +387,20 @@ export function ChatView({
     return { threadRows, historyRows, selectedId: next }
   }, [])
 
+  const readSelectedThread = useCallback(async (id: string) => {
+    const requestVersion = selectedThreadReadVersionRef.current + 1
+    selectedThreadReadVersionRef.current = requestVersion
+    const restored = await window.api.invoke<ChatThread | null>('chat.read', id)
+    if (!shouldApplySelectedThreadRead({
+      requestVersion,
+      latestVersion: selectedThreadReadVersionRef.current,
+      requestedId: id,
+      selectedId: selectedIdRef.current,
+    })) return
+    setThread(restored)
+    setLegacy(null)
+  }, [])
+
   const loadSelected = useCallback(async (
     id: string | null,
     threadRows: ChatThreadSummary[],
@@ -396,14 +412,13 @@ export function ChatView({
       return
     }
     if (threadRows.some((item) => item.id === id)) {
-      const restored = await window.api.invoke<ChatThread | null>('chat.read', id)
-      setThread(restored)
-      setLegacy(null)
+      await readSelectedThread(id)
       return
     }
+    selectedThreadReadVersionRef.current += 1
     setThread(null)
     setLegacy(historyRows.find((item) => item.id === id) ?? null)
-  }, [])
+  }, [readSelectedThread])
 
   const refresh = useCallback(async (preferredId?: string | null) => {
     try {
@@ -417,6 +432,19 @@ export function ChatView({
       setLoading(false)
     }
   }, [loadIndex, loadSelected])
+
+  const refreshChangedThread = useCallback(async (chatId: string) => {
+    try {
+      await Promise.all([
+        readSelectedThread(chatId),
+        loadIndex(),
+      ])
+      setError(null)
+    } catch (reason: unknown) {
+      setErrorTitle('loadError')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }, [loadIndex, readSelectedThread])
 
   useEffect(() => {
     void refresh(initialThreadId)
@@ -480,7 +508,7 @@ export function ChatView({
       if (!value || typeof value !== 'object' || !('chatId' in value)) return
       const chatId = (value as { chatId?: unknown }).chatId
       if (typeof chatId !== 'string') return
-      if (chatId === selectedIdRef.current) void refresh(chatId)
+      if (chatId === selectedIdRef.current) void refreshChangedThread(chatId)
       else if (!selectedIdRef.current && sendingRef.current) {
         selectedIdRef.current = chatId
         setSelectedId(chatId)
@@ -489,7 +517,7 @@ export function ChatView({
     }
     window.api.onEvent('chat.changed', onChanged)
     return () => window.api.offEvent('chat.changed', onChanged)
-  }, [refresh])
+  }, [refresh, refreshChangedThread])
 
   const items = useMemo(() => {
     const persistedIds = new Set(threads.map((item) => item.id))

@@ -4,6 +4,7 @@ import {
   groupNativeTurnTimeline,
   mergeLiveTimeline,
   normalizeThinkingMarkdown,
+  shouldApplySelectedThreadRead,
   shouldShowNativeChatStop,
   toolActivityCounts,
 } from '../renderer/src/views/chat-timeline-model.js'
@@ -230,6 +231,23 @@ describe('Native Chat 终止按钮运行态', () => {
     expect(shouldShowNativeChatStop(false, {
       kind: 'rules-generation',
       status: 'running',
+    })).toBe(false)
+  })
+})
+
+describe('Native Chat 当前任务刷新门禁', () => {
+  it('只接受当前任务的最新读取，避免旧 Context revision 回写', () => {
+    expect(shouldApplySelectedThreadRead({
+      requestVersion: 2, latestVersion: 2,
+      requestedId: 'chat-current', selectedId: 'chat-current',
+    })).toBe(true)
+    expect(shouldApplySelectedThreadRead({
+      requestVersion: 1, latestVersion: 2,
+      requestedId: 'chat-current', selectedId: 'chat-current',
+    })).toBe(false)
+    expect(shouldApplySelectedThreadRead({
+      requestVersion: 2, latestVersion: 2,
+      requestedId: 'chat-old', selectedId: 'chat-current',
     })).toBe(false)
   })
 })

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
-import { isRunCancelledError } from '../../core/src/abort.js'
+import { isRunCancelledError, throwIfAborted } from '../../core/src/abort.js'
 import {
   runLiveSessionEvidence,
   type SessionEvidenceCoverageSummary,
@@ -81,7 +81,7 @@ export interface NativeChatControllerOptions {
   enableSessionEvidence?: boolean
   sessionEvidenceHomeDir?: string
   sessionEvidenceTempParentDir?: string
-  scanSessions?: (sinceDays: number) => Promise<ScanSummary>
+  scanSessions?: (sinceDays: number, signal?: AbortSignal) => Promise<ScanSummary>
 }
 
 export interface NativeRulesStartResult {
@@ -96,6 +96,7 @@ export class NativeChatController {
     abortController: AbortController
     runner: NativeEvidenceModelRunner
   }>()
+  private readonly activeRulesRuns = new Map<string, AbortController>()
 
   constructor(private readonly options: NativeChatControllerOptions) {
     this.createId = options.createId ?? randomUUID
@@ -392,8 +393,12 @@ export class NativeChatController {
       at: createdAt,
       turnConfig: config,
     }))
-    startRunMetadata(runId, request, createdAt)
-    void this.runRulesGeneration({ chatId, runId, request, provider, config })
+    startRunMetadata(runId, request, createdAt, this.options.sessionEvidenceHomeDir)
+    const abortController = new AbortController()
+    this.activeRulesRuns.set(chatId, abortController)
+    void this.runRulesGeneration({
+      chatId, runId, request, provider, config, abortController,
+    })
     return { chatId, runId }
   }
 
@@ -403,6 +408,7 @@ export class NativeChatController {
     request: GenerationRequest
     provider: NativeChatProvider
     config: NativeTurnConfig
+    abortController: AbortController
   }): Promise<void> {
     let nativeSessionId: string | null = null
     let evidence: EvidenceSnapshot | undefined
@@ -411,14 +417,16 @@ export class NativeChatController {
     let firstProviderTurn = true
     let contextRevision = 0
     let contextSelected: NativeSessionReference[] = []
+    const signal = input.abortController.signal
     try {
-      await runRulesGenerationPreflight(input.request, this.options.scanSessions)
+      await runRulesGenerationPreflight(input.request, this.options.scanSessions, signal)
       await runRulesGenerate({
         ...generationEvidenceOptions(input.request),
         runId: input.runId,
         ...rulesGenerationCoreBridge(input.provider, input.config.model),
         effort: input.config.effort,
         fastMode: input.config.fastMode,
+        signal,
         onEvidence: (bundles) => {
           evidence = evidenceSnapshot(input.request, bundles, this.now())
           contextSelected = evidenceReferences(bundles)
@@ -426,7 +434,13 @@ export class NativeChatController {
             input.chatId, contextSelected, this.now(),
           )
           contextRevision = context.revision
-          updateRunMetadata(input.runId, 'running', input.request, evidence)
+          updateRunMetadata({
+            runId: input.runId,
+            status: 'running',
+            request: input.request,
+            evidence,
+            homeDir: this.options.sessionEvidenceHomeDir,
+          })
           this.options.onThreadChanged?.(input.chatId)
         },
         onProjectResponse: (response) => {
@@ -494,6 +508,7 @@ export class NativeChatController {
           )
         },
       })
+      throwIfAborted(signal)
       const completedAt = this.now()
       const candidateCount = projectResponses.reduce(
         (count, response) => count + response.candidates.length, 0,
@@ -518,22 +533,57 @@ export class NativeChatController {
         candidateCount,
         projectResponses,
       }, completedAt)
-      updateRunMetadata(input.runId, 'completed', input.request, evidence, candidateCount)
+      updateRunMetadata({
+        runId: input.runId,
+        status: 'completed',
+        request: input.request,
+        evidence,
+        candidateCount,
+        homeDir: this.options.sessionEvidenceHomeDir,
+      })
       this.options.onTurnCompleted?.(input.chatId)
     } catch (error) {
+      const cancelled = signal.aborted || isRunCancelledError(error)
       const message = errorMessage(error)
       const failedAt = this.now()
-      this.options.store.markNativeTurnFailed(input.chatId, message, failedAt)
-      this.options.store.appendNativeMessage(input.chatId, visibleMessage({
-        id: randomUUID(), role: 'assistant', content: `规则生成失败：${message}`, at: failedAt,
-      }))
-      updateRunMetadata(input.runId, 'failed', input.request, evidence, 0, message)
+      if (cancelled) {
+        this.options.store.markNativeTurnInterrupted(input.chatId, failedAt)
+        updateRunMetadata({
+          runId: input.runId,
+          status: 'cancelled',
+          request: input.request,
+          evidence,
+          homeDir: this.options.sessionEvidenceHomeDir,
+        })
+      } else {
+        this.options.store.markNativeTurnFailed(input.chatId, message, failedAt)
+        this.options.store.appendNativeMessage(input.chatId, visibleMessage({
+          id: randomUUID(), role: 'assistant', content: `规则生成失败：${message}`, at: failedAt,
+        }))
+        updateRunMetadata({
+          runId: input.runId,
+          status: 'failed',
+          request: input.request,
+          evidence,
+          failure: message,
+          homeDir: this.options.sessionEvidenceHomeDir,
+        })
+      }
     } finally {
+      if (this.activeRulesRuns.get(input.chatId) === input.abortController) {
+        this.activeRulesRuns.delete(input.chatId)
+      }
       this.options.onThreadChanged?.(input.chatId)
     }
   }
 
   async interrupt(chatId: string): Promise<void> {
+    const rulesRun = this.activeRulesRuns.get(chatId)
+    if (rulesRun) {
+      rulesRun.abort()
+      await this.options.runtime.interrupt(chatId)
+      return
+    }
     const evidenceRun = this.activeEvidenceRuns.get(chatId)
     if (!evidenceRun) return this.options.runtime.interrupt(chatId)
     evidenceRun.abortController.abort()
@@ -647,10 +697,13 @@ export function rulesGenerationCoreBridge(
 
 export async function runRulesGenerationPreflight(
   request: GenerationRequest,
-  scanSessions?: (sinceDays: number) => Promise<ScanSummary>,
+  scanSessions?: (sinceDays: number, signal?: AbortSignal) => Promise<ScanSummary>,
+  signal?: AbortSignal,
 ): Promise<void> {
+  throwIfAborted(signal)
   if (request.mode !== 'changed7d' || !scanSessions) return
-  const summary = await scanSessions(7)
+  const summary = await scanSessions(7, signal)
+  throwIfAborted(signal)
   if (summary.errors > 0) {
     throw new Error(`生成前扫描存在 ${summary.errors} 个错误，请在“扫描”页面查看详情后重试`)
   }
@@ -804,8 +857,13 @@ function rulesArtifactSummary(
   return `规则生成完成：${completed} 个项目，${candidateCount} 条候选${failed ? `，${failed} 个项目失败` : ''}。可前往“生成的规则”审核。`
 }
 
-function startRunMetadata(runId: string, request: GenerationRequest, startedAt: string): void {
-  const db = new Database(getDbPath())
+function startRunMetadata(
+  runId: string,
+  request: GenerationRequest,
+  startedAt: string,
+  homeDir?: string,
+): void {
+  const db = new Database(getDbPath(homeDir))
   try {
     db.prepare(`
       INSERT INTO run_metadata (id, run_type, started_at, status, details)
@@ -816,32 +874,38 @@ function startRunMetadata(runId: string, request: GenerationRequest, startedAt: 
   }
 }
 
-function updateRunMetadata(
-  runId: string,
-  status: 'running' | 'completed' | 'failed',
-  request: GenerationRequest,
-  evidence?: EvidenceSnapshot,
-  candidateCount = 0,
-  failure?: string,
-): void {
-  const db = new Database(getDbPath())
+function updateRunMetadata(input: {
+  runId: string
+  status: 'running' | 'completed' | 'cancelled' | 'failed'
+  request: GenerationRequest
+  evidence?: EvidenceSnapshot
+  candidateCount?: number
+  failure?: string
+  homeDir?: string
+}): void {
+  const db = new Database(getDbPath(input.homeDir))
   try {
     const details = {
-      request,
-      evidence: evidence ? {
-        projectCount: evidence.projects.length,
-        totalSessions: evidence.totalSessions,
-        projects: evidence.projects,
-        createdAt: evidence.createdAt,
+      request: input.request,
+      evidence: input.evidence ? {
+        projectCount: input.evidence.projects.length,
+        totalSessions: input.evidence.totalSessions,
+        projects: input.evidence.projects,
+        createdAt: input.evidence.createdAt,
       } : null,
-      candidateCount,
-      ...(failure ? { failure } : {}),
+      candidateCount: input.candidateCount ?? 0,
+      ...(input.failure ? { failure: input.failure } : {}),
     }
     db.prepare(`
       UPDATE run_metadata
       SET ended_at = ?, status = ?, details = ?
       WHERE id = ?
-    `).run(status === 'running' ? null : new Date().toISOString(), status, JSON.stringify(details), runId)
+    `).run(
+      input.status === 'running' ? null : new Date().toISOString(),
+      input.status,
+      JSON.stringify(details),
+      input.runId,
+    )
   } finally {
     db.close()
   }

@@ -3725,3 +3725,24 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 45 suites / 282 tests、Core 全量 36 suites / 359 tests、App/Core production build 与
   `git diff --check` 通过；App build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 生成规则前自动扫描最近 Session`
+
+## Rules Chat 停止与 Session Context 实时刷新（2026-08-10）
+
+- 用户在真实 changed7d Rules Chat 中发现两条回归：Composer 停止按钮在扫描 / Evidence 阶段无效；新建任务
+  写入的 Session Context 要切出再返回才显示。定位确认 Rules Run 未登记独立取消句柄，而 Renderer 的
+  `chat.changed` 继续走整组异步刷新且没有最新响应门禁。
+- 原生 Rules Run 现在持有贯穿前置扫描、Evidence 提取与 Provider 生成的 `AbortController`；停止时同时调用
+  Provider runtime interrupt。取消路径把 Native Thread 写为 `interrupted`、run metadata 写为 `cancelled`，
+  不再追加“规则生成失败”。
+- `ScanController.runToCompletion` 接受 `AbortSignal`：本次 Rules Run 自己启动的扫描随停止取消；如果只是复用
+  已有同范围扫描，则只解除当前等待，避免误停扫描页或其他调用方。
+- Renderer 对当前任务的 `chat.changed` 直接并行重读 `chat.read` 与索引，并用单调请求序号拒绝旧响应；Context
+  查询也随 thread id / sessionContext revision 更新，当前页无需重新挂载即可同步 badge、已选项与列表状态。
+- `simplify` 复核后把 run metadata 更新改为具名参数对象，并避免后台刷新把用户重新拉回旧任务；行为保持不变。
+- 真实 Electron 启动 OpenCode changed7d：保持当前页时 Context 自动显示 150 个 Session；点击停止后任务变为
+  “已中断”、停止按钮消失，Context 保持 150。数据库运行 `4d591f31-2a20-4fa0-9f44-df549981ac0b` 最终状态为
+  `cancelled`，`ended_at` 已落盘。
+- App 全量 45 suites / 286 tests、Core 全量 36 suites / 359 tests、App/Core production build 与定向 5 suites /
+  99 tests 通过；App `typecheck` 仍被既有跨包 `rootDir / file list` 和旧 UI Button 类型错误阻塞，build 仅有既有
+  `markstream-react` PURE comment warning。
+- 提交信息：`fix: 修复规则对话停止与上下文刷新`

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from '@jest/globals'
+import Database from 'better-sqlite3'
 import { initDatabase } from '../../core/src/db.js'
 import { ChatStore } from '../main/chat-store.js'
 import {
@@ -902,5 +903,64 @@ describe('NativeChatController', () => {
     expect(store.readThread('chat-resume-failure')).toMatchObject({
       nativeSessionId: 'native-original', nativeState: 'resume-failed', status: 'failed',
     })
+  })
+
+  it('停止 Rules Chat 会取消前置扫描并落为中断而不是失败', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-native-rules-cancel-'))
+    roots.push(root)
+    fs.mkdirSync(path.join(root, '.memory-manager'), { recursive: true })
+    initDatabase(root).close()
+    const store = new ChatStore(path.join(root, '.memory-manager', 'chats'))
+    let receivedSignal: AbortSignal | undefined
+    const controller = new NativeChatController({
+      store,
+      runtime: new ChatRuntimeManager((): ChatProviderAdapter => ({
+        start: async () => { throw new Error('provider 不应在扫描完成前启动') },
+        resume: async () => { throw new Error('provider 不应在扫描完成前恢复') },
+        interrupt: async () => undefined,
+        readToolItem: async () => ({ available: false, content: '', nextCursor: null }),
+        archive: async () => undefined,
+        unarchive: async () => undefined,
+        delete: async () => undefined,
+        close: async () => undefined,
+      })),
+      workingDirectory: root,
+      sessionEvidenceHomeDir: root,
+      createId: () => 'rules-cancel-preflight',
+      now: () => '2026-08-10T03:00:00.000Z',
+      scanSessions: (_sinceDays, signal) => {
+        receivedSignal = signal
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('扫描等待已停止')), {
+            once: true,
+          })
+        })
+      },
+    })
+
+    const started = controller.startRulesGeneration({
+      mode: 'changed7d', projects: [], provider: 'opencode',
+      effort: 'medium', fastMode: false,
+    })
+    expect(receivedSignal?.aborted).toBe(false)
+
+    await controller.interrupt(started.chatId)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(receivedSignal?.aborted).toBe(true)
+    expect(store.readThread(started.chatId)).toMatchObject({
+      status: 'interrupted',
+      lastError: null,
+      messages: [{ role: 'user' }],
+    })
+    const db = new Database(path.join(root, '.memory-manager', 'memory.db'), {
+      readonly: true,
+    })
+    try {
+      expect(db.prepare('SELECT status FROM run_metadata WHERE id = ?').get(started.runId))
+        .toEqual({ status: 'cancelled' })
+    } finally {
+      db.close()
+    }
   })
 })

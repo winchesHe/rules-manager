@@ -113,7 +113,7 @@ const nativeChatController = new NativeChatController({
   onEvent: broadcastNativeChatEvent,
   onThreadChanged: broadcastNativeChatChanged,
   onTurnCompleted: recordChatCompletion,
-  scanSessions: (sinceDays) => scanController.runToCompletion([], sinceDays),
+  scanSessions: (sinceDays, signal) => scanController.runToCompletion([], sinceDays, signal),
 })
 const generationController = new GenerationController(
   (request) =>

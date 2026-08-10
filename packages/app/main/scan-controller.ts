@@ -1,4 +1,5 @@
 import type { AgentName, ScanProgress, ScanSummary } from '../../core/src/types.js'
+import { RunCancelledError, throwIfAborted } from '../../core/src/abort.js'
 import {
   createRunId,
   isActiveRun,
@@ -57,6 +58,7 @@ export type ScanStartResult =
 interface ScanWaiter {
   resolve: (summary: ScanSummary) => void
   reject: (error: Error) => void
+  cleanup: () => void
 }
 
 export class ScanController {
@@ -159,16 +161,19 @@ export class ScanController {
   async runToCompletion(
     agents: AgentName[] = [],
     sinceDays?: number,
+    signal?: AbortSignal,
   ): Promise<ScanSummary> {
+    throwIfAborted(signal)
     const active = this.status()
     if (isActiveRun(active.state) && active.runId) {
-      const summary = await this.waitForCompletion(active.runId)
+      const summary = await this.waitForCompletion(active.runId, signal, false)
       if (sameScanScope(active, agents, sinceDays)) return summary
+      throwIfAborted(signal)
     }
 
     const started = this.start(agents, sinceDays)
-    if (!started.started) return this.runToCompletion(agents, sinceDays)
-    return this.waitForCompletion(started.runId)
+    if (!started.started) return this.runToCompletion(agents, sinceDays, signal)
+    return this.waitForCompletion(started.runId, signal, true)
   }
 
   status(): ScanStatus {
@@ -220,13 +225,35 @@ export class ScanController {
     if (runId) this.settleWaiters(runId)
   }
 
-  private waitForCompletion(runId: string): Promise<ScanSummary> {
+  private waitForCompletion(
+    runId: string,
+    signal: AbortSignal | undefined,
+    cancelOnAbort: boolean,
+  ): Promise<ScanSummary> {
     const terminal = this.terminalResult(runId)
     if (terminal) return terminal
     return new Promise((resolve, reject) => {
       const waiters = this.waiters.get(runId) ?? []
-      waiters.push({ resolve, reject })
+      const waiter: ScanWaiter = {
+        resolve,
+        reject,
+        cleanup: () => signal?.removeEventListener('abort', onAbort),
+      }
+      const onAbort = () => {
+        const current = this.waiters.get(runId)
+        if (current) {
+          const remaining = current.filter((item) => item !== waiter)
+          if (remaining.length > 0) this.waiters.set(runId, remaining)
+          else this.waiters.delete(runId)
+        }
+        waiter.cleanup()
+        if (cancelOnAbort) this.cancel(runId)
+        reject(new RunCancelledError('扫描已取消'))
+      }
+      waiters.push(waiter)
       this.waiters.set(runId, waiters)
+      signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) onAbort()
     })
   }
 
@@ -249,13 +276,19 @@ export class ScanController {
     if (!waiters) return
     this.waiters.delete(runId)
     if (this.state.state === 'completed' && this.state.summary) {
-      for (const waiter of waiters) waiter.resolve(this.state.summary)
+      for (const waiter of waiters) {
+        waiter.cleanup()
+        waiter.resolve(this.state.summary)
+      }
       return
     }
     const message = this.state.state === 'cancelled'
       ? '扫描已取消'
       : this.state.error ?? '扫描失败'
-    for (const waiter of waiters) waiter.reject(new Error(message))
+    for (const waiter of waiters) {
+      waiter.cleanup()
+      waiter.reject(new Error(message))
+    }
   }
 
   private emitWithSeq(

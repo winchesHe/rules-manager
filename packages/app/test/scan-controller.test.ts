@@ -214,4 +214,37 @@ describe('ScanController', () => {
     cancelledWorker.emit('message', { type: 'cancelled' })
     await expect(cancelled).rejects.toThrow('扫描已取消')
   })
+
+  it('等待方取消自己启动的扫描时同步取消 Worker', async () => {
+    const worker = new FakeWorker()
+    const controller = new ScanController(() => worker, () => undefined)
+    const abortController = new AbortController()
+
+    const completed = controller.runToCompletion([], 7, abortController.signal)
+    abortController.abort()
+
+    await expect(completed).rejects.toThrow('扫描已取消')
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'cancel' })
+    expect(controller.status()).toMatchObject({ state: 'cancelling', sinceDays: 7 })
+  })
+
+  it('等待方取消复用中的扫描时只解除等待，不误停已有 Worker', async () => {
+    const worker = new FakeWorker()
+    const controller = new ScanController(() => worker, () => undefined)
+    controller.start([], 7)
+    const abortController = new AbortController()
+
+    const completed = controller.runToCompletion([], 7, abortController.signal)
+    abortController.abort()
+
+    await expect(completed).rejects.toThrow('扫描已取消')
+    expect(worker.postMessage).not.toHaveBeenCalled()
+    expect(controller.status()).toMatchObject({ state: 'running', sinceDays: 7 })
+
+    worker.emit('message', {
+      type: 'done',
+      summary: { total: 1, new: 0, updated: 0, unchanged: 1, missing: 0, errors: 0 },
+    })
+    expect(controller.status()).toMatchObject({ state: 'completed' })
+  })
 })
