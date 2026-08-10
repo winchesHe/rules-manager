@@ -3791,3 +3791,19 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - App 全量 45 suites / 287 tests、Core 全量 36 suites / 359 tests、Electron production build 与
   `git diff --check` 通过；build 仅有既有 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 调整侧栏导航横向留白`
+
+## Chat 历史复制原生 Session ID（2026-08-10）
+
+- 用户希望从 Chat 历史直接复制所选会话 ID。能力同时放入历史记录右键操作菜单和当前对话顶部“…”管理菜单，
+  不在紧凑历史列表中常驻额外按钮。
+- 复制值严格使用 `NativeChatThreadSummary.nativeSessionId`，不以本地 `thread.id` 冒充 Agent Session ID；原生
+  Session 尚未创建时入口禁用并显示“Session 尚未创建”。
+- Clipboard API 成功后关闭菜单并短暂展示“Session ID 已复制”和实际 ID；失败复用 Chat 既有操作错误提示，
+  明确提示检查系统剪贴板权限。`simplify` 复核后让两个入口共用 `copyNativeSessionId`，避免重复状态逻辑。
+- 更新 `DESIGN.md` 和 `docs/plans/chat-history-copy-session-id.md`，合同测试锁定两个入口、`nativeSessionId` 来源、
+  Clipboard 调用及成功/失败反馈。
+- 定向 1 suite / 48 tests、App 全量 45 suites / 287 tests、Electron production build 与 `git diff --check`
+  通过；build 仅有既有 `markstream-react` PURE comment warning。Core 未改动，因此未重复运行 Core 测试。
+- 真实 Electron 验证顶部管理菜单和历史右键菜单均显示“复制 Session ID”；复制成功反馈为
+  `ses_0164cc855ffeILjx33azZ8Gd1a`，与对应 Thread 文件中的 `nativeSessionId` 完全一致。
+- 提交信息：`feat: 支持复制会话 Session ID`

@@ -221,6 +221,8 @@ Primitives 只约束页面级构图，不替代 Tailwind 的组件内部布局�
   桌面端对话历史在 Chat 内默认展开并可独立收起，中央对话负责 Request / Assistant / Artifact，右侧 Session
   Context 负责选择当前 Chat 引用的历史 Session。
 - Chat 终态操作与 Run 状态一致：成功且有候选时提供审核出口；失败、取消或中断时提供“重新生成”，复用原请求创建新 Run 并保留旧 Thread；运行态不提供重复生成。
+- Chat 历史操作菜单可复制底层 Agent 的原生 Session ID；尚未创建原生 Session 时禁用该操作，成功与失败都要
+  给出可见反馈，不得用本地 Thread ID 冒充 Session ID。
 - **Rules**：默认只展示候选规则队列；生成范围、单条审核、产物输出分别进入独立页面。
 - Rules 候选队列支持当前可见范围内的多选和全选；批量接受/拒绝使用临近表格的选择
   工具栏，切换状态或生成批次必须清空选择，批量写入必须具备事务原子性。候选行从

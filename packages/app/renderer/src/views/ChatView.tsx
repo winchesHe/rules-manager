@@ -183,6 +183,7 @@ export function ChatView({
     x: number
     y: number
   } | null>(null)
+  const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirmThread, setDeleteConfirmThread] = useState<Extract<ChatThread, { version: 2 }> | null>(null)
   const selectedIdRef = useRef<string | null>(selectedId)
@@ -194,10 +195,17 @@ export function ChatView({
   const conversationRef = useRef<HTMLElement | null>(null)
   const followStreamRef = useRef(true)
   const composerOptionsRef = useRef<HTMLDivElement | null>(null)
+  const copyNoticeTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
     selectedIdRef.current = selectedId
   }, [selectedId])
+
+  useEffect(() => () => {
+    if (copyNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(copyNoticeTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 1279px)')
@@ -600,6 +608,28 @@ export function ChatView({
     await refresh(item.id)
     setRenameValue(item.thread.title)
     setManagementOpen(true)
+  }
+
+  async function copyNativeSessionId(sessionId: string | null): Promise<void> {
+    if (!sessionId) return
+    setHistoryContextMenu(null)
+    setManagementOpen(false)
+    try {
+      await navigator.clipboard.writeText(sessionId)
+      setError(null)
+      setCopiedSessionId(sessionId)
+      if (copyNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(copyNoticeTimeoutRef.current)
+      }
+      copyNoticeTimeoutRef.current = window.setTimeout(() => {
+        setCopiedSessionId((current) => current === sessionId ? null : current)
+        copyNoticeTimeoutRef.current = null
+      }, 2400)
+    } catch {
+      setCopiedSessionId(null)
+      setErrorTitle('actionError')
+      setError(t('copySessionIdFailed'))
+    }
   }
 
   async function setHistoryPinned(item: ChatHistoryItem, pinned: boolean): Promise<void> {
@@ -1083,6 +1113,18 @@ export function ChatView({
               <Alert.Content><Alert.Title>{t(errorTitle)}</Alert.Title><Alert.Description>{error}</Alert.Description></Alert.Content>
             </Alert>
           )}
+          {copiedSessionId && !error && (
+            <Alert
+              aria-live="polite"
+              className="absolute left-1/2 top-14 z-30 w-[min(42rem,calc(100%-7rem))] -translate-x-1/2 shadow-xl"
+              status="success"
+            >
+              <Alert.Content>
+                <Alert.Title>{t('sessionIdCopied')}</Alert.Title>
+                <Alert.Description className="break-all font-mono">{copiedSessionId}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
 
           <div
             className={`relative grid min-h-0 min-w-0 overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${historyPaneOpen ? 'grid-cols-[18rem_minmax(0,1fr)]' : 'grid-cols-[0rem_minmax(0,1fr)]'} max-[1279px]:grid-cols-1`}
@@ -1369,6 +1411,16 @@ export function ChatView({
           style={{ left: historyContextMenu.x, top: historyContextMenu.y }}
         >
           <Button className="h-8 justify-start gap-2 px-2" onPress={() => void openHistoryManagement(historyContextMenu.item)} size="sm" variant="ghost"><Pencil size={14} />{t('renameChat')}</Button>
+          <Button
+            className="h-8 justify-start gap-2 px-2"
+            isDisabled={!historyContextThread.nativeSessionId}
+            onPress={() => void copyNativeSessionId(historyContextThread.nativeSessionId)}
+            size="sm"
+            variant="ghost"
+          >
+            <Copy size={14} />
+            {historyContextThread.nativeSessionId ? t('copySessionId') : t('sessionIdUnavailable')}
+          </Button>
           <Button className="h-8 justify-start gap-2 px-2" onPress={() => void setHistoryPinned(historyContextMenu.item, !historyContextThread.pinnedAt)} size="sm" variant="ghost">
             {historyContextThread.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
             {historyContextThread.pinnedAt ? t('unpinChat') : t('pinChat')}
@@ -1411,6 +1463,16 @@ export function ChatView({
                         {t('renameChat')}
                       </Button>
                     </div>
+                    <Button
+                      className="gap-2"
+                      isDisabled={!thread.nativeSessionId}
+                      onPress={() => void copyNativeSessionId(thread.nativeSessionId)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <Copy aria-hidden="true" size={14} />
+                      {thread.nativeSessionId ? t('copySessionId') : t('sessionIdUnavailable')}
+                    </Button>
                     {thread.archivedAt ? (
                       <div className="flex gap-2">
                         <Button
