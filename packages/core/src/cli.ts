@@ -6,6 +6,7 @@ import { runScanCommand } from './commands/scan.js'
 import { runSessionsShow } from './commands/sessions.js'
 import {
   runContextClose,
+  runContextCleanup,
   runContextLocate,
   runContextOutcomes,
   runContextPrepare,
@@ -96,11 +97,11 @@ sessions
 
 const context = program
   .command('context')
-  .description('查询 Session 并提供可分页的完整上下文')
+  .description('查询 Session，并按需实时读取最新上下文')
 
 context
   .command('prepare')
-  .description('执行 Session Query 并创建私有临时上下文')
+  .description('执行 Session Query 并创建轻量查询清单')
   .option('--query-json <json>', '直接提供 Session Query JSON')
   .option('--query-file <path>', '从文件读取 Session Query JSON')
   .action(async (opts: { queryJson?: string; queryFile?: string }) => {
@@ -109,23 +110,23 @@ context
 
 context
   .command('read <run-id>')
-  .description('读取一个 Session 的一个上下文分片（JSON）')
+  .description('实时回源读取一个 Session 的最新上下文分片（JSON）')
   .requiredOption('--session <session-id>', '目标 Session ID')
   .requiredOption('--part <n>', '从 1 开始的分片编号', (value: string) => Number(value))
-  .action((runId: string, opts: { session: string; part: number }) => {
-    runContextRead(runId, opts)
+  .action(async (runId: string, opts: { session: string; part: number }) => {
+    await runContextRead(runId, opts)
   })
 
 context
   .command('status <run-id>')
-  .description('查看 Context run 的 coverage 与分片状态')
+  .description('查看 Context run 的 coverage 与轻量清单状态')
   .action((runId: string) => {
     runContextStatus(runId)
   })
 
 context
   .command('sessions <run-id>')
-  .description('分页列出命中的 Session 与上下文分片信息')
+  .description('分页列出命中的 Session 与准备时证明摘要')
   .option('--cursor <cursor>', '下一页游标（默认 0）')
   .option('--limit <n>', '每页数量（1-200）', (value: string) => Number(value))
   .action((runId: string, opts: { cursor?: string; limit?: number }) => {
@@ -161,16 +162,23 @@ context
 
 context
   .command('locate <run-id>')
-  .description('定位一个 event 所在的上下文分片')
+  .description('在最新 Session 源中定位一个 proof event 的当前分片')
   .requiredOption('--session <session-id>', '目标 Session ID')
   .requiredOption('--event <index>', '从 0 开始的 event index', (value: string) => Number(value))
-  .action((runId: string, opts: { session: string; event: number }) => {
-    runContextLocate(runId, opts)
+  .action(async (runId: string, opts: { session: string; event: number }) => {
+    await runContextLocate(runId, opts)
+  })
+
+context
+  .command('cleanup')
+  .description('清理已过期的 Context run')
+  .action(() => {
+    runContextCleanup()
   })
 
 context
   .command('close <run-id>')
-  .description('删除 Context run 的临时正文')
+  .description('删除 Context run 的轻量查询清单')
   .action((runId: string) => {
     runContextClose(runId)
   })

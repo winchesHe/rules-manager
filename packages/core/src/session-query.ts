@@ -984,6 +984,21 @@ function isInternalSession(events: SessionEvent[]): boolean {
   ))
 }
 
+export function evaluateSessionQueryContent(
+  query: SessionQuery,
+  events: SessionEvent[],
+): PredicateResult {
+  const excludeInternal = query.version === 2
+    && query.scope?.includeInternal !== true
+    && isInternalSession(events)
+  if (excludeInternal) {
+    return predicateResult('not_matched', [{ kind: 'excluded_internal' }])
+  }
+  return query.where
+    ? evaluateSessionPredicate(query.where, events)
+    : predicateResult('matched', [{ kind: 'all' }])
+}
+
 function sourceUnknownOutcome(
   candidate: CandidateRow,
   source: SessionEventReadResult,
@@ -1023,14 +1038,7 @@ export async function runSessionQuery(
       continue
     }
 
-    const excludeInternal = query.version === 2
-      && query.scope?.includeInternal !== true
-      && isInternalSession(source.events)
-    const evaluation = excludeInternal
-      ? predicateResult('not_matched', [{ kind: 'excluded_internal' }])
-      : query.where
-        ? evaluateSessionPredicate(query.where, source.events)
-        : predicateResult('matched', [{ kind: 'all' }])
+    const evaluation = evaluateSessionQueryContent(query, source.events)
     const outcome: SessionSelectionOutcome = {
       sessionId: candidate.id,
       agent: candidate.agent,

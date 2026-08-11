@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import {
   cleanupStaleSessionContextRuns,
   closeSessionContextRun,
-  createSessionContextRunWriter,
+  createSessionContextRun,
   getSessionContextStatus,
   listSessionContextProofs,
   listSessionContextOutcomes,
@@ -61,23 +61,15 @@ export async function runContextPrepare(
   deps: ContextCommandDeps = {},
 ): Promise<void> {
   cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
-  const writer = createSessionContextRunWriter({
+  const execution = await runSessionQuery(parseQueryInput(options), {
+    homeDir: deps.homeDir,
+    now: deps.now,
+    retainMatchedSources: false,
+  })
+  const summary = createSessionContextRun(execution, {
     parentDir: deps.parentDir,
     now: deps.now,
   })
-  let summary: ReturnType<typeof writer.finalize>
-  try {
-    const execution = await runSessionQuery(parseQueryInput(options), {
-      homeDir: deps.homeDir,
-      now: deps.now,
-      retainMatchedSources: false,
-      onMatchedSource: writer.writeMatchedSession,
-    })
-    summary = writer.finalize(execution)
-  } catch (error) {
-    writer.cleanup()
-    throw error
-  }
   output(deps, {
     ...summary,
     readCommand: 'memory-manager context read <run-id> --session <session-id> --part <part>',
@@ -90,17 +82,21 @@ export async function runContextPrepare(
   })
 }
 
-export function runContextRead(
+export async function runContextRead(
   runId: string,
   options: { session: string; part: number },
   deps: ContextCommandDeps = {},
-): void {
+): Promise<void> {
   cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
-  output(deps, readSessionContextPart(
+  output(deps, await readSessionContextPart(
     runId,
     options.session,
     options.part,
-    deps.parentDir,
+    {
+      parentDir: deps.parentDir,
+      homeDir: deps.homeDir,
+      now: deps.now,
+    },
   ))
 }
 
@@ -144,18 +140,33 @@ export function runContextProofs(
   ))
 }
 
-export function runContextLocate(
+export async function runContextLocate(
   runId: string,
   options: { session: string; event: number },
   deps: ContextCommandDeps = {},
-): void {
+): Promise<void> {
   cleanupStaleSessionContextRuns({ parentDir: deps.parentDir, now: deps.now })
-  output(deps, locateSessionContextEvent(
+  output(deps, await locateSessionContextEvent(
     runId,
     options.session,
     options.event,
-    deps.parentDir,
+    {
+      parentDir: deps.parentDir,
+      homeDir: deps.homeDir,
+      now: deps.now,
+    },
   ))
+}
+
+export function runContextCleanup(deps: ContextCommandDeps = {}): void {
+  const removedRunIds = cleanupStaleSessionContextRuns({
+    parentDir: deps.parentDir,
+    now: deps.now,
+  })
+  output(deps, {
+    removed: removedRunIds.length,
+    removedRunIds,
+  })
 }
 
 export function runContextClose(

@@ -3902,3 +3902,27 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 41 suites / 402 tests、production build、TypeScript noEmit、Skill validator 与 `git diff --check`
   通过；build 仅保留既有 tsdown `define` warning。
 - 提交信息：`fix: 提升 Session 联调检索准确性`
+
+## Session Context 改为实时读取最新源（2026-08-11）
+
+- 用户确认原 Session 后续变化不需要冻结，正文应始终读取最新权威源。本轮把 Context schema 升为 v4：
+  `prepare` 只保存 owner、Query、coverage、outcome、proof、Session ID 和准备时 revision，明确返回
+  `contentMode=live-source / contentStored=false`；run 目录不再创建 `sessions/`、gzip 或任何消息 / tool output 快照。
+- `read` 与 `locate` 每次按 Session ID 重新调用六 Agent Reader，重判原 Query 的内容谓词并基于当前事件流重新
+  分片 / 定位；响应携带 `readAt`、当前 `sourceRevision`、`sourceChangedSincePrepare`、`selectionStatus` 和
+  `selectionChanged`。locate 优先用稳定 `sourceLocator`，再以 proof 语义兜底；锚点消失时明确失败，不回退到错误
+  event index。全量查询中的空 Session 返回一个空 part，确保读取账本可闭合。
+- 新增 `context cleanup`，并保留每次 Context 命令前的过期清理。cleanup 同时识别 v3 owner/manifest，可删除旧正文
+  快照；close / cleanup 都先校验 run ID 与 owner，不清理无法证明归属的目录。App `scan-history` 测试也增加
+  afterEach 清理，避免每次测试遗留 SQLite 临时目录。
+- 真实本机冒烟：最近 1 天 rules-manager 查询命中 4 个 Session；prepare 目录只有 `manifest.json` 与
+  `owner.json`，合计 3,488 bytes。prepare 后当前 Session 从 1,052 增长到 1,058 events，live read 立即读到
+  新 revision 和 241 个当前 part，随后 close 成功。
+- 清理既有遗留：4 个旧 v3 Context 正文 run（合计约 641 MiB）与 50 个
+  `memory-manager-scan-history-*` 测试目录（合计 614,400 bytes）已删除；全量测试后再次核对，两类临时目录均为 0。
+- 同步仓库 Skill、`/Users/moego-winches/Desktop/Company/person/skills/local-session-context` 与
+  `~/.agents/skills/local-session-context`，三份逐文件一致且 Skill validator 全部通过；合同改为先读 part 1 获取
+  当前 partCount，并在跨 part revision 变化时重读或披露未完整范围。
+- Core 全量 41 suites / 406 tests、App 全量 45 suites / 289 tests、Core/App production build 与
+  `git diff --check` 通过；build 仅保留既有 tsdown `define` 和 `markstream-react` PURE comment warning。
+- 提交信息：`fix: 改为实时读取最新 Session 上下文`

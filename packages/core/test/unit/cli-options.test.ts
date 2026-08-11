@@ -73,12 +73,13 @@ describe('CLI workspace options', () => {
     expect(result.stdout).toContain('NDJSON')
   })
 
-  it('context 暴露 prepare/read/status/close 与 Query 输入选项', () => {
+  it('context 暴露 prepare/read/status/cleanup/close 与 Query 输入选项', () => {
     const context = runCli(['context', '--help'])
     expect(context.status).toBe(0)
     expect(context.stdout).toContain('prepare')
     expect(context.stdout).toContain('read')
     expect(context.stdout).toContain('status')
+    expect(context.stdout).toContain('cleanup')
     expect(context.stdout).toContain('close')
 
     const prepare = runCli(['context', 'prepare', '--help'])

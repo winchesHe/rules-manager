@@ -1,16 +1,25 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import Database from 'better-sqlite3'
-import { describe, expect, it } from '@jest/globals'
+import { afterEach, describe, expect, it } from '@jest/globals'
 import {
   listChangedSessionIds,
   listCompletedScans,
   loadLatestCompletedScan,
 } from '../main/scan-history.js'
 
+const temporaryDirectories: string[] = []
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 function createDatabase(): string {
   const directory = mkdtempSync(path.join(tmpdir(), 'memory-manager-scan-history-'))
+  temporaryDirectories.push(directory)
   const dbPath = path.join(directory, 'memory.db')
   const db = new Database(dbPath)
   db.exec(`

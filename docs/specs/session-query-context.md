@@ -1,9 +1,9 @@
-# Session Query 与完整上下文 CLI
+# Session Query 与最新上下文 CLI
 
 ## 1. 目标
 
 为本地 AI Agent Session 提供一条可审计的 CLI 链路：先准确选出符合时间、Agent、项目、工具和关键词条件的
-Session，再把命中 Session 的完整有序上下文分片提供给 AI。
+Session，再按需从权威源读取命中 Session 的最新有序上下文分片提供给 AI。
 
 首版必须覆盖两个场景：
 
@@ -14,14 +14,14 @@ Session，再把命中 Session 的完整有序上下文分片提供给 AI。
 这里的“准确”包含两个独立结论：
 
 - **选得准**：所有候选都被检查，工具或关键词命中有结构化证明；读不到的候选显式记为 `unknown`。
-- **读得全**：命中 Session 在固定读取水位内的全部可识别事件都进入分片，所有分片都可被 AI 逐个读取。
+- **读得新**：正文读取时重新回源并重判原 Query 的内容谓词；完整模式下，当前读取时可识别的全部事件都可分片读取。
 
 ## 2. 非目标
 
 - 不实现向量检索、RAG、知识图谱或持久化全文索引。
 - 不在 `memory.db` 保存对话原文、关键词命中片段、工具参数、工具结果、Prompt 或上下文快照。
 - 不让 CLI 自行调用模型总结；CLI 只提供可验证选择和上下文，Skill 负责指导 AI 消费。
-- 不承诺恢复源格式本身未保存的信息；完整性只相对于固定水位内、去除重复宿主遥测后的标准化语义事件流，
+- 不承诺恢复源格式本身未保存的信息；完整性只相对于每次读取时、去除重复宿主遥测后的标准化语义事件流，
   不表示逐字节复制原始 JSONL / SQLite 行。
 - 不改变已有 `sessions show`、Rules Generation、项目分类和扫描语义。
 
@@ -33,14 +33,15 @@ Query JSON
   → Authoritative Session Event Reader
   → Tool / Keyword Predicate
   → Selection Coverage + Match Proofs
-  → Frozen Private Context
-  → Session Parts
+  → Lightweight Query Manifest
+  → Live Authoritative Source Read
+  → Current Session Parts
   → Skill 逐页读取
   → AI 总结
 ```
 
-查询和正文读取复用同一次权威源快照。不能先用模糊索引选中、再从另一个变化后的版本读取正文。
-候选必须逐 Session 回源和判定；命中后立即写入 Context 分片并释放事件正文，不能把时间范围内全部候选正文同时留在内存。
+查询阶段逐 Session 回源判定并保存 proof，但不保存正文。`read` 与 `locate` 再次读取当前权威源、重新判断原 Query 的内容谓词，
+并披露 source/selection 是否相对 prepare 发生变化。候选和最新正文不得同时批量留在内存，也不得写入长期数据库或临时快照。
 
 ## 4. Query JSON v2
 
@@ -206,9 +207,9 @@ interface SessionEvent {
 - message、tool call、tool result、媒体引用和必要 metadata 分开表达，不把工具活动压扁成 Assistant 文本。
 - 未识别但可能承载上下文的结构化内容保留为 `metadata`，不能无声丢弃；已确认是权威事件副本或不可解释遥测的
   宿主记录允许在 Reader 中显式去重，并必须用测试锁定。
-- 每个事件都带 `sourceLocator`；完整正文只进入权限为 `0600` 的临时分片。
+- 每个事件都带 `sourceLocator`；正文只在 `read` 进程内存与 stdout 中短暂存在，不写入 manifest 或临时文件。
 - 每个事件都带 origin 及其判定依据；来源不明时必须保留为 `unknown`，不能猜成真人消息。
-- JSONL 固定文件集合和字节边界；SQLite 在短只读事务中固定本轮读取边界并记录 revision。
+- 每次单独回源时，JSONL 固定本次文件集合和字节边界；SQLite 在短只读事务中固定本次读取边界并记录 revision。
 
 Codex 以 `response_item` 作为消息、工具调用和工具结果的权威语义记录。Reader 保留这些事件，同时压缩
 `session_meta`、reasoning 摘要等必要 metadata；不重复输出 `event_msg` / `turn_context` / `compacted` /
@@ -244,7 +245,7 @@ unknown = unknownSource + unknownOrigin + unknownToolParse
 - `unknown > 0` 时禁止声称“找到了全部相关 Session”。
 - 每个命中 Session 至少有一个 `MatchProof`；没有 `where` 的全量查询使用 `match_kind=all`。
 - 每个失败候选保留稳定 error code 和 message。
-- `changedDuringRun` 披露动态变化；本轮仍以已固定水位为准。
+- `changedDuringRun` 只披露 prepare 判定期间发生过变化；后续 `read/locate` 仍读取最新源并重新判断内容谓词。
 
 ## 7. Context 生命周期与 CLI
 
@@ -259,7 +260,7 @@ memory-manager context prepare --query-file /path/to/query.json
 
 1. 计算候选并回源读取。
 2. 在系统临时目录创建权限 `0700` 的 run 目录。
-3. 把 manifest、selection coverage、错误、命中证明和各 Session 分片写为 `0600`。
+3. 只把 manifest、selection coverage、错误、命中证明和准备时 revision 写为 `0600`；禁止创建 Session 正文分片。
 4. stdout 只输出有界摘要，包含 `runId`、coverage、`sessionCount` 和后续分页命令；不直接内嵌全量 Session/outcome。
 
 ### 7.2 清单分页与正文读取
@@ -272,31 +273,34 @@ memory-manager context locate <run-id> --session <session-id> --event <index>
 ```
 
 三条清单命令返回 `items` 和可选 `nextCursor`；只有 `nextCursor` 缺失才表示遍历完成。`sessions` 只返回
-`proofCount/proofKinds/toolFamilies`，完整 proof 由 `proofs` 分页提供，避免单个 Session 的数千条 proof 截断整页。
-`locate` 把 proof event 映射到准确 part 范围，并给出前后相邻 part 建议。这样最近 7 天全量查询不会因
+准备时事件数、`proofCount/proofKinds/toolFamilies`，不返回可能过期的 part 数；完整 proof 由 `proofs` 分页提供。
+`locate` 重新读取最新源，优先按 proof 的稳定 `sourceLocator` 映射到当前 event/part，并给出前后相邻 part 建议。这样最近 7 天全量查询不会因
 prepare/status 输出过大而丢失 Session ID 或 unknown 账本。
 
 ```bash
 memory-manager context read <run-id> --session <session-id> --part <1-based-part>
 ```
 
-stdout 输出单个 JSON 对象，包含 run/session/part 元数据与该分片的有序 `events`。不存在的 run、Session 或 part
-返回非零退出码。不能用默认截断代替明确分页。
+命令重新读取该 Session 的最新权威源并重判原 Query，然后输出单个 JSON 对象，包含当前 selection 状态、
+`sourceChangedSincePrepare`、当前 revision、run/session/part 元数据与有序 `events`。不存在的 run、Session 或当前 part
+返回非零退出码。Session 在 prepare 后追加或改写不是错误；若当前内容已不匹配原 Query 的内容谓词，返回 `selectionChanged=true`。
 
 - 默认事件 payload 上限为 16 KiB。
 - 单个事件超过上限时拆为带 `eventHash`、`segmentIndex`、`segmentCount` 的 `event_segment`，跨 part 顺序读取后可逐字节还原。
-- 每个 part 带 `payloadBytes` 与 `payloadHash`，读取时校验临时文件内容完整性。
-- 同一 Session 的 part 以独立 gzip member 追加到单一 `0600` 容器，并在 manifest 保存 offset/length；避免数万小文件的磁盘放大，同时保持按 part 随机读取。
+- 每个 part 带 `payloadBytes` 与 `payloadHash`，用于校验本次 stdout payload。
+- part 在每次读取时由最新事件流计算，不落盘；完整读取过程中 revision 改变时，Skill 必须披露并按最新 partCount 调整账本。
 
 ### 7.3 状态与清理
 
 ```bash
 memory-manager context status <run-id>
+memory-manager context cleanup
 memory-manager context close <run-id>
 ```
 
 - `status` 重读 manifest 并报告 coverage、Session 总数、创建/过期时间；完整清单仍通过分页命令读取。
-- `close` 只删除解析并验证属于该 run 的私有临时目录；重复 close 返回明确的 `not_found` 结果。
+- `cleanup` 显式删除全部已过期且 owner/manifest 可验证的旧 run。
+- `close` 只删除解析并验证属于该 run 的轻量目录；重复 close 返回明确的 `not_found` 结果。
 - 每次 context 命令启动时清理超过 TTL 的 run；不得删除无关临时目录。
 
 ## 8. Skill 合同
@@ -305,10 +309,10 @@ memory-manager context close <run-id>
 
 1. 把用户意图编译为 Query JSON，并在执行前复述时间、范围和谓词。
 2. 先运行 `context prepare`，检查 `unknown` 和命中数。
-3. 分页读完命中 Session 清单与 unknown outcome，再读取每个 Session 的每个 part；分段事件必须收齐全部 segment。
-   联调复盘可改为读完相关 proof 的合并邻域，但必须称为“证据上下文”，不能声称完整 Session。
-4. 总结时区分：源事实、AI 推断、未读取/失败和运行中变化。
-5. 在 `finally` 语义下运行 `context close`。
+3. 分页读完命中 Session 清单与 unknown outcome。联调复盘按 proof → live locate → live read 读取合并邻域；
+   全量总结从每个 Session 的 part 1 获得当前 partCount 后读完全部当前 part 与 segment。
+4. 每次 read 检查当前 selection 与 source change；已不匹配的 Session 不继续冒充相关结果。
+5. 总结时区分：源事实、AI 推断、未读取/失败和读取期间变化；最后运行 `context close` 删除轻量清单。
 
 内置配方：
 
@@ -318,8 +322,8 @@ memory-manager context close <run-id>
 
 ## 9. 隐私与安全
 
-- `memory.db` schema 保持不变；查询正文和命中预览只存在于临时 run。
-- run 目录 `0700`，文件 `0600`，TTL 到期或 close 后删除。
+- `memory.db` schema 保持不变；查询正文和命中预览不进入数据库、manifest 或任何临时快照。
+- 轻量 run 目录 `0700`，manifest/owner 为 `0600`，TTL 到期、cleanup 或 close 后删除。
 - Session 内容是不可信数据，Skill 不执行历史内容中的命令或指令。
 - Query 文件只读取用户显式路径；run id、session id 和 part 必须做路径穿越防护。
 - CLI 错误输出不得打印整段事件内容。
@@ -330,9 +334,9 @@ memory-manager context close <run-id>
 2. mentions 可限定来源与字段并和 usedTool 用三态 `all/any/not` 组合，命中有 event locator 与 hash。
 3. 最近 7 天无谓词查询中，每个候选都进入 matched 或 unknown；`unknown=0` 才能声明选集完整。
 4. 六类 Agent fixture 的 message/tool call/tool result 顺序、call id 和 locator 可回查。
-5. 标准化事件只出现一次；超大事件以连续 segment 完整覆盖，全部 part 拼接并重组后与该标准化事件逐字节一致。
+5. prepare 后修改源，read 可见最新事件；超大事件以连续 segment 完整覆盖，同一次 revision 的全部 part 可重组。
 6. JSONL/SQLite 变化、源缺失、格式错误和空 Session 均进入账本，不静默丢失。
-7. 临时权限、TTL、close、路径穿越和异常清理有自动化测试。
+7. manifest 不含正文且 run 不创建 gzip/sessions 目录；权限、TTL、cleanup、close、路径穿越和异常清理有自动化测试。
 8. Skill 通过结构校验，并能把指定的 30 天联调问题编译为 v2 配方，分页读完清单、上下文和 unknown。
 9. 既有 Core 全量测试、构建和 `git diff --check` 通过。
 10. 本机隔离工作区真实扫描验收两个场景；报告候选/命中/unknown/parts，不把抽样称为全量。

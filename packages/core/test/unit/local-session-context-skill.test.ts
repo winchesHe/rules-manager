@@ -7,7 +7,7 @@ const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const skillRoot = path.resolve(coreRoot, '../../.agents/skills/local-session-context')
 
 describe('local-session-context Skill', () => {
-  it('frontmatter 覆盖两个触发场景且正文锁定 coverage、全量 part 与 close', () => {
+  it('frontmatter 覆盖两个触发场景且正文锁定最新回源、coverage 与 close', () => {
     const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8')
 
     expect(skill).not.toContain('TODO')
@@ -15,7 +15,9 @@ describe('local-session-context Skill', () => {
     expect(skill).toContain('chrome-use')
     expect(skill).toContain('全量读取最近一段时间的 Session')
     expect(skill).toContain('coverage.unknown > 0')
-    expect(skill).toContain('part=1..partCount')
+    expect(skill).toContain('contentMode=live-source')
+    expect(skill).toContain('contentStored=false')
+    expect(skill).toContain('source revision')
     expect(skill).toContain('event_segment')
     expect(skill).toContain('context sessions <runId>')
     expect(skill).toContain('context outcomes <runId> --status unknown')
@@ -40,6 +42,9 @@ describe('local-session-context Skill', () => {
     expect(reference).toContain('inspected = matched + notMatched')
     expect(reference).toContain('unknown = unknownSource + unknownOrigin + unknownToolParse')
     expect(reference).toContain('补丁、字符串、注释')
+    expect(reference).toContain('"contentMode": "live-source"')
+    expect(reference).toContain('"contentStored": false')
+    expect(reference).toContain('selectionChanged=true')
   })
 
   it('agents/openai.yaml 与 Skill 名称和默认触发提示一致', () => {

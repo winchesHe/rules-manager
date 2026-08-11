@@ -20,20 +20,26 @@ describe('context CLI', () => {
   let tempDir: string
   let workspaceParent: string
   let dbPath: string
+  let sourcePath: string
+  let contextRunIds: string[]
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mm-context-cli-'))
     workspaceParent = path.join(tempDir, 'workspace')
+    contextRunIds = []
     expect(runCli(['init', '--non-interactive', '--workspace', workspaceParent]).status).toBe(0)
     dbPath = path.join(workspaceParent, '.memory-manager', 'memory.db')
   })
 
   afterEach(() => {
+    for (const runId of contextRunIds) {
+      runCli(['context', 'close', runId, '--workspace', workspaceParent])
+    }
     fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
   function addCodexSession(): void {
-    const sourcePath = path.join(tempDir, 'codex-session.jsonl')
+    sourcePath = path.join(tempDir, 'codex-session.jsonl')
     fs.writeFileSync(sourcePath, [
       {
         type: 'response_item',
@@ -64,7 +70,7 @@ describe('context CLI', () => {
     db.close()
   }
 
-  it('prepare → status → read all parts → close 形成可脚本消费的完整链路', () => {
+  it('prepare 只建轻量清单，read/locate 实时读取 prepare 后的最新源', () => {
     addCodexSession()
     const query = JSON.stringify({
       version: 2,
@@ -99,9 +105,17 @@ describe('context CLI', () => {
       unknownToolParse: 0,
       changedDuringRun: 0,
     })
+    contextRunIds.push(prepared.runId)
     expect(prepared.sessionCount).toBe(1)
+    expect(prepared).toMatchObject({ contentMode: 'live-source', contentStored: false })
     expect(prepared).not.toHaveProperty('sessions')
     expect(prepared.sessionsCommand).toContain(prepared.runId)
+    const runDir = path.join(
+      os.tmpdir(),
+      'memory-manager-context-runs',
+      `memory-manager-context-${prepared.runId}`,
+    )
+    expect(fs.readdirSync(runDir).sort()).toEqual(['manifest.json', 'owner.json'])
     const sessionsResult = runCli([
       'context', 'sessions', prepared.runId, '--limit', '1', '--workspace', workspaceParent,
     ])
@@ -110,7 +124,7 @@ describe('context CLI', () => {
       total: number
       items: Array<{
         id: string
-        partCount: number
+        eventCountAtPrepare: number
         proofCount: number
         toolFamilies: string[]
       }>
@@ -119,9 +133,10 @@ describe('context CLI', () => {
     expect(sessions.items).toEqual([
       expect.objectContaining({
         id: 'cli-context',
-        partCount: 1,
+        eventCountAtPrepare: 3,
         proofCount: 1,
         toolFamilies: ['chrome-use'],
+        contentMode: 'live-source',
       }),
     ])
     expect(prepared.closeCommand).toContain(prepared.runId)
@@ -133,7 +148,14 @@ describe('context CLI', () => {
     expect(JSON.parse(status.stdout)).toMatchObject({
       runId: prepared.runId,
       coverage: { matched: 1, unknown: 0 },
+      contentMode: 'live-source',
+      contentStored: false,
     })
+
+    fs.appendFileSync(sourcePath, `${JSON.stringify({
+      type: 'response_item',
+      payload: { type: 'message', role: 'assistant', content: 'prepare 之后新增' },
+    })}\n`)
 
     const read = runCli([
       'context',
@@ -152,10 +174,15 @@ describe('context CLI', () => {
       sessionId: 'cli-context',
       part: 1,
       partCount: 1,
+      contentMode: 'live-source',
+      selectionStatus: 'matched',
+      selectionChanged: false,
+      sourceChangedSincePrepare: true,
       events: [
         expect.objectContaining({ kind: 'message', role: 'user', origin: 'human_user' }),
         expect.objectContaining({ kind: 'tool_call', toolName: 'mcp__chrome__navigate' }),
         expect.objectContaining({ kind: 'tool_result', toolCallId: 'call-1' }),
+        expect.objectContaining({ content: 'prepare 之后新增' }),
       ],
     })
 
@@ -180,7 +207,9 @@ describe('context CLI', () => {
     expect(locate.status).toBe(0)
     expect(JSON.parse(locate.stdout)).toMatchObject({
       sessionId: 'cli-context',
+      requestedEventIndex: 1,
       eventIndex: 1,
+      sourceChangedSincePrepare: true,
       firstPart: 1,
       lastPart: 1,
     })
