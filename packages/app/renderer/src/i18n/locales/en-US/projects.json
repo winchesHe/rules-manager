@@ -1,0 +1,109 @@
+{
+  "title": "Projects",
+  "description": "Find a project, then inspect its sessions and rule state.",
+  "loading": {
+    "projects": "Loading projects",
+    "project": "Loading {{project}}",
+    "session": "Loading session content"
+  },
+  "errors": {
+    "loadProjects": "Unable to load projects",
+    "loadDetails": "Unable to load project details",
+    "openSession": "Unable to open session",
+    "loadPublishedRules": "Unable to read the published version",
+    "revealProject": "Unable to open the project location.",
+    "revealSession": "Unable to reveal the Session source.",
+    "previewVersion": "Session preview is available in the new app version. Restart the app to finish updating."
+  },
+  "filters": {
+    "label": "Project filter",
+    "all": "All",
+    "changed": "Changed",
+    "draft": "Has drafts",
+    "unclassified": "Unclassified"
+  },
+  "list": {
+    "search": "Search projects",
+    "filteredCount": "Showing {{visible}} of {{total}}",
+    "emptyFilter": "No projects match this search and filter.",
+    "tableLabel": "Projects",
+    "openProject": "Open project {{project}}",
+    "changed_one": "{{count}} changed",
+    "changed_other": "{{count}} changed"
+  },
+  "columns": {
+    "project": "Project",
+    "agents": "Agents",
+    "sessions": "Sessions",
+    "latestChange": "Latest change",
+    "draftRules": "Draft rules"
+  },
+  "details": {
+    "description_one": "{{count}} session · {{agents}}",
+    "description_other": "{{count}} sessions · {{agents}}",
+    "noAgents": "No agents",
+    "label": "Project details",
+    "sessionsTab": "Sessions",
+    "rulesTab": "Rules",
+    "generate": "Generate for this project",
+    "openProjectLocation": "Open project location",
+    "searchSessions": "Search session name, ID, or source path",
+    "agent": "Agent",
+    "status": "Status",
+    "allAgents": "All agents",
+    "allStatuses": "All statuses",
+    "filteredCount": "{{visible}} of {{total}}"
+  },
+  "sessions": {
+    "emptyFilter": "No sessions match these filters.",
+    "listLabel": "Project sessions",
+    "messages_one": "{{count}} message",
+    "messages_other": "{{count}} messages",
+    "latestMessages": "Latest {{visible}} of {{total}} messages",
+    "emptyPreview": "No displayable user or assistant messages.",
+    "messagesLabel": "Session messages",
+    "session": "Session",
+    "openLocation": "Open Session location"
+  },
+  "breadcrumbs": {
+    "label": "Breadcrumb",
+    "projects": "Projects"
+  },
+  "rules": {
+    "empty": "No project rules.",
+    "confidence": "{{level}} confidence",
+    "viewsLabel": "Project rule views",
+    "candidates": "Rule candidates",
+    "published": "Published version",
+    "loadingPublished": "Loading published version",
+    "notPublished": "No project rules file has been exported",
+    "notPublishedDescription": "Use “Export this project rules file” from the accepted-rules publish page first.",
+    "reloadPublished": "Reload from disk",
+    "exportedFile": "Managed export",
+    "publishedContent": "Published rules for {{project}}",
+    "publishedMetadata": "{{size}} · Modified {{time}}",
+    "exportedFileDescription": "This is an Agent Dashboard project rules export; it does not mean the rules were published to Claude or Codex Memory.",
+    "memoryPublicationTitle": "Project Memory publication status",
+    "publishToMemory": "Publish to Memory",
+    "memoryAgents": {
+      "claude": "Claude Project Memory",
+      "codex": "Codex project Memory"
+    },
+    "memoryStatus": {
+      "synced": "Synced",
+      "outdated": "Updates available",
+      "not_published": "Not published",
+      "unavailable": "Unavailable",
+      "no_rules": "No accepted rules"
+    },
+    "memoryRuleCount_one": "Checked against {{count}} accepted project rule",
+    "memoryRuleCount_other": "Checked against {{count}} accepted project rules"
+  },
+  "empty": {
+    "projects": "No classified projects yet.",
+    "rules": "No rule candidates in this status."
+  },
+  "sharedTable": {
+    "noAgents": "No agents"
+  }
+}

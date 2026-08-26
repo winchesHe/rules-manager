@@ -1,0 +1,4 @@
+{"timestamp":"2026-01-03T00:00:00.000Z","type":"session.start","data":{"context":{"cwd":"/Users/example/Projects/memory-lab","gitRoot":"/Users/example/Projects/memory-lab","branch":"main","headCommit":"3333333333333333333333333333333333333333"}}}
+{"timestamp":"2026-01-03T00:00:01.000Z","type":"user.message","data":{"content":"请读取示例文件。"}}
+{"timestamp":"2026-01-03T00:00:02.000Z","type":"tool.execution_start","data":{"toolName":"read_file","arguments":{"path":"README.md"}}}
+{"timestamp":"2026-01-03T00:00:03.000Z","type":"assistant.message","data":{"content":"这是合成测试响应。"}}

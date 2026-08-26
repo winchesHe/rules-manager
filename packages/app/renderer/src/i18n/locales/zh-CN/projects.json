@@ -1,0 +1,109 @@
+{
+  "title": "项目",
+  "description": "查找项目并查看它的会话和规则状态。",
+  "loading": {
+    "projects": "正在加载项目",
+    "project": "正在加载 {{project}}",
+    "session": "正在加载会话内容"
+  },
+  "errors": {
+    "loadProjects": "无法加载项目",
+    "loadDetails": "无法加载项目详情",
+    "openSession": "无法打开会话",
+    "loadPublishedRules": "无法读取已发布版本",
+    "revealProject": "无法打开项目位置。",
+    "revealSession": "无法定位 Session 来源。",
+    "previewVersion": "新版本已支持会话预览。请重启应用以完成更新。"
+  },
+  "filters": {
+    "label": "项目筛选",
+    "all": "全部",
+    "changed": "有变更",
+    "draft": "有草稿",
+    "unclassified": "未分类"
+  },
+  "list": {
+    "search": "搜索项目",
+    "filteredCount": "显示 {{visible}} / {{total}}",
+    "emptyFilter": "没有符合搜索和筛选条件的项目。",
+    "tableLabel": "项目",
+    "openProject": "打开项目 {{project}}",
+    "changed_one": "{{count}} 项变更",
+    "changed_other": "{{count}} 项变更"
+  },
+  "columns": {
+    "project": "项目",
+    "agents": "Agents",
+    "sessions": "会话",
+    "latestChange": "最近变更",
+    "draftRules": "规则草稿"
+  },
+  "details": {
+    "description_one": "{{count}} 个会话 · {{agents}}",
+    "description_other": "{{count}} 个会话 · {{agents}}",
+    "noAgents": "没有 Agent",
+    "label": "项目详情",
+    "sessionsTab": "会话",
+    "rulesTab": "规则",
+    "generate": "为此项目生成规则",
+    "openProjectLocation": "打开项目位置",
+    "searchSessions": "搜索会话名称、ID 或来源路径",
+    "agent": "Agent",
+    "status": "状态",
+    "allAgents": "全部 Agent",
+    "allStatuses": "全部状态",
+    "filteredCount": "{{visible}} / {{total}}"
+  },
+  "sessions": {
+    "emptyFilter": "没有符合筛选条件的会话。",
+    "listLabel": "项目会话",
+    "messages_one": "{{count}} 条消息",
+    "messages_other": "{{count}} 条消息",
+    "latestMessages": "最近 {{visible}} / {{total}} 条消息",
+    "emptyPreview": "没有可展示的用户或 Assistant 消息。",
+    "messagesLabel": "会话消息",
+    "session": "会话",
+    "openLocation": "打开 Session 位置"
+  },
+  "breadcrumbs": {
+    "label": "面包屑",
+    "projects": "项目"
+  },
+  "rules": {
+    "empty": "没有项目规则。",
+    "confidence": "{{level}} 置信度",
+    "viewsLabel": "项目规则视图",
+    "candidates": "候选规则",
+    "published": "已发布版本",
+    "loadingPublished": "正在读取已发布版本",
+    "notPublished": "尚未导出项目规则文件",
+    "notPublishedDescription": "请先在已接受规则发布页执行“导出该项目规则文件”。",
+    "reloadPublished": "从磁盘重新加载",
+    "exportedFile": "托管导出文件",
+    "publishedContent": "{{project}} 已发布规则内容",
+    "publishedMetadata": "{{size}} · 修改于 {{time}}",
+    "exportedFileDescription": "此文件是 Agent Dashboard 的项目规则导出，不代表已经发布到 Claude 或 Codex Memory。",
+    "memoryPublicationTitle": "项目 Memory 发布状态",
+    "publishToMemory": "发布到 Memory",
+    "memoryAgents": {
+      "claude": "Claude Project Memory",
+      "codex": "Codex 项目 Memory"
+    },
+    "memoryStatus": {
+      "synced": "已同步",
+      "outdated": "有更新",
+      "not_published": "未发布",
+      "unavailable": "不可用",
+      "no_rules": "没有已接受规则"
+    },
+    "memoryRuleCount_one": "按 {{count}} 条已接受项目规则检查",
+    "memoryRuleCount_other": "按 {{count}} 条已接受项目规则检查"
+  },
+  "empty": {
+    "projects": "还没有已分类的项目。",
+    "rules": "当前状态下没有候选规则。"
+  },
+  "sharedTable": {
+    "noAgents": "没有 Agent"
+  }
+}

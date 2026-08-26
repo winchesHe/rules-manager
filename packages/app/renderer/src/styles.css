@@ -1,0 +1,384 @@
+@import "tailwindcss";
+@import "@heroui/react/styles";
+@import "markstream-react/index.css";
+
+@theme inline {
+  --color-background: hsl(var(--theme-background));
+  --color-sidebar: hsl(var(--theme-sidebar));
+  --color-surface: hsl(var(--theme-surface));
+  --color-surface-hover: hsl(var(--theme-surface-hover));
+  --color-pane: var(--theme-pane);
+  --color-pane-surface: var(--theme-pane-surface);
+  --color-pane-hover: var(--theme-pane-hover);
+  --color-pane-foreground: var(--theme-pane-foreground);
+  --color-pane-muted: var(--theme-pane-muted);
+  --color-pane-border: var(--theme-pane-border);
+  --color-surface-raised: var(--theme-surface-raised);
+  --color-border-soft: var(--theme-border-soft);
+  --color-foreground: hsl(var(--theme-foreground));
+  --color-muted: hsl(var(--theme-muted));
+  --color-primary: hsl(var(--theme-primary));
+  --color-primary-foreground: hsl(var(--theme-primary-foreground));
+  --color-primary-soft: hsl(var(--theme-primary-soft));
+  --color-border: hsl(var(--theme-border));
+  --color-danger: hsl(var(--theme-danger));
+  --color-danger-foreground: hsl(var(--theme-danger-foreground));
+  --color-success: hsl(var(--theme-success));
+  --color-success-foreground: hsl(var(--theme-success-foreground));
+  --color-warning: hsl(var(--theme-warning));
+  --color-warning-foreground: hsl(var(--theme-warning-foreground));
+  --color-default: hsl(var(--theme-default));
+  --color-default-foreground: hsl(var(--theme-default-foreground));
+  --color-separator: hsl(var(--theme-border));
+}
+
+:root.dark {
+  color-scheme: dark;
+  --theme-background: 0 0% 12%;
+  --theme-sidebar: 0 0% 9%;
+  --theme-surface: 0 0% 15%;
+  --theme-surface-hover: 0 0% 19%;
+  --theme-pane: #1b1c1b;
+  --theme-pane-surface: #242524;
+  --theme-pane-hover: #292a29;
+  --theme-pane-foreground: #e8e9e7;
+  --theme-pane-muted: #9a9c98;
+  --theme-pane-border: #303230;
+  --theme-surface-raised: #2b2c2b;
+  --theme-border-soft: #282a28;
+  --theme-foreground: 0 0% 100%;
+  --theme-muted: 0 0% 65%;
+  --theme-primary: 0 0% 100%;
+  --theme-primary-foreground: 0 0% 0%;
+  --theme-primary-soft: 0 0% 20%;
+  --theme-border: 0 0% 22%;
+  --theme-danger: 0 60% 50%;
+  --theme-danger-foreground: 0 0% 100%;
+  --theme-success: 156 60% 40%;
+  --theme-success-foreground: 0 0% 0%;
+  --theme-warning: 42 80% 55%;
+  --theme-warning-foreground: 0 0% 8%;
+  --theme-default: 0 0% 19%;
+  --theme-default-foreground: 0 0% 100%;
+  --background: var(--color-background);
+  --surface: var(--color-surface);
+  --surface-foreground: var(--color-foreground);
+  --surface-hover: var(--color-surface-hover);
+  --foreground: var(--color-foreground);
+  --muted: var(--color-muted);
+  --accent: var(--color-primary);
+  --accent-foreground: var(--color-primary-foreground);
+  --border: var(--color-border);
+  --separator: var(--color-separator);
+  --danger: var(--color-danger);
+  --danger-foreground: var(--color-danger-foreground);
+  --success: var(--color-success);
+  --success-foreground: var(--color-success-foreground);
+  --warning: var(--color-warning);
+  --warning-foreground: var(--color-warning-foreground);
+  --default: var(--color-default);
+  --default-foreground: var(--color-default-foreground);
+}
+
+:root.light {
+  color-scheme: light;
+  --theme-background: 214 40% 97%;
+  --theme-sidebar: 0 0% 100%;
+  --theme-surface: 0 0% 100%;
+  --theme-surface-hover: 214 100% 96%;
+  --theme-pane: #f8fafc;
+  --theme-pane-surface: #edf1f5;
+  --theme-pane-hover: #e3e9ef;
+  --theme-pane-foreground: #18212a;
+  --theme-pane-muted: #66717c;
+  --theme-pane-border: #d5dce3;
+  --theme-surface-raised: #e4e9ee;
+  --theme-border-soft: #e1e6eb;
+  --theme-foreground: 222 47% 11%;
+  --theme-muted: 215 16% 47%;
+  --theme-primary: 217 91% 60%;
+  --theme-primary-foreground: 0 0% 100%;
+  --theme-primary-soft: 214 100% 93%;
+  --theme-border: 214 32% 91%;
+  --theme-danger: 0 65% 48%;
+  --theme-danger-foreground: 0 0% 100%;
+  --theme-success: 156 55% 34%;
+  --theme-success-foreground: 0 0% 100%;
+  --theme-warning: 42 85% 46%;
+  --theme-warning-foreground: 222 47% 11%;
+  --theme-default: 214 100% 96%;
+  --theme-default-foreground: 222 47% 11%;
+  --background: var(--color-background);
+  --surface: var(--color-surface);
+  --surface-foreground: var(--color-foreground);
+  --surface-hover: var(--color-surface-hover);
+  --foreground: var(--color-foreground);
+  --muted: var(--color-muted);
+  --accent: var(--color-primary);
+  --accent-foreground: var(--color-primary-foreground);
+  --border: var(--color-border);
+  --separator: var(--color-separator);
+  --danger: var(--color-danger);
+  --danger-foreground: var(--color-danger-foreground);
+  --success: var(--color-success);
+  --success-foreground: var(--color-success-foreground);
+  --warning: var(--color-warning);
+  --warning-foreground: var(--color-warning-foreground);
+  --default: var(--color-default);
+  --default-foreground: var(--color-default-foreground);
+}
+
+:root {
+  min-width: 900px;
+  min-height: 100%;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-synthesis: none;
+  letter-spacing: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body,
+#root {
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.ux-page-transition {
+  min-height: 0;
+}
+
+.ux-entrance-transition {
+  animation: ux-content-enter 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--ux-enter-delay, 0ms);
+}
+
+.ux-entrance-fade {
+  animation: ux-content-fade 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--ux-enter-delay, 0ms);
+}
+
+.ux-enter-delay-50 {
+  --ux-enter-delay: 50ms;
+}
+
+.ux-enter-delay-110 {
+  --ux-enter-delay: 110ms;
+}
+
+.ux-enter-delay-160 {
+  --ux-enter-delay: 160ms;
+}
+
+.ux-stagger-regions > * {
+  animation: ux-content-enter 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ux-stagger-regions > :nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.ux-stagger-regions > :nth-child(n + 3) {
+  animation-delay: 110ms;
+}
+
+.ux-page-transition[data-transition-key^='rules:'] > :not([data-page-shell]) {
+  animation: ux-content-enter 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ux-page-transition[data-transition-key^='rules:'] > :not([data-page-shell]):nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.ux-page-transition[data-transition-key^='rules:'] > :not([data-page-shell]):nth-child(n + 3) {
+  animation-delay: 110ms;
+}
+
+.ux-filter-transition {
+  transition: opacity 120ms ease-out;
+}
+
+.ux-filter-transition[data-busy='true'] {
+  opacity: 0.58;
+}
+
+@keyframes ux-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes ux-content-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ux-entrance-transition,
+  .ux-entrance-fade,
+  .ux-stagger-regions > *,
+  .ux-page-transition[data-transition-key^='rules:'] > :not([data-page-shell]),
+  .ux-filter-transition {
+    animation: none;
+    transition: none;
+  }
+
+  button:not(:disabled):active {
+    transform: none;
+  }
+}
+
+.chat-markdown {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-markdown .markstream-react {
+  --background: var(--theme-background);
+  --border: var(--theme-border);
+  --foreground: var(--theme-foreground);
+  --link-color: hsl(var(--theme-primary));
+  --muted: var(--theme-primary-soft);
+  --muted-foreground: var(--theme-muted);
+  --secondary: var(--theme-surface-hover);
+  --blockquote-border-color: hsl(var(--theme-border));
+  color: hsl(var(--theme-foreground));
+  font: inherit;
+  line-height: inherit;
+}
+
+.chat-markdown .markstream-react .paragraph-node {
+  margin-block: 0.75em;
+}
+
+.chat-markdown .markstream-react .heading-1 {
+  margin-block: 1.25em 0.6em;
+  font-size: 1.5rem;
+  line-height: 1.35;
+}
+
+.chat-markdown .markstream-react .heading-2 {
+  margin-block: 1.2em 0.55em;
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+
+.chat-markdown .markstream-react .heading-3 {
+  margin-block: 1.1em 0.5em;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.chat-markdown .markstream-react .inline-code {
+  background: hsl(var(--theme-primary-soft));
+  color: hsl(var(--theme-foreground));
+}
+
+.chat-markdown .markstream-react :where(pre, .table-node-wrapper) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-markdown .markstream-react img {
+  max-width: 100%;
+}
+
+.chat-markdown-thinking .markstream-react {
+  --foreground: var(--theme-muted);
+  color: hsl(var(--theme-muted));
+}
+
+.chat-markdown-thinking .markstream-react .paragraph-node {
+  margin-block: 0.35em;
+}
+
+.window-drag-region {
+  position: fixed;
+  inset: 0 0 auto 5rem;
+  z-index: 1000;
+  height: 2rem;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.window-titlebar-toggle-region {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.75rem;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls {
+  position: fixed;
+  top: 0.8125rem;
+  left: 1rem;
+  z-index: 1002;
+  display: flex;
+  gap: 0.5rem;
+  -webkit-app-region: no-drag;
+}
+
+.window-control {
+  width: 0.75rem;
+  height: 0.75rem;
+  min-width: 0.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 18%);
+}
+
+.window-control--close {
+  background: #ff5f57;
+}
+
+.window-control--minimize {
+  background: #febc2e;
+}
+
+.window-control--zoom {
+  background: #28c840;
+}
+
+.window-control:focus-visible {
+  outline: 2px solid hsl(var(--theme-accent));
+  outline-offset: 2px;
+}
+
+.sidebar-titlebar-toggle {
+  position: absolute;
+  top: 0.125rem;
+  left: 5.5rem;
+  z-index: 1001;
+  -webkit-app-region: no-drag;
+}
+
+.window-no-drag {
+  position: relative;
+  z-index: 1001;
+  -webkit-app-region: no-drag;
+}
+
+button,
+a,
+input,
+textarea,
+select,
+[role="button"] {
+  -webkit-app-region: no-drag;
+}

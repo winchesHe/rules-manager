@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory Manager · 已接受规则发布台原型</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --sidebar-width: 196px;
+      --page-width: 1296px;
+      --target-width: 352px;
+      --background: #f4f7fb;
+      --sidebar: #fbfcfe;
+      --surface: #ffffff;
+      --surface-subtle: #f7f9fc;
+      --surface-hover: #eef4ff;
+      --surface-selected: #eaf2ff;
+      --foreground: #172033;
+      --muted: #67758a;
+      --faint: #8b97a8;
+      --border: #dce4ee;
+      --border-strong: #c9d4e2;
+      --primary: #3978e8;
+      --primary-hover: #2f68cb;
+      --primary-soft: #e8f1ff;
+      --primary-foreground: #ffffff;
+      --success: #237a57;
+      --success-soft: #e8f6ef;
+      --warning: #9a6400;
+      --warning-soft: #fff5dc;
+      --danger: #b43d45;
+      --shadow: 0 14px 38px rgb(35 61 94 / 8%);
+      --radius-panel: 14px;
+      --radius-control: 9px;
+      --ease: cubic-bezier(.2, .8, .2, 1);
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --background: #1e1f20;
+      --sidebar: #18191a;
+      --surface: #252627;
+      --surface-subtle: #202122;
+      --surface-hover: #30343a;
+      --surface-selected: #27364d;
+      --foreground: #f1f3f5;
+      --muted: #a5adb8;
+      --faint: #7e8792;
+      --border: #35383c;
+      --border-strong: #474b50;
+      --primary: #79a7f7;
+      --primary-hover: #91b7f8;
+      --primary-soft: #263a59;
+      --primary-foreground: #14213a;
+      --success: #6bc69e;
+      --success-soft: #203b31;
+      --warning: #e0b45d;
+      --warning-soft: #43371f;
+      --danger: #ed858b;
+      --shadow: 0 18px 44px rgb(0 0 0 / 18%);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-width: 0; min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    button, select, input { font: inherit; }
+    button, select, input[type="checkbox"] { cursor: pointer; }
+    button:focus-visible, select:focus-visible, input:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    button:disabled, select:disabled { cursor: not-allowed; }
+    [hidden] { display: none !important; }
+
+    .app {
+      display: grid;
+      min-height: 100dvh;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      display: flex;
+      height: 100dvh;
+      min-width: 0;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--sidebar);
+      padding: 18px 12px 14px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 2px 8px 22px;
+    }
+    .brand-mark {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 9px;
+      background: #2f946e;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .brand-copy { min-width: 0; }
+    .brand-copy strong, .brand-copy span { display: block; }
+    .brand-copy strong { font-size: 13px; font-weight: 700; }
+    .brand-copy span { margin-top: 2px; color: var(--muted); font-size: 10px; }
+    .nav { display: grid; gap: 3px; }
+    .nav-section { margin: 13px 10px 5px; color: var(--faint); font-size: 10px; font-weight: 650; }
+    .nav-item {
+      display: flex;
+      width: 100%;
+      height: 36px;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      padding: 0 10px;
+      text-align: left;
+    }
+    .nav-item:hover { background: var(--surface-hover); color: var(--foreground); }
+    .nav-item.active { background: var(--primary-soft); color: var(--foreground); font-weight: 650; }
+    .nav-icon {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 5px;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .nav-sub { height: 31px; padding-left: 38px; font-size: 12px; }
+    .sidebar-spacer { flex: 1; }
+    .theme-button {
+      display: flex;
+      height: 36px;
+      align-items: center;
+      justify-content: space-between;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      padding: 0 10px;
+    }
+    .theme-button:hover { background: var(--surface-hover); color: var(--foreground); }
+    .theme-key { color: var(--faint); font-size: 11px; }
+
+    .workspace {
+      min-width: 0;
+      padding: 18px clamp(24px, 3vw, 48px) 20px;
+    }
+    .page {
+      position: relative;
+      width: min(100%, var(--page-width));
+      margin: 0 auto;
+    }
+    .back-link {
+      float: right;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      margin-top: 4px;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .back-link:hover { color: var(--foreground); }
+    .page-header {
+      display: grid;
+      gap: 5px;
+      margin-top: 0;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: clamp(25px, 2vw, 31px);
+      font-weight: 720;
+      letter-spacing: -.035em;
+      line-height: 1.12;
+    }
+    .page-header p {
+      max-width: 58ch;
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .scope-tabs {
+      clear: both;
+      display: inline-grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-subtle);
+      padding: 2px;
+    }
+    .scope-tab {
+      display: flex;
+      min-width: 150px;
+      height: 34px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 620;
+    }
+    .scope-tab:hover { color: var(--foreground); }
+    .scope-tab.active {
+      background: var(--surface);
+      color: var(--foreground);
+      box-shadow: 0 1px 3px rgb(28 48 73 / 10%);
+    }
+    .count {
+      min-width: 20px;
+      border-radius: 6px;
+      background: var(--surface-hover);
+      color: var(--muted);
+      padding: 2px 6px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+    .scope-tab.active .count { background: var(--primary-soft); color: var(--primary); }
+
+    .task-surface {
+      display: flex;
+      height: calc(100dvh - 206px);
+      min-height: 480px;
+      flex-direction: column;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-panel);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .task-header {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+    }
+    .task-title { min-width: 0; }
+    .task-title h2 { margin: 0; font-size: 15px; font-weight: 700; }
+    .task-title p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .secondary-button {
+      display: inline-flex;
+      min-height: 34px;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-control);
+      background: var(--surface);
+      color: var(--foreground);
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 640;
+    }
+    .secondary-button:hover { background: var(--surface-hover); border-color: var(--primary); }
+
+    .task-grid {
+      display: grid;
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      grid-template-columns: minmax(0, 1fr) var(--target-width);
+    }
+    .rules-pane, .target-pane { min-width: 0; overflow-y: auto; padding: 16px; }
+    .rules-pane { border-right: 1px solid var(--border); }
+    .pane-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .pane-heading h3 { margin: 0; font-size: 13px; font-weight: 700; }
+    .pane-heading p { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .target-pane .pane-heading { margin-bottom: 8px; }
+    .target-pane .pane-heading p { display: none; }
+    .selection-count {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .rule-list { overflow: hidden; border: 1px solid var(--border); border-radius: 10px; }
+    .rule-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: flex-start;
+      background: var(--surface);
+      padding: 12px;
+      transition: background 160ms var(--ease);
+    }
+    .rule-row:hover { background: var(--surface-hover); }
+    .rule-row.selected { background: var(--surface-selected); }
+    .rule-row input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--primary); }
+    .rule-copy { font-size: 13px; line-height: 1.65; text-wrap: pretty; }
+    .rule-meta { display: block; margin-top: 8px; color: var(--muted); font-size: 11px; }
+
+    .destination-tabs, .target-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      margin-bottom: 13px;
+      border-radius: 9px;
+      background: var(--surface-subtle);
+      padding: 3px;
+    }
+    .destination-tabs { border: 1px solid var(--border); }
+    .destination-tab,
+    .target-tab {
+      min-width: 0;
+      height: 32px;
+      overflow: hidden;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 620;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .destination-tab:hover,
+    .target-tab:hover { color: var(--foreground); }
+    .destination-tab.active,
+    .target-tab.active { background: var(--surface); color: var(--foreground); box-shadow: 0 1px 3px rgb(28 48 73 / 10%); }
+    .target-config { display: grid; gap: 9px; }
+    .target-name h4 { margin: 0; font-size: 13px; font-weight: 700; }
+    .target-name p { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .field { display: grid; gap: 7px; }
+    .field label { color: var(--muted); font-size: 11px; font-weight: 650; }
+    .field select {
+      width: 100%;
+      min-width: 0;
+      height: 36px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-control);
+      background: var(--surface);
+      color: var(--foreground);
+      padding: 0 34px 0 11px;
+      font-size: 12px;
+    }
+    .field select:hover { border-color: var(--primary); }
+    .target-detail {
+      display: grid;
+      gap: 5px;
+      border-left: 2px solid var(--border-strong);
+      padding-left: 11px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .target-detail code {
+      overflow-wrap: anywhere;
+      color: var(--foreground);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10px;
+    }
+    .helper { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .agent-list {
+      display: grid;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .agent-option {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+      background: var(--surface);
+      padding: 8px 10px;
+    }
+    .agent-option + .agent-option { border-top: 1px solid var(--border); }
+    .agent-option:hover { background: var(--surface-hover); }
+    .agent-option.selected { background: var(--surface-selected); }
+    .agent-option input { width: 15px; height: 15px; margin: 0; accent-color: var(--primary); }
+    .agent-copy { min-width: 0; }
+    .agent-copy strong { display: block; font-size: 11px; font-weight: 700; }
+    .agent-copy code {
+      display: block;
+      overflow: hidden;
+      margin-top: 3px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 9px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .inline-status {
+      display: none;
+      border-radius: 9px;
+      background: var(--success-soft);
+      color: var(--success);
+      padding: 10px 11px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .inline-status.visible { display: block; }
+
+    .action-bar {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface-subtle);
+      padding: 9px 14px 9px 16px;
+    }
+    .action-summary { min-width: 0; }
+    .action-summary strong { display: block; font-size: 12px; font-weight: 700; }
+    .action-summary span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .primary-button {
+      display: inline-flex;
+      min-width: 168px;
+      height: 40px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: var(--radius-control);
+      background: var(--primary);
+      color: var(--primary-foreground);
+      padding: 0 18px;
+      font-size: 12px;
+      font-weight: 720;
+      transition: background 160ms var(--ease), transform 120ms var(--ease), opacity 160ms var(--ease);
+    }
+    .primary-button:hover:not(:disabled) { background: var(--primary-hover); }
+    .primary-button:active:not(:disabled) { transform: translateY(1px) scale(.99); }
+    .primary-button:disabled { background: var(--border-strong); color: var(--faint); opacity: .72; }
+
+    .empty-state {
+      display: grid;
+      flex: 1;
+      min-height: 330px;
+      place-items: center;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .empty-state-inner { max-width: 420px; }
+    .empty-glyph {
+      display: grid;
+      width: 46px;
+      height: 46px;
+      margin: 0 auto 16px;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-subtle);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+    }
+    .empty-state h3 { margin: 0; font-size: 15px; }
+    .empty-state p { margin: 8px auto 18px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+    .toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 20;
+      max-width: min(380px, calc(100vw - 32px));
+      border: 1px solid color-mix(in srgb, var(--success) 34%, var(--border));
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      color: var(--foreground);
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.55;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+    }
+    .toast.visible { opacity: 1; transform: translateY(0); }
+    .prototype-note {
+      margin-top: 12px;
+      color: var(--faint);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1080px) {
+      :root { --target-width: 320px; }
+      .workspace { padding-inline: 24px; }
+    }
+
+    @media (max-width: 860px) {
+      .app { grid-template-columns: 68px minmax(0, 1fr); }
+      .sidebar { padding-inline: 8px; }
+      .brand { justify-content: center; padding-inline: 0; }
+      .brand-copy, .nav-item span:not(.nav-icon), .nav-section, .theme-button span:first-child { display: none; }
+      .nav-item { justify-content: center; padding: 0; }
+      .nav-sub { display: none; }
+      .theme-button { justify-content: center; padding: 0; }
+      .task-surface { height: auto; }
+      .task-grid { grid-template-columns: 1fr; }
+      .rules-pane, .target-pane { overflow: visible; }
+      .rules-pane { border-right: 0; border-bottom: 1px solid var(--border); }
+    .target-pane { padding-top: 20px; }
+    }
+
+    @media (max-width: 620px) {
+      .app { display: block; }
+      .sidebar {
+        position: static;
+        display: flex;
+        width: 100%;
+        height: 56px;
+        flex-direction: row;
+        align-items: center;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 7px 10px;
+      }
+      .brand { padding: 0; }
+      .brand-mark { width: 30px; height: 30px; }
+      .nav { display: flex; margin-left: 8px; }
+      .nav-item { width: 34px; height: 34px; }
+      .nav-item:nth-of-type(1), .nav-item:nth-of-type(2), .nav-item:nth-of-type(3), .nav-section { display: none; }
+      .sidebar-spacer { flex: 1; }
+      .theme-button { width: 34px; height: 34px; }
+      .workspace { padding: 20px 14px 36px; }
+      .back-link { float: none; margin-top: 0; }
+      .page-header { margin-top: 12px; }
+      .scope-tabs { display: grid; width: 100%; }
+      .task-surface { height: auto; min-height: 0; }
+      .scope-tab { min-width: 0; }
+      .task-header { align-items: flex-start; padding: 16px; }
+      .task-header, .action-bar { flex-direction: column; }
+      .secondary-button, .primary-button { width: 100%; }
+      .rules-pane, .target-pane { padding: 16px; }
+      .action-bar { align-items: stretch; padding: 14px 16px; }
+      .toast { right: 16px; bottom: 16px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <div class="brand-mark">M</div>
+        <div class="brand-copy">
+          <strong>Memory Manager</strong>
+          <span>本地 Agent Session</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item" type="button"><span class="nav-icon">S</span><span>扫描</span></button>
+        <button class="nav-item" type="button"><span class="nav-icon">P</span><span>项目</span></button>
+        <button class="nav-item" type="button"><span class="nav-icon">C</span><span>Chat</span></button>
+        <button class="nav-item active" type="button"><span class="nav-icon">R</span><span>规则</span></button>
+        <span class="nav-section">规则</span>
+        <button class="nav-item nav-sub" type="button"><span>概览</span></button>
+        <button class="nav-item nav-sub" type="button"><span>Agent 指令</span></button>
+        <button class="nav-item nav-sub" type="button"><span>Agent Memory</span></button>
+        <button class="nav-item nav-sub active" type="button"><span>生成的规则</span></button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <button class="theme-button" id="theme-toggle" type="button" aria-label="切换明暗主题">
+        <span>切换主题</span>
+        <span class="theme-key" id="theme-label">深色</span>
+      </button>
+    </aside>
+
+    <main class="workspace">
+      <div class="page">
+        <button class="back-link" type="button">← 返回规则</button>
+
+        <header class="page-header">
+          <h1>发布已接受规则</h1>
+          <p>先选择规则范围，再配置对应的发布目标。不同范围不会共享目标或发布状态。</p>
+        </header>
+
+        <div class="scope-tabs" role="tablist" aria-label="规则范围">
+          <button class="scope-tab active" id="project-tab" type="button" role="tab" aria-selected="true" aria-controls="project-view" data-scope="project">
+            项目规则 <span class="count">1</span>
+          </button>
+          <button class="scope-tab" id="memory-tab" type="button" role="tab" aria-selected="false" aria-controls="project-view" data-scope="memory">
+            Memory <span class="count">1</span>
+          </button>
+          <button class="scope-tab" id="global-tab" type="button" role="tab" aria-selected="false" aria-controls="global-view" data-scope="global">
+            全局规则 <span class="count">0</span>
+          </button>
+        </div>
+
+        <section class="task-surface" id="project-view" role="tabpanel" aria-labelledby="project-tab">
+          <header class="task-header">
+            <div class="task-title">
+              <h2>agent-workspace</h2>
+              <p>1 条已接受规则。勾选项可发布到 Agent 全局规则或项目 Memory。</p>
+            </div>
+            <button class="secondary-button" id="export-button" type="button">导出全部 1 条规则</button>
+          </header>
+
+          <div class="task-grid">
+            <section class="rules-pane" aria-labelledby="rules-heading">
+              <div class="pane-heading">
+                <div>
+                  <h3 id="rules-heading">选择规则</h3>
+                  <p>只有勾选的规则会发布到所选 Agent 指令文件或项目 Memory。</p>
+                </div>
+                <span class="selection-count" id="selection-count">已选择 1 / 1</span>
+              </div>
+
+              <div class="rule-list">
+                <label class="rule-row selected" id="project-rule-row">
+                  <input id="project-rule" type="checkbox" checked>
+                  <span class="rule-copy">
+                    同一个需求涉及前后端多仓时，所有仓库使用相同的分支名称（如 `feature-grm-xxxx-feature-name`），不得各自独立命名。
+                    <span class="rule-meta">项目规则 · agent-workspace</span>
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            <aside class="target-pane" aria-labelledby="target-heading">
+              <div class="pane-heading">
+                <div>
+                  <h3 id="target-heading">发布目标</h3>
+                  <p>先选择发布方式，再明确选择目标。</p>
+                </div>
+              </div>
+
+              <div class="target-config" id="agent-config">
+                <div class="target-name">
+                  <h4>Agent 全局指令文件</h4>
+                  <p>将勾选规则写入明确选择的 Agent 全局规则文件，可同时发布到多个 Agent。</p>
+                </div>
+                <div class="agent-list" aria-label="选择 Agent">
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Claude"><span class="agent-copy"><strong>Claude</strong><code>~/.claude/CLAUDE.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Codex"><span class="agent-copy"><strong>Codex</strong><code>~/.codex/AGENTS.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Copilot"><span class="agent-copy"><strong>Copilot</strong><code>~/.copilot/copilot-instructions.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="OpenCode"><span class="agent-copy"><strong>OpenCode</strong><code>~/.config/opencode/AGENTS.md</code></span></label>
+                  <label class="agent-option"><input class="agent-checkbox" type="checkbox" value="Pi"><span class="agent-copy"><strong>Pi</strong><code>~/.pi/agent/AGENTS.md</code></span></label>
+                </div>
+                <p class="helper">默认不选择任何 Agent，发布前必须显式确认目标。</p>
+                <div class="inline-status" id="agent-status" role="status">原型模拟完成：规则已发布到所选 Agent 全局指令文件。</div>
+              </div>
+
+              <div id="memory-config" hidden>
+                <div class="target-tabs" role="tablist" aria-label="项目 Memory 类型">
+                  <button class="target-tab active" id="claude-target-tab" type="button" role="tab" aria-selected="true" aria-controls="claude-config" data-target="claude">Claude</button>
+                  <button class="target-tab" id="codex-target-tab" type="button" role="tab" aria-selected="false" aria-controls="codex-config" data-target="codex">Codex</button>
+                </div>
+
+                <div class="target-config" id="claude-config" role="tabpanel" aria-labelledby="claude-target-tab">
+                <div class="target-name">
+                  <h4>Claude Project Memory</h4>
+                  <p>更新 Memory Manager 受管区块，不覆盖 Claude 自己维护的内容。</p>
+                </div>
+                <div class="field">
+                  <label for="claude-target">Project Memory 目标</label>
+                  <select id="claude-target">
+                    <option value="">请选择目标</option>
+                    <option value="agent-workspace">agent-workspace</option>
+                    <option value="rules-manager">rules-manager</option>
+                  </select>
+                </div>
+                <div class="target-detail" id="claude-detail" hidden>
+                  <span>目标路径</span>
+                  <code id="claude-path">选择目标后显示 Memory 路径</code>
+                </div>
+                <p class="helper">项目和 Memory 目标不会根据名称自动关联。</p>
+                <div class="inline-status" id="claude-status" role="status">原型模拟完成：1 条规则已发布到 Claude Project Memory。</div>
+                </div>
+
+                <div class="target-config" id="codex-config" role="tabpanel" aria-labelledby="codex-target-tab" hidden>
+                <div class="target-name">
+                  <h4>Codex 项目 Memory</h4>
+                  <p>为所选工作目录维护 ad-hoc note，Codex 会在后台合并。</p>
+                </div>
+                <div class="field">
+                  <label for="codex-target">applies_to 工作目录</label>
+                  <select id="codex-target">
+                    <option value="">请选择工作目录</option>
+                    <option value="agent-workspace">/Users/example/Projects/agent-workspace</option>
+                    <option value="rules-manager">/Users/example/Desktop/Company/AI-Agent/rules-manager</option>
+                  </select>
+                </div>
+                <div class="target-detail" id="codex-detail" hidden>
+                  <span>目标契约</span>
+                  <code id="codex-path">选择工作目录后显示 applies_to</code>
+                </div>
+                <p class="helper">工作目录来自 Session metadata，不根据项目名称推断。</p>
+                <div class="inline-status" id="codex-status" role="status">原型模拟完成：1 条规则已提交给 Codex Memory。</div>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <footer class="action-bar">
+            <div class="action-summary">
+              <strong id="action-title">已选择 1 条规则</strong>
+              <span id="action-detail">请选择至少一个 Agent</span>
+            </div>
+            <button class="primary-button" id="publish-button" type="button" disabled>发布到 0 个 Agent</button>
+          </footer>
+        </section>
+
+        <section class="task-surface" id="global-view" role="tabpanel" aria-labelledby="global-tab" hidden>
+          <header class="task-header">
+            <div class="task-title">
+              <h2>全局规则</h2>
+              <p>全局规则只会写入用户明确选择的 Agent 指令文件。</p>
+            </div>
+          </header>
+          <div class="empty-state">
+            <div class="empty-state-inner">
+              <div class="empty-glyph">0</div>
+              <h3>没有已接受的全局规则</h3>
+              <p>接受至少一条全局规则后，这里才会显示 Agent 目标和发布操作。</p>
+              <button class="secondary-button" type="button">返回候选规则</button>
+            </div>
+          </div>
+        </section>
+
+        <p class="prototype-note">交互仅用于布局评审。发布与导出按钮不会调用本机 API，也不会修改任何文件。</p>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const html = document.documentElement;
+    const scopeTabs = [...document.querySelectorAll('.scope-tab')];
+    const targetTabs = [...document.querySelectorAll('.target-tab')];
+    const projectView = document.getElementById('project-view');
+    const globalView = document.getElementById('global-view');
+    const ruleCheckbox = document.getElementById('project-rule');
+    const ruleRow = document.getElementById('project-rule-row');
+    const selectionCount = document.getElementById('selection-count');
+    const agentConfig = document.getElementById('agent-config');
+    const memoryConfig = document.getElementById('memory-config');
+    const agentCheckboxes = [...document.querySelectorAll('.agent-checkbox')];
+    const claudeSelect = document.getElementById('claude-target');
+    const codexSelect = document.getElementById('codex-target');
+    const claudeConfig = document.getElementById('claude-config');
+    const codexConfig = document.getElementById('codex-config');
+    const claudePath = document.getElementById('claude-path');
+    const codexPath = document.getElementById('codex-path');
+    const claudeDetail = document.getElementById('claude-detail');
+    const codexDetail = document.getElementById('codex-detail');
+    const publishButton = document.getElementById('publish-button');
+    const actionTitle = document.getElementById('action-title');
+    const actionDetail = document.getElementById('action-detail');
+    const exportButton = document.getElementById('export-button');
+    const toast = document.getElementById('toast');
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeLabel = document.getElementById('theme-label');
+    let activeDestination = 'agent';
+    let activeTarget = 'claude';
+    let toastTimer = null;
+
+    function showToast(message) {
+      window.clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add('visible');
+      toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 2600);
+    }
+
+    function selectedRuleCount() {
+      return ruleCheckbox.checked ? 1 : 0;
+    }
+
+    function activeTargetValue() {
+      return activeTarget === 'claude' ? claudeSelect.value : codexSelect.value;
+    }
+
+    function selectedAgents() {
+      return agentCheckboxes.filter((checkbox) => checkbox.checked);
+    }
+
+    function clearPublishStatuses() {
+      document.getElementById('agent-status').classList.remove('visible');
+      document.getElementById('claude-status').classList.remove('visible');
+      document.getElementById('codex-status').classList.remove('visible');
+    }
+
+    function updateActionBar() {
+      const count = selectedRuleCount();
+
+      selectionCount.textContent = `已选择 ${count} / 1`;
+      ruleRow.classList.toggle('selected', ruleCheckbox.checked);
+      actionTitle.textContent = `已选择 ${count} 条规则`;
+
+      if (count === 0) {
+        actionDetail.textContent = '选择至少一条规则后继续';
+        publishButton.disabled = true;
+        return;
+      }
+
+      if (activeDestination === 'agent') {
+        const agents = selectedAgents();
+        publishButton.textContent = `发布到 ${agents.length} 个 Agent`;
+        publishButton.disabled = agents.length === 0;
+        actionDetail.textContent = agents.length === 0
+          ? '请选择至少一个 Agent 全局指令文件'
+          : `将发布到 ${agents.map((checkbox) => checkbox.value).join('、')}`;
+      } else {
+        const targetValue = activeTargetValue();
+        const targetLabel = activeTarget === 'claude' ? 'Claude Project Memory' : 'Codex 项目 Memory';
+        publishButton.textContent = activeTarget === 'claude' ? '发布到 Claude Memory' : '提交到 Codex Memory';
+        publishButton.disabled = !targetValue;
+        actionDetail.textContent = targetValue ? `将发布到 ${targetLabel}` : `请选择 ${targetLabel} 目标`;
+      }
+    }
+
+    function setDestination(destination) {
+      activeDestination = destination;
+      agentConfig.hidden = destination !== 'agent';
+      memoryConfig.hidden = destination !== 'memory';
+      document.getElementById('target-heading').textContent = destination === 'agent' ? '发布到 Agent 全局规则' : '发布到项目 Memory';
+      clearPublishStatuses();
+      updateActionBar();
+    }
+
+    scopeTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const scope = tab.dataset.scope;
+        const globalActive = scope === 'global';
+        scopeTabs.forEach((item) => {
+          const active = item === tab;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', String(active));
+        });
+        projectView.hidden = globalActive;
+        globalView.hidden = !globalActive;
+        if (!globalActive) setDestination(scope === 'memory' ? 'memory' : 'agent');
+      });
+    });
+
+    targetTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        activeTarget = tab.dataset.target;
+        targetTabs.forEach((item) => {
+          const active = item === tab;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', String(active));
+        });
+        claudeConfig.hidden = activeTarget !== 'claude';
+        codexConfig.hidden = activeTarget !== 'codex';
+        clearPublishStatuses();
+        updateActionBar();
+      });
+    });
+
+    ruleCheckbox.addEventListener('change', () => {
+      clearPublishStatuses();
+      updateActionBar();
+    });
+
+    agentCheckboxes.forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        checkbox.closest('.agent-option').classList.toggle('selected', checkbox.checked);
+        clearPublishStatuses();
+        updateActionBar();
+      });
+    });
+
+    claudeSelect.addEventListener('change', () => {
+      const paths = {
+        'agent-workspace': '~/.claude/projects/-Users-example-Desktop-Company-person-agent-workspace/memory/',
+        'rules-manager': '~/.claude/projects/-Users-example-Desktop-Company-AI-Agent-rules-manager/memory/'
+      };
+      claudePath.textContent = paths[claudeSelect.value] || '选择目标后显示 Memory 路径';
+      claudeDetail.hidden = !claudeSelect.value;
+      clearPublishStatuses();
+      updateActionBar();
+    });
+
+    codexSelect.addEventListener('change', () => {
+      const paths = {
+        'agent-workspace': 'applies_to: cwd=/Users/example/Projects/agent-workspace',
+        'rules-manager': 'applies_to: cwd=/Users/example/Desktop/Company/AI-Agent/rules-manager'
+      };
+      codexPath.textContent = paths[codexSelect.value] || '选择工作目录后显示 applies_to';
+      codexDetail.hidden = !codexSelect.value;
+      clearPublishStatuses();
+      updateActionBar();
+    });
+
+    publishButton.addEventListener('click', () => {
+      if (publishButton.disabled) return;
+      if (activeDestination === 'agent') {
+        document.getElementById('agent-status').classList.add('visible');
+        showToast(`已模拟发布到 ${selectedAgents().length} 个 Agent 全局指令文件`);
+        return;
+      }
+      const status = document.getElementById(`${activeTarget}-status`);
+      status.classList.add('visible');
+      showToast(activeTarget === 'claude' ? '已模拟发布到 Claude Project Memory' : '已模拟提交到 Codex Memory');
+    });
+
+    exportButton.addEventListener('click', () => {
+      showToast('已模拟导出全部 1 条项目规则。勾选状态不会影响导出内容。');
+    });
+
+    themeToggle.addEventListener('click', () => {
+      const nextTheme = html.dataset.theme === 'light' ? 'dark' : 'light';
+      html.dataset.theme = nextTheme;
+      themeLabel.textContent = nextTheme === 'light' ? '深色' : '浅色';
+    });
+
+    setDestination('agent');
+  </script>
+</body>
+</html>

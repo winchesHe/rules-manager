@@ -1,0 +1,117 @@
+{
+  "title": "扫描",
+  "description": "发现本地 Agent 会话并整理到项目中。",
+  "loading": {
+    "scan": "正在加载扫描",
+    "history": "正在加载扫描历史"
+  },
+  "errors": {
+    "loadStatus": "无法加载扫描状态",
+    "failed": "扫描失败",
+    "loadHistory": "无法加载扫描历史",
+    "historyVersion": "新版本已支持扫描历史。请重启应用以完成更新。"
+  },
+  "notices": {
+    "cancelled": "扫描已取消。已完成的部分索引会保留；“最近扫描”仍展示上一次完整结果。"
+  },
+  "history": {
+    "back": "返回最近扫描",
+    "title": "扫描历史",
+    "description": "全部已完成的扫描，按时间倒序排列。",
+    "all": "全部已完成扫描",
+    "empty": "还没有已完成的扫描。",
+    "tableLabel": "扫描历史",
+    "viewRow": "查看 {{time}} 完成的扫描",
+    "backToHistory": "返回历史",
+    "action": "历史"
+  },
+  "create": {
+    "back": "返回最近扫描",
+    "title": "新建扫描",
+    "description": "选择 Agent 和扫描的历史时间范围。",
+    "scopeTitle": "扫描范围",
+    "scopeDescription": "选择本次扫描要覆盖的会话活动时间。",
+    "rangeLabel": "扫描时间范围",
+    "fullHistory": "全部历史",
+    "lastDays": "最近 X 天",
+    "daysLabel": "扫描天数",
+    "daysUnit": "天",
+    "agentsTitle": "Agents",
+    "agentsDescription": "只扫描已选择的 Agent。",
+    "agentsLabel": "扫描 Agents",
+    "selectAgent": "至少选择一个 Agent",
+    "summaryRecent_one": "{{count}} 个 Agent · 最近 {{days}} 天",
+    "summaryRecent_other": "{{count}} 个 Agent · 最近 {{days}} 天",
+    "summaryFull_one": "{{count}} 个 Agent · 全部历史",
+    "summaryFull_other": "{{count}} 个 Agent · 全部历史",
+    "start": "开始扫描"
+  },
+  "latest": {
+    "newScan": "新建扫描",
+    "historicalDescription": "查看这次历史扫描结果，并打开受影响的项目。",
+    "resultDescription": "查看本次变更，然后前往项目或规则继续处理。",
+    "emptyDescription": "发现本地 Agent 会话并整理到项目中。",
+    "stoppingTitle": "正在停止扫描",
+    "progressTitle": "扫描进行中",
+    "resultTitle": "扫描结果",
+    "latestTitle": "最近扫描",
+    "title": "扫描",
+    "completedAt": "完成于 {{time}}",
+    "filterLabel": "变更筛选",
+    "changesTableLabel": "最近扫描变更",
+    "emptyFilter": "当前筛选条件下没有项目变更。",
+    "viewSessions": "查看会话",
+    "viewProjectSessions": "查看 {{project}} 的会话",
+    "firstTitle": "设置第一次扫描",
+    "firstDescription": "选择要扫描会话的本地 Agent。",
+    "configureFirst": "配置第一次扫描"
+  },
+  "progress": {
+    "cancellingTitle": "正在取消扫描",
+    "runningTitle": "正在扫描会话",
+    "backgroundHint": "扫描运行时，你仍可继续使用项目和规则。",
+    "cancelling": "正在取消",
+    "stop": "停止扫描",
+    "agentLabel": "{{agent}} 扫描进度"
+  },
+  "phase": {
+    "waiting": "等待中",
+    "processing": "处理中",
+    "discovering": "发现中",
+    "done": "已完成",
+    "skipped": "已跳过",
+    "error": "错误"
+  },
+  "scope": {
+    "recent": "最近 {{days}} 天",
+    "full": "全部历史"
+  },
+  "filters": {
+    "all": "全部",
+    "new": "新增",
+    "updated": "已更新",
+    "missing": "缺失"
+  },
+  "columns": {
+    "completed": "完成时间",
+    "status": "状态",
+    "scope": "范围",
+    "sessions": "会话",
+    "new": "新增",
+    "updated": "已更新",
+    "errors": "错误",
+    "project": "项目",
+    "agents": "Agents",
+    "missing": "缺失",
+    "actions": "操作"
+  },
+  "summary": {
+    "sessions_one": "{{count}} 个会话",
+    "sessions_other": "{{count}} 个会话",
+    "new": "{{count}} 个新增",
+    "updated": "{{count}} 个更新",
+    "missing": "{{count}} 个缺失",
+    "errors_one": "{{count}} 个错误",
+    "errors_other": "{{count}} 个错误"
+  }
+}

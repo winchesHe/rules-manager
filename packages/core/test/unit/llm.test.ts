@@ -1,0 +1,717 @@
+import { EventEmitter } from 'node:events'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { jest } from '@jest/globals'
+
+const queryMock = jest.fn()
+const spawnMock = jest.fn()
+
+jest.unstable_mockModule('@anthropic-ai/claude-agent-sdk', () => ({
+  query: queryMock,
+}))
+jest.unstable_mockModule('node:child_process', () => ({
+  spawn: spawnMock,
+}))
+
+const { candidateRulesSchema, getStructuredResponse } = await import('../../src/llm')
+
+function response(result: string, structuredOutput?: unknown): AsyncIterable<unknown> {
+  return (async function* () {
+    yield {
+      type: 'result',
+      subtype: 'success',
+      result,
+      ...(structuredOutput === undefined ? {} : { structured_output: structuredOutput }),
+      usage: { input_tokens: 1, output_tokens: 1 },
+    }
+  })()
+}
+
+function codexProcess(
+  lines: unknown[],
+  options: { code?: number; stderr?: string } = {},
+) {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter & { setEncoding: ReturnType<typeof jest.fn> }
+    stderr: EventEmitter & { setEncoding: ReturnType<typeof jest.fn> }
+    stdin: { end: ReturnType<typeof jest.fn> }
+    kill: ReturnType<typeof jest.fn>
+  }
+  child.stdout = Object.assign(new EventEmitter(), { setEncoding: jest.fn() })
+  child.stderr = Object.assign(new EventEmitter(), { setEncoding: jest.fn() })
+  child.stdin = { end: jest.fn() }
+  child.kill = jest.fn(() => true)
+  queueMicrotask(() => {
+    child.stdout.emit('data', `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`)
+    if (options.stderr) child.stderr.emit('data', options.stderr)
+    child.emit('close', options.code ?? 0)
+  })
+  return child
+}
+
+describe('getStructuredResponse', () => {
+  beforeEach(() => {
+    queryMock.mockReset()
+    spawnMock.mockReset()
+  })
+
+  it('Claude 使用只读多回合与短 Schema 指令，并校验 structured_output', async () => {
+    const structured = [{
+      scope: 'project',
+      project_slug: 'demo',
+      rule_text: 'Always run tests',
+      confidence_level: 'high',
+      reasoning: 'Repeated requirement',
+      evidence_refs: ['s1:0'],
+    }]
+    queryMock.mockReturnValue(response('structured response', structured))
+
+    const value = await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      'sonnet-test',
+      'max',
+      {
+        fastMode: true,
+        cwd: '/tmp/evidence-project',
+        maxTurns: 12,
+        tools: ['Read', 'Grep', 'Glob'],
+      },
+    )
+
+    expect(value).toHaveLength(1)
+    expect(queryMock).toHaveBeenCalledTimes(1)
+    expect(queryMock.mock.calls[0][0]).toMatchObject({
+      options: {
+        maxTurns: 12,
+        includePartialMessages: true,
+        model: 'sonnet-test',
+        effort: 'max',
+        settings: { fastMode: true },
+        cwd: '/tmp/evidence-project',
+        tools: ['Read', 'Grep', 'Glob'],
+        allowedTools: ['Read', 'Grep', 'Glob'],
+        permissionMode: 'dontAsk',
+      },
+    })
+    const request = queryMock.mock.calls[0][0] as {
+      prompt: string
+      options: Record<string, unknown>
+    }
+    expect(request.options).not.toHaveProperty('outputFormat')
+    expect(request.prompt).toContain('evidence')
+    expect(request.prompt).toContain('只输出语义符合以下 JSON Schema 的 YAML')
+    expect(request.prompt).toContain('"confidence_level"')
+    expect(request.prompt).not.toContain('"$schema"')
+  })
+
+  it('Fast Mode 关闭时仍显式覆盖 Claude session settings', async () => {
+    queryMock.mockReturnValue(response('[]'))
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      'xhigh',
+      { fastMode: false },
+    )
+
+    expect(queryMock.mock.calls[0][0]).toMatchObject({
+      options: {
+        maxTurns: 1,
+        includePartialMessages: true,
+        effort: 'xhigh',
+        settings: { fastMode: false },
+      },
+    })
+  })
+
+  it.each([
+    [true, 'priority'],
+    [false, 'default'],
+  ])('Codex Fast Mode %s 映射为 service_tier=%s', async (fastMode, serviceTier) => {
+    const child = codexProcess([{
+      type: 'item.completed',
+      item: { type: 'agent_message', text: '[]' },
+    }])
+    spawnMock.mockReturnValue(child)
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      'gpt-test',
+      'high',
+      {
+        fastMode,
+        cwd: '/tmp/evidence-project',
+        outputSchemaPath: '/tmp/evidence-project/schema.json',
+      },
+    )
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0][1]).toEqual([
+      'exec',
+      '--json',
+      '--ephemeral',
+      '--ignore-rules',
+      '--skip-git-repo-check',
+      '--sandbox',
+      'read-only',
+      '-C',
+      '/tmp/evidence-project',
+      '--output-schema',
+      '/tmp/evidence-project/schema.json',
+      '-m',
+      'gpt-test',
+      '-c',
+      'model_reasoning_effort="high"',
+      '-c',
+      `service_tier=${JSON.stringify(serviceTier)}`,
+      '-',
+    ])
+    expect(child.stdin.end).toHaveBeenCalledWith('evidence')
+  })
+
+  it('Codex output schema 要求 project_slug 必填且允许 null', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-manager-schema-test-'))
+    const schemaPath = path.join(root, 'candidate-rules.schema.json')
+    const child = codexProcess([{
+      type: 'item.completed',
+      item: { type: 'agent_message', text: '[]' },
+    }])
+    spawnMock.mockReturnValue(child)
+
+    try {
+      await getStructuredResponse(
+        'evidence',
+        candidateRulesSchema,
+        'codex',
+        undefined,
+        undefined,
+        { outputSchemaPath: schemaPath },
+      )
+      const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8')) as {
+        type: string
+        required: string[]
+        properties: {
+          candidates: {
+            type: string
+            items: {
+              required: string[]
+              properties: {
+                project_slug: { anyOf: Array<{ type: string }> }
+              }
+            }
+          }
+        }
+      }
+      expect(schema.type).toBe('object')
+      expect(schema.required).toEqual(['candidates'])
+      expect(schema.properties.candidates.type).toBe('array')
+      expect(schema.properties.candidates.items.required).toContain('project_slug')
+      expect(schema.properties.candidates.items.properties.project_slug.anyOf.map(({ type }) => type))
+        .toEqual(['string', 'null'])
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('结构化输出损坏时立即失败，不携带完整 Evidence 原样重试', async () => {
+    queryMock.mockReturnValue(response('not json'))
+
+    await expect(
+      getStructuredResponse('private evidence body', candidateRulesSchema, 'claude'),
+    ).rejects.toThrow('expected array')
+    expect(queryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('Claude 回复包含多个 JSON 片段时提取第一个独立合法数组', async () => {
+    const first = [{
+      scope: 'project',
+      project_slug: 'demo',
+      rule_text: 'Always run tests',
+      confidence_level: 'high',
+      reasoning: 'Explicit requirement',
+      evidence_refs: ['s1:0'],
+    }]
+    queryMock.mockReturnValue(response(
+      `${JSON.stringify(first)}\nAdditional diagnostic: []`,
+    ))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual(first)
+  })
+
+  it('Claude global 候选继续兼容省略 project_slug', async () => {
+    const globalRule = [{
+      scope: 'global',
+      rule_text: 'Always answer in Chinese',
+      confidence_level: 'high',
+      reasoning: 'Explicit global preference',
+      evidence_refs: ['s1:0'],
+    }]
+    queryMock.mockReturnValue(response('structured response', globalRule))
+
+    await expect(getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual(globalRule)
+  })
+
+  it('Claude 回复先包含诊断对象时继续寻找符合 Zod Schema 的数组', async () => {
+    const rules = [{
+      scope: 'project',
+      project_slug: 'demo',
+      rule_text: 'Always run tests',
+      confidence_level: 'high',
+      reasoning: 'Explicit requirement',
+      evidence_refs: ['s1:0'],
+    }]
+    queryMock.mockReturnValue(response(
+      `${JSON.stringify({ status: 'analyzed' })}\n${JSON.stringify(rules)}`,
+    ))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual(rules)
+  })
+
+  it('Claude 在空数组前附带说明文字时仍返回零条候选', async () => {
+    queryMock.mockReturnValue(response([
+      'Evidence 中没有明确要求、偏好、纠正或规则信号。',
+      '',
+      '[]',
+    ].join('\n')))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual([])
+  })
+
+  it('Claude 在 YAML 根列表前附带说明文字时仍返回候选', async () => {
+    queryMock.mockReturnValue(response([
+      'Based on the evidence, here are the reusable rules.',
+      '',
+      '- scope: project',
+      '  project_slug: demo',
+      '  rule_text: |-',
+      '    Always run tests',
+      '  confidence_level: high',
+      '  reasoning: |-',
+      '    Explicit requirement',
+      '  evidence_refs:',
+      '    - s1:0',
+    ].join('\n')))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual([expect.objectContaining({
+      rule_text: 'Always run tests',
+    })])
+  })
+
+  it('Claude YAML block scalar 可包含未转义的双引号', async () => {
+    queryMock.mockReturnValue(response([
+      '- scope: project',
+      '  project_slug: demo',
+      '  rule_text: |-',
+      '    重点股票必须写"名称 + 6位代码"',
+      '  confidence_level: high',
+      '  reasoning: |-',
+      '    用户明确要求该格式。',
+      '  evidence_refs:',
+      '    - s1:0',
+    ].join('\n')))
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+    )).resolves.toEqual([expect.objectContaining({
+      rule_text: '重点股票必须写"名称 + 6位代码"',
+    })])
+  })
+
+  it('Prompt too long 属于确定性失败，不原样重试', async () => {
+    queryMock.mockReturnValue((async function* () {
+      yield {
+        type: 'result',
+        subtype: 'error_during_execution',
+        errors: ['Prompt is too long'],
+      }
+    })())
+
+    await expect(
+      getStructuredResponse('read manifest.json', candidateRulesSchema, 'claude'),
+    ).rejects.toThrow('Prompt is too long')
+    expect(queryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('瞬时 Provider 错误有限重试并保留原始短 Prompt', async () => {
+    queryMock
+      .mockImplementationOnce(() => {
+        throw new Error('temporary provider unavailable')
+      })
+      .mockReturnValueOnce(response('[]', []))
+    const events: unknown[] = []
+
+    await expect(getStructuredResponse(
+      'read manifest.json',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { maxRetries: 1, onEvent: (event) => events.push(event) },
+    )).resolves.toEqual([])
+
+    expect(queryMock).toHaveBeenCalledTimes(2)
+    const prompts = queryMock.mock.calls.map(
+      (call) => (call[0] as { prompt: string }).prompt,
+    )
+    expect(prompts[0]).toBe(prompts[1])
+    expect(prompts[0]).toContain('read manifest.json')
+    expect(prompts[0]).toContain('只输出语义符合以下 JSON Schema 的 YAML')
+    expect(events).toContainEqual({
+      type: 'retry',
+      message: 'temporary provider unavailable',
+      attempt: 1,
+    })
+  })
+
+  it('Claude 把 partial text delta 归一化为 assistant_delta', async () => {
+    queryMock.mockReturnValue((async function* () {
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'streamed ' },
+        },
+      }
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'reply' },
+        },
+      }
+      yield { type: 'result', subtype: 'success', result: '[]' }
+    })())
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([
+      { type: 'assistant_delta', text: 'streamed ' },
+      { type: 'assistant_delta', text: 'reply' },
+    ])
+  })
+
+  it('Claude 未提供 partial event 时仍把最终回复展示到输出流', async () => {
+    queryMock.mockReturnValue(response('[]'))
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([{ type: 'assistant_delta', text: '[]' }])
+  })
+
+  it('Claude 把 thinking 与 tool use 归一化为可见 Activity 摘要', async () => {
+    queryMock.mockReturnValue((async function* () {
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'thinking', thinking: '' },
+        },
+      }
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: '先检查项目约束，' },
+        },
+      }
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: '再分析会话证据。' },
+        },
+      }
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_stop',
+          index: 0,
+        },
+      }
+      yield {
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tool-read-1',
+            name: 'Read',
+            input: {
+              file_path: '/repo/AGENTS.md',
+              content: 'must never be exposed',
+            },
+          }],
+        },
+      }
+      yield { type: 'result', subtype: 'success', result: '[]' }
+    })())
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'claude',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toContainEqual({
+      type: 'activity',
+      activity: {
+        id: expect.stringMatching(/^claude-\d+-thinking-0$/),
+        kind: 'thinking',
+        label: 'Thinking',
+        status: 'running',
+      },
+    })
+    expect(events).toContainEqual({
+      type: 'activity',
+      activity: {
+        id: expect.stringMatching(/^claude-\d+-thinking-0$/),
+        kind: 'thinking',
+        label: 'Thinking',
+        status: 'completed',
+        detail: '先检查项目约束，再分析会话证据。',
+      },
+    })
+    expect(events).toContainEqual({
+      type: 'activity',
+      activity: {
+        id: 'tool-read-1',
+        kind: 'read',
+        label: 'Read',
+        detail: '/repo/AGENTS.md',
+      },
+    })
+    expect(JSON.stringify(events)).not.toContain('must never be exposed')
+  })
+
+  it('Codex 逐行解析 JSONL delta，并用 completed message 作为最终输出', async () => {
+    const child = codexProcess([
+      {
+        type: 'item.updated',
+        item: {
+          type: 'agent_message',
+          delta: { text: '[' },
+        },
+      },
+      {
+        type: 'item.updated',
+        item: {
+          type: 'agent_message',
+          delta: { text: ']' },
+        },
+      },
+      {
+        type: 'item.completed',
+        item: { type: 'agent_message', text: '[]' },
+      },
+    ])
+    spawnMock.mockReturnValue(child)
+    const events: unknown[] = []
+
+    await expect(getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )).resolves.toEqual([])
+
+    expect(events).toEqual([
+      { type: 'assistant_delta', text: '[' },
+      { type: 'assistant_delta', text: ']' },
+    ])
+  })
+
+  it('Codex 只有 completed message 时仍把最终回复展示到输出流', async () => {
+    const child = codexProcess([{
+      type: 'item.completed',
+      item: { type: 'agent_message', text: '[]' },
+    }])
+    spawnMock.mockReturnValue(child)
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([{ type: 'assistant_delta', text: '[]' }])
+  })
+
+  it('Codex 失败时优先展示结构化错误并去重 stderr 诊断', async () => {
+    const child = codexProcess([
+      {
+        type: 'item.completed',
+        item: { type: 'error', message: 'Skill descriptions were shortened' },
+      },
+      {
+        type: 'error',
+        message: 'output schema is not supported by this provider',
+      },
+    ], {
+      code: 1,
+      stderr: [
+        'ERROR skills scan reached its traversal limit',
+        'ERROR skills scan reached its traversal limit',
+      ].join('\n'),
+    })
+    spawnMock.mockReturnValue(child)
+
+    await expect(getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+    )).rejects.toThrow(
+      /^codex 退出码 1：output schema is not supported by this provider\nCodex diagnostics: ERROR skills scan reached its traversal limit/,
+    )
+  })
+
+  it('Codex 把 reasoning、搜索命令和 web search 逐行归一化为 Activity', async () => {
+    const child = codexProcess([
+      {
+        type: 'item.started',
+        item: { id: 'reason-1', type: 'reasoning', text: 'private chain of thought' },
+      },
+      {
+        type: 'item.completed',
+        item: {
+          id: 'reason-1',
+          type: 'reasoning',
+          text: 'Checked the project constraints.',
+        },
+      },
+      {
+        type: 'item.started',
+        item: {
+          id: 'command-1',
+          type: 'command_execution',
+          command: 'rtk rg -n "ChatView" packages/app',
+          aggregated_output: 'private tool output',
+        },
+      },
+      {
+        type: 'item.started',
+        item: {
+          id: 'search-1',
+          type: 'web_search',
+          query: 'Codex JSONL events',
+          result: 'private search result',
+        },
+      },
+      {
+        type: 'item.completed',
+        item: { type: 'agent_message', text: '[]' },
+      },
+    ])
+    spawnMock.mockReturnValue(child)
+    const events: unknown[] = []
+
+    await getStructuredResponse(
+      'evidence',
+      candidateRulesSchema,
+      'codex',
+      undefined,
+      undefined,
+      { onEvent: (event) => events.push(event) },
+    )
+
+    expect(events).toEqual([
+      {
+        type: 'activity',
+        activity: {
+          id: 'reason-1',
+          kind: 'thinking',
+          label: 'Thinking',
+          status: 'running',
+        },
+      },
+      {
+        type: 'activity',
+        activity: {
+          id: 'reason-1',
+          kind: 'thinking',
+          label: 'Thinking',
+          status: 'completed',
+          detail: 'Checked the project constraints.',
+        },
+      },
+      {
+        type: 'activity',
+        activity: {
+          id: 'command-1',
+          kind: 'search',
+          label: 'Search',
+          detail: 'rtk rg -n "ChatView" packages/app',
+          status: 'running',
+        },
+      },
+      {
+        type: 'activity',
+        activity: {
+          id: 'search-1',
+          kind: 'search',
+          label: 'Search',
+          detail: 'Codex JSONL events',
+          status: 'running',
+        },
+      },
+      { type: 'assistant_delta', text: '[]' },
+    ])
+    expect(JSON.stringify(events)).not.toContain('private chain of thought')
+  })
+})

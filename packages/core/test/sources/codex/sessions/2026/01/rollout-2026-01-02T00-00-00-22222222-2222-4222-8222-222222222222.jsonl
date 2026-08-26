@@ -1,0 +1,4 @@
+{"timestamp":"2026-01-02T00:00:00.000Z","type":"session_meta","payload":{"id":"22222222-2222-4222-8222-222222222222","timestamp":"2026-01-02T00:00:00.000Z","cwd":"/Users/example/Projects/orbit-cli","originator":"codex_cli","cli_version":"1.0.0","source":"cli","model_provider":"fixture","git":{"commit_hash":"2222222222222222222222222222222222222222","branch":"feature/synthetic-runtime","repository_url":"https://example.invalid/orbit-cli.git"}}}
+{"timestamp":"2026-01-02T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"运行合成测试。"}]}}
+{"timestamp":"2026-01-02T00:00:02.000Z","type":"response_item","payload":{"type":"function_call","name":"read_file","arguments":"{\"path\":\"README.md\"}","call_id":"call_fixture"}}
+{"timestamp":"2026-01-02T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"合成测试完成。"}]}}

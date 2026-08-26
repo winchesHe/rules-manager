@@ -1,0 +1,2 @@
+{"role":"user","message":{"content":[{"type":"text","text":"检查示例浏览器扩展。"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"这是合成测试响应。"},{"type":"tool_use","id":"tool_fixture","name":"read_file","input":{"path":"README.md"}}]}}

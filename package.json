@@ -1,0 +1,13 @@
+{
+  "name": "memory-manager-monorepo",
+  "version": "0.1.0",
+  "description": "本地优先 AI agent session 管理与 rules 生成 CLI",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "npm run build -w @memory-manager/core",
+    "test": "npm test -w @memory-manager/core",
+    "eval:session-evidence": "npm run eval:session-evidence -w @memory-manager/evals --"
+  }
+}
