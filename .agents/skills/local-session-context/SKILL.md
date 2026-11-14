@@ -1,6 +1,6 @@
 ---
 name: local-session-context
-description: 准确检索并按需读取本机 Claude、Codex、Copilot、Cursor、OpenCode、Pi 的最新历史 Session。用于查找最近 X 天真实使用过 computer-use、chrome-use 的 Session，或按“联调”等可信消息关键词找相关 Session，读取最新工具调用、结果与上下文以复盘重复错误和阻碍；也用于全量读取最近一段时间的 Session 并总结做了什么。需要 coverage、命中证明、最新无截断分页上下文或本地 Session 历史总结时使用。
+description: 准确检索并按需读取本机 Claude、Codex、Copilot、Cursor、Gemini CLI、Grok Build、OpenCode、Pi 的最新历史 Session。用于查找最近 X 天真实使用过 computer-use、chrome-use 的 Session，或按“联调”等可信消息关键词找相关 Session，读取最新工具调用、结果与上下文以复盘重复错误和阻碍；也用于全量读取最近一段时间的 Session 并总结做了什么。需要 coverage、命中证明、最新无截断分页上下文或本地 Session 历史总结时使用。
 ---
 
 # 本地 Session 上下文

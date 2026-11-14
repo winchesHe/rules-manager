@@ -3926,3 +3926,21 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - Core 全量 41 suites / 406 tests、App 全量 45 suites / 289 tests、Core/App production build 与
   `git diff --check` 通过；build 仅保留既有 tsdown `define` 和 `markstream-react` PURE comment warning。
 - 提交信息：`fix: 改为实时读取最新 Session 上下文`
+
+## Grok Build 与 Gemini CLI Session 适配器（2026-11-14）
+
+- 新增 `gemini` 与 `grok` 两个 Agent adapter，并纳入扫描注册、Query v2、Session Show、Session Event Reader、
+  live Context、Evidence 与 App Session 引用校验。DB schema 不变，扫描仍只保存既有元数据、源路径和内容 hash。
+- Gemini CLI 从 `~/.gemini/tmp/<project>/chats/session-*.jsonl` 读取本地会话，重建消息追加、`$patch` 与
+  `$rewindTo` 后的有效记录；仅使用可信绝对路径字段生成项目 hint。
+- Grok Build 从 `${GROK_HOME:-~/.grok}/sessions/<encoded-cwd>/<session-id>/` 读取；`updates.jsonl` 是权威对话流，
+  仅当更新流没有消息时回退 `chat_history.jsonl`。忽略 system/reasoning 内容，并从 `summary.json` 读取会话标题和路径元数据。
+- `docs/plans/grok-gemini-session-adapters.md` 定义观察点、验收和实现次序；同步 Query 合同、项目 Agent 清单、
+  App 白名单测试及 `local-session-context` 仓库 skill。网页产品的云端对话不在本次范围。
+- 隔离 fixture 覆盖发现/解析、patch/rewind、Grok tool call/result、fallback、扫描→Query→Session Show→live read，
+  并验证 DB 不写入消息正文及损坏文件错误被写入 `run_metadata.details`。新增 adapter 与注册表定向测试 9/9，
+  受影响 Query/Event/Source Reader/Session Show/Context 测试 53/53，App 引用校验与 prompt 测试 6/6；Core 与 App build、
+  仓库 skill quick validator 及 `git diff --check` 通过。只运行带明确文件路径的增量测试，未跑全量套件。
+- 本机未安装 Grok Build，且没有 `~/.grok/sessions` 或 `~/.gemini/tmp`；本轮只通过真实格式的隔离 fixture 验收，
+  未验证个人真实会话。源仓库实现与个人 Skills worktree 均已更新；等待提交并推送分支，不合并 `main`。
+- 提交信息：`feat: 支持 Grok Build 与 Gemini CLI Session`

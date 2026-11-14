@@ -66,7 +66,7 @@ describe('session source reader', () => {
     expect(result.messages.some((message) => message.content === text)).toBe(true)
   }
 
-  it('按 selection 顺序为 6 个 Agent 返回唯一 readable 终态', async () => {
+  it('按 selection 顺序为既有 Agent 返回唯一 readable 终态', async () => {
     const references: SessionReference[] = (['claude', 'codex', 'cursor', 'pi'] as const).map((agent) => {
       const id = `${agent}-session`
       addSession(id, agent, writeJsonl(id, agent))

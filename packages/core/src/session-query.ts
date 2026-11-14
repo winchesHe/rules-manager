@@ -15,7 +15,7 @@ export const SESSION_QUERY_VERSION = 2 as const
 export const SESSION_QUERY_LEGACY_VERSION = 1 as const
 export const TOOL_REGISTRY_VERSION = 2 as const
 
-const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'opencode', 'pi'])
+const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 'opencode', 'pi'])
 const statusSchema = z.enum(['new', 'updated', 'unchanged', 'missing', 'error'])
 const keywordFieldSchema = z.enum([
   'user',

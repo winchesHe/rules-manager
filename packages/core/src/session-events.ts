@@ -8,6 +8,8 @@ import { throwIfAborted } from './abort.js'
 import type { SourceRevision, SessionSourceStatus } from './evidence-coverage.js'
 import type { SessionSourceErrorCode } from './session-source-reader.js'
 import type { AgentName, SessionStatus } from './types.js'
+import { readGeminiSession } from './gemini-session.js'
+import { readGrokSession } from './grok-session.js'
 import { resolveWorkspace } from './workspace.js'
 
 export type SessionEventKind =
@@ -103,7 +105,7 @@ interface EventReadAttempt {
   sourceRevision: SourceRevision
 }
 
-const JSONL_AGENTS = new Set<AgentName>(['claude', 'codex', 'cursor', 'pi'])
+const JSONL_AGENTS = new Set<AgentName>(['claude', 'codex', 'cursor', 'gemini', 'grok', 'pi'])
 const TOOL_CALL_TYPES = new Set([
   'tool_use',
   'toolcall',
@@ -765,11 +767,144 @@ function readCopilotTurnEvents(
   }, () => afterSnapshot?.(dbPath, sessionId))
 }
 
+async function readGeminiEvents(
+  sourcePath: string,
+  signal?: AbortSignal,
+  afterSnapshot?: (sourcePath: string) => void,
+): Promise<EventReadAttempt> {
+  const watermark = captureJsonlWatermark(sourcePath, 'gemini')
+  afterSnapshot?.(sourcePath)
+  let drafts: EventDraft[] = []
+  let readError: unknown
+  try {
+    throwIfAborted(signal)
+    const session = readGeminiSession(sourcePath)
+    if (session.summary) {
+      drafts.push({
+        kind: 'metadata',
+        content: { title: session.summary },
+        sourceLocator: 'session.summary',
+      })
+    }
+    for (const message of session.messages) {
+      throwIfAborted(signal)
+      const role = message.type === 'user'
+        ? 'user'
+        : message.type === 'gemini'
+          ? 'assistant'
+          : undefined
+      if (!role) continue
+      const timestamp = timestampOf(message.timestamp)
+      if (message.content !== undefined) {
+        drafts.push(...contentDrafts(
+          message.content,
+          role,
+          timestamp,
+          message.sourceLocator,
+        ))
+      }
+      if (role !== 'assistant' || !Array.isArray(message.toolCalls)) continue
+      message.toolCalls.forEach((value, index) => {
+        const tool = asRecord(value)
+        if (!tool) return
+        const callId = asString(tool.id)
+        const name = asString(tool.name)
+        const locator = `${message.sourceLocator}.toolCalls[${index}]`
+        drafts.push(toolCallDraft({
+          toolCallId: callId,
+          name,
+          input: tool.args ?? {},
+        }, timestamp, locator))
+        if (tool.result !== undefined && tool.result !== null) {
+          drafts.push(toolResultDraft({
+            toolCallId: callId,
+            name,
+            output: tool.result,
+          }, timestampOf(tool.timestamp) ?? timestamp, `${locator}.result`))
+        }
+      })
+    }
+  } catch (error) {
+    readError = error
+  }
+  const sourceRevision = jsonlRevision(watermark, 'gemini')
+  if (readError) {
+    if (readError instanceof SessionEventReaderError) {
+      throw new SessionEventReaderError(readError.code, readError.message, sourceRevision)
+    }
+    const code = signal?.aborted ? 'SOURCE_READ_FAILED' : 'SOURCE_FORMAT_INVALID'
+    throw new SessionEventReaderError(code, String(readError), sourceRevision)
+  }
+  return { events: assignIndexes(drafts), sourceRevision }
+}
+
+async function readGrokEvents(
+  sourcePath: string,
+  sessionId: string,
+  afterSnapshot?: (sourcePath: string) => void,
+): Promise<EventReadAttempt> {
+  try {
+    const session = readGrokSession(
+      sourcePath,
+      sessionId,
+      () => afterSnapshot?.(sourcePath),
+    )
+    const drafts: EventDraft[] = []
+    if (session.title) {
+      drafts.push({
+        kind: 'metadata',
+        content: { title: session.title },
+        sourceLocator: 'summary.json:generated_title',
+      })
+    }
+    for (const event of session.events) {
+      if (event.kind === 'message') {
+        drafts.push(...contentDrafts(
+          event.content,
+          event.role,
+          event.timestamp,
+          event.sourceLocator,
+        ))
+      } else if (event.kind === 'tool_call') {
+        drafts.push(toolCallDraft({
+          toolCallId: event.toolCallId,
+          name: event.toolName,
+          input: event.content,
+        }, event.timestamp, event.sourceLocator))
+      } else {
+        drafts.push(toolResultDraft({
+          toolCallId: event.toolCallId,
+          name: event.toolName,
+          output: event.content,
+        }, event.timestamp, event.sourceLocator))
+      }
+    }
+    return { events: assignIndexes(drafts), sourceRevision: session.sourceRevision }
+  } catch (error) {
+    if (error instanceof SessionEventReaderError) throw error
+    throw new SessionEventReaderError('SOURCE_FORMAT_INVALID', String(error))
+  }
+}
+
 async function readStoredSession(
   session: StoredSessionRow,
   options: SessionEventReaderOptions,
   deps: SessionEventReaderDeps,
 ): Promise<EventReadAttempt> {
+  if (session.agent === 'gemini') {
+    return readGeminiEvents(
+      session.source_path,
+      options.signal,
+      deps.afterJsonlSnapshot,
+    )
+  }
+  if (session.agent === 'grok') {
+    return readGrokEvents(
+      session.source_path,
+      session.id,
+      deps.afterJsonlSnapshot,
+    )
+  }
   if (JSONL_AGENTS.has(session.agent)) {
     return readJsonlEvents(
       session.source_path,

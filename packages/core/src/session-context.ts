@@ -5,6 +5,7 @@ import { parse as parseYaml } from 'yaml'
 import { getDbPath, isDatabaseReady } from './db.js'
 import type { AgentName, SessionStatus } from './types.js'
 import { redactSecrets } from './redaction.js'
+import { grokSessionTitle } from './grok-session.js'
 
 export interface SessionContextQuery {
   homeDir?: string
@@ -202,7 +203,9 @@ export function resolveSessionDisplayNames(
     if (names.has(key)) continue
     const title = session.agent === 'copilot'
       ? readCopilotTitle(session.sourcePath)
-      : readJsonlTitle(session.sourcePath, session.agent)
+      : session.agent === 'grok'
+        ? grokSessionTitle(session.sourcePath)
+        : readJsonlTitle(session.sourcePath, session.agent)
     if (title) names.set(key, title)
   }
   return names

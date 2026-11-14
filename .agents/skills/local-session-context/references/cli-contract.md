@@ -39,7 +39,7 @@ memory-manager context close <run-id>
   "version": 2,
   "time": { "lastDays": 30 },
   "scope": {
-    "agents": ["claude", "codex", "copilot", "cursor", "opencode", "pi"],
+    "agents": ["claude", "codex", "copilot", "cursor", "gemini", "grok", "opencode", "pi"],
     "projects": ["optional-project-slug"],
     "statuses": ["new", "updated", "unchanged"],
     "includeInternal": false
@@ -63,7 +63,11 @@ memory-manager context close <run-id>
 
 时间：`lastDays` 为正整数；也可使用 ISO 8601 `since` / `until`，但不能和 `lastDays` 混用。
 
-范围：`scope` 可省略；Agent 只允许 `claude|codex|copilot|cursor|opencode|pi`。`includeInternal` 默认 false。未明确要求状态限制时，不要自行添加 `statuses`。
+范围：`scope` 可省略；Agent 只允许 `claude|codex|copilot|cursor|gemini|grok|opencode|pi`。`includeInternal` 默认 false。未明确要求状态限制时，不要自行添加 `statuses`。
+
+本地会话来源：Gemini CLI 位于 `~/.gemini/tmp/<project>/chats/session-*.jsonl`；Grok Build 位于
+`${GROK_HOME:-~/.grok}/sessions/<encoded-cwd>/<session-id>/`，优先读取权威 `updates.jsonl`，其中没有对话内容时回退到
+`chat_history.jsonl`。Grok 的 `summary.json` 只提供标题和项目元数据。搜索范围是本地 CLI 历史，不包含 Gemini 或 Grok 网页产品的云端对话。
 
 布尔谓词：
 

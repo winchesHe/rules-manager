@@ -50,7 +50,7 @@ Query JSON
   "version": 2,
   "time": { "lastDays": 30 },
   "scope": {
-    "agents": ["claude", "codex", "copilot", "cursor", "opencode", "pi"],
+    "agents": ["claude", "codex", "copilot", "cursor", "gemini", "grok", "opencode", "pi"],
     "projects": ["optional-project-slug"]
   },
   "where": {
@@ -75,6 +75,9 @@ Query JSON
 - `time.lastDays` 为正整数，以命令启动时的时钟计算闭区间起点；也支持 ISO 8601 的 `since` / `until`。
 - `lastDays` 不得和 `since` / `until` 混用。
 - `scope.agents`、`scope.projects`、`scope.statuses` 均为可选白名单；未提供表示不限制。
+- 内置 Agent 来源包括 Claude、Codex、Copilot、Cursor、Gemini CLI、Grok Build、OpenCode 与 Pi。Gemini 读取
+  `~/.gemini/tmp/<project>/chats/` 的本地会话；Grok 读取 `${GROK_HOME:-~/.grok}/sessions/`，以 `updates.jsonl`
+  为权威会话流，必要时回退 `chat_history.jsonl`。网页产品的云端历史不在范围内。
 - `scope.includeInternal` 默认 false，排除 memory-manager 自身生成的内部任务 Session。
 - 候选集合来自 `sessions.updated_at`，排序固定为 `updated_at DESC, id ASC`。
 

@@ -62,6 +62,12 @@ function defaultAgentSourceDir(agent: AgentAdapter['name'], homeDir?: string): s
   if (!homeDir && agent === 'codex' && process.env.CODEX_HOME) {
     return path.resolve(process.env.CODEX_HOME)
   }
+  if (!homeDir && agent === 'gemini' && process.env.GEMINI_CLI_HOME) {
+    return path.join(path.resolve(process.env.GEMINI_CLI_HOME), '.gemini')
+  }
+  if (!homeDir && agent === 'grok' && process.env.GROK_HOME) {
+    return path.resolve(process.env.GROK_HOME)
+  }
   if (agent === 'opencode') {
     const dataHome = !homeDir && process.env.XDG_DATA_HOME
       ? path.resolve(process.env.XDG_DATA_HOME)
@@ -77,6 +83,7 @@ function defaultAgentSourceDir(agent: AgentAdapter['name'], homeDir?: string): s
     }
     return path.join(home, '.pi', 'agent')
   }
+  if (agent === 'grok') return path.join(home, '.grok')
   return path.join(home, `.${agent}`)
 }
 

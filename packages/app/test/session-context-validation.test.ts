@@ -17,4 +17,14 @@ describe('validateSessionReferences', () => {
     expect(() => validateSessionReferences([{ agent: 'codex', id: '' }]))
       .toThrow('id is required')
   })
+
+  it('接受 Gemini CLI 与 Grok Build 的 Session 引用', () => {
+    expect(validateSessionReferences([
+      { agent: 'gemini', id: 'gemini-session' },
+      { agent: 'grok', id: 'grok-session' },
+    ])).toEqual([
+      { agent: 'gemini', id: 'gemini-session' },
+      { agent: 'grok', id: 'grok-session' },
+    ])
+  })
 })

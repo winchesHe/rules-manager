@@ -3,6 +3,8 @@ import { claudeAdapter } from './claude.js'
 import { codexAdapter } from './codex.js'
 import { copilotAdapter } from './copilot.js'
 import { cursorAdapter } from './cursor.js'
+import { geminiAdapter } from './gemini.js'
+import { grokAdapter } from './grok.js'
 import { opencodeAdapter } from './opencode.js'
 import { piAdapter } from './pi.js'
 
@@ -11,6 +13,8 @@ export const ALL_ADAPTERS: AgentAdapter[] = [
   codexAdapter,
   copilotAdapter,
   cursorAdapter,
+  geminiAdapter,
+  grokAdapter,
   opencodeAdapter,
   piAdapter,
 ]

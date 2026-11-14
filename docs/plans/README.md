@@ -21,6 +21,12 @@
 | 7 | [Renderer & Outputs](./07-renderer-outputs.md) | 输出正式 Markdown rules |
 | 8 | [Safety & Validation](./08-safety-validation.md) | 补齐安全、dry-run、mock LLM 和端到端验收 |
 
+## 能力扩展计划
+
+| Plan | 目标 |
+| --- | --- |
+| [Grok Build 与 Gemini CLI Session 适配器](./grok-gemini-session-adapters.md) | 为 Grok Build 和 Gemini CLI 增加本地 Session 扫描、查询与实时读取 |
+
 ## 端到端验收链路
 
 完整 MVP 最终需要通过：

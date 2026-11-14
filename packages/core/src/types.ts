@@ -1,4 +1,4 @@
-export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'pi'
+export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'gemini' | 'grok' | 'opencode' | 'pi'
 
 /**
  * scan session 的状态机：
@@ -46,6 +46,7 @@ export interface ProbeResult {
 export interface ParsedSessionMetadata {
   cwd?: string
   gitRoot?: string
+  gitRemote?: string
   branch?: string
   headCommit?: string
 }

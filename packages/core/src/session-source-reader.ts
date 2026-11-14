@@ -12,6 +12,8 @@ import type {
 } from './evidence-coverage.js'
 import { resolveWorkspace } from './workspace.js'
 import type { AgentName, SessionStatus } from './types.js'
+import { readGeminiSession } from './gemini-session.js'
+import { readGrokSession } from './grok-session.js'
 
 export interface SessionSourceMessage {
   role: 'user' | 'assistant'
@@ -106,7 +108,7 @@ interface SqliteSourceDescriptor {
   dbPath: string
 }
 
-const JSONL_AGENTS = new Set<AgentName>(['claude', 'codex', 'cursor', 'pi'])
+const JSONL_AGENTS = new Set<AgentName>(['claude', 'codex', 'cursor', 'gemini', 'grok', 'pi'])
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -424,6 +426,78 @@ async function readNonSqliteMessages(
   signal?: AbortSignal,
   afterJsonlSnapshot?: SessionSourceReaderDeps['afterJsonlSnapshot'],
 ): Promise<SourceReadAttempt> {
+  if (session.agent === 'gemini') {
+    const watermark = captureJsonlWatermark(session.source_path, 'gemini')
+    afterJsonlSnapshot?.(session.source_path)
+    let messages: SessionSourceMessage[] = []
+    let readError: unknown
+    try {
+      const snapshot = readGeminiSession(session.source_path)
+      messages = snapshot.messages.flatMap((message) => {
+        const role = message.type === 'user'
+          ? 'user'
+          : message.type === 'gemini'
+            ? 'assistant'
+            : undefined
+        if (!role) return []
+        const output: SessionSourceMessage[] = []
+        if (message.content !== undefined) {
+          output.push({ role, content: message.content, timestamp: message.timestamp })
+        }
+        if (role === 'assistant' && Array.isArray(message.toolCalls)) {
+          for (const call of message.toolCalls) {
+            if (!call || typeof call !== 'object' || Array.isArray(call)) continue
+            const tool = call as Record<string, unknown>
+            output.push({
+              role: 'assistant',
+              timestamp: tool.timestamp ?? message.timestamp,
+              content: {
+                type: 'tool_use',
+                id: tool.id,
+                name: tool.name,
+                input: tool.args ?? {},
+                result: tool.result,
+              },
+            })
+          }
+        }
+        return output
+      })
+    } catch (error) {
+      readError = error
+    }
+    const sourceRevision = jsonlRevision(watermark)
+    if (readError) {
+      throw new SourceReaderError('SOURCE_FORMAT_INVALID', String(readError), sourceRevision)
+    }
+    return { messages, sourceRevision }
+  }
+
+  if (session.agent === 'grok') {
+    try {
+      const snapshot = readGrokSession(
+        session.source_path,
+        session.id,
+        () => afterJsonlSnapshot?.(session.source_path),
+      )
+      const messages = snapshot.events.map((event): SessionSourceMessage => ({
+        role: event.kind === 'message' && event.role === 'user' ? 'user' : 'assistant',
+        timestamp: event.timestamp,
+        content: event.kind === 'message'
+          ? event.content
+          : {
+            type: event.kind === 'tool_call' ? 'tool_use' : 'tool_result',
+            id: event.toolCallId,
+            name: event.toolName,
+            ...(event.kind === 'tool_call' ? { input: event.content } : { output: event.content }),
+          },
+      }))
+      return { messages, sourceRevision: snapshot.sourceRevision }
+    } catch (error) {
+      throw new SourceReaderError('SOURCE_FORMAT_INVALID', String(error))
+    }
+  }
+
   if (JSONL_AGENTS.has(session.agent)) {
     return readJsonlMessages(session.source_path, session.agent, signal, afterJsonlSnapshot)
   }

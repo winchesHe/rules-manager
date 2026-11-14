@@ -26,7 +26,7 @@ interface StoredSessionRow {
 }
 
 const MAX_SHOW_BYTES = 50 * 1024 * 1024
-const JSONL_AGENTS = new Set(['claude', 'codex', 'cursor', 'pi'])
+const JSONL_AGENTS = new Set(['claude', 'codex', 'cursor', 'gemini', 'grok', 'pi'])
 
 async function readOpenCodeMessages(input: OpenCodeReadInput): Promise<unknown> {
   const { createOpencode } = await import('@opencode-ai/sdk/v2')
@@ -81,7 +81,8 @@ function jsonlFiles(sourcePath: string, agent: string, enforceShowLimit = true):
   if (!fs.existsSync(sourcePath)) throw new Error(`${agent} session 源不存在：${sourcePath}`)
   const stat = fs.statSync(sourcePath)
   const files = stat.isDirectory()
-    ? collectFilesRecursive(sourcePath, (filePath) => filePath.endsWith('.jsonl'))
+    ? collectFilesRecursive(sourcePath, (filePath) => filePath.endsWith('.jsonl')
+      || (agent === 'gemini' && path.extname(filePath).toLowerCase() === '.json'))
     : [sourcePath]
   if (files.length === 0) throw new Error(`${agent} session 没有 JSONL 文件：${sourcePath}`)
   const totalBytes = files.reduce((sum, filePath) => sum + fs.statSync(filePath).size, 0)
@@ -145,6 +146,24 @@ async function streamJsonlRecords(
 ): Promise<void> {
   let recordIndex = 0
   for (const filePath of jsonlFiles(sourcePath, agent, false)) {
+    if (agent === 'gemini' && path.extname(filePath).toLowerCase() === '.json') {
+      let record: unknown
+      try {
+        record = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+      } catch {
+        throw new Error(`${agent} JSON 解析失败：${filePath}`)
+      }
+      const shouldContinue = await writeStreamRecord(
+        sessionId,
+        agent,
+        recordIndex,
+        record,
+        writeOutput,
+      )
+      if (!shouldContinue) return
+      recordIndex++
+      continue
+    }
     const input = fs.createReadStream(filePath, { encoding: 'utf8' })
     const lines = readline.createInterface({ input, crlfDelay: Infinity })
     let lineNumber = 0
@@ -202,6 +221,14 @@ async function streamRecords(
 function readJsonlRecords(sourcePath: string, agent: string): unknown[] {
   const records: unknown[] = []
   for (const filePath of jsonlFiles(sourcePath, agent)) {
+    if (agent === 'gemini' && path.extname(filePath).toLowerCase() === '.json') {
+      try {
+        records.push(JSON.parse(fs.readFileSync(filePath, 'utf8')))
+      } catch {
+        throw new Error(`${agent} JSON 解析失败：${filePath}`)
+      }
+      continue
+    }
     const lines = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)
     for (const [index, line] of lines.entries()) {
       if (!line.trim()) continue

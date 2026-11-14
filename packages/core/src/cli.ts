@@ -275,7 +275,7 @@ program
   .description('扫描 agent session 源并写入 DB')
   .option('--source <dir>', '指定源目录（包含各 agent 子目录）')
   .option('--all', '扫描所有内置 agents', false)
-  .option('--agent <names>', '扫描指定 agents（逗号分隔，如 claude,codex）')
+  .option('--agent <names>', '扫描指定 agents（逗号分隔，如 claude,gemini）')
   .option('--full', '完整重扫（忽略缓存状态）', false)
   .action(async (opts: { source?: string; all: boolean; agent?: string; full: boolean }) => {
     await runScanCommand(opts)
