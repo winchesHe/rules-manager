@@ -3942,5 +3942,5 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
   受影响 Query/Event/Source Reader/Session Show/Context 测试 53/53，App 引用校验与 prompt 测试 6/6；Core 与 App build、
   仓库 skill quick validator 及 `git diff --check` 通过。只运行带明确文件路径的增量测试，未跑全量套件。
 - 本机未安装 Grok Build，且没有 `~/.grok/sessions` 或 `~/.gemini/tmp`；本轮只通过真实格式的隔离 fixture 验收，
-  未验证个人真实会话。源仓库实现与个人 Skills worktree 均已更新；等待提交并推送分支，不合并 `main`。
+  未验证个人真实会话。实现提交 `b005145` 与个人 Skills 合同同步提交 `f5f0f3c` 已分别推送到各自功能分支，尚未合并 `main`。
 - 提交信息：`feat: 支持 Grok Build 与 Gemini CLI Session`
