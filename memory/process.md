@@ -12,3 +12,7 @@
 - 验证通过：Core 41 suites / 406 tests、App 45 suites / 289 tests、Evals 6 suites / 25 tests、Core production build、App production build 与 `git diff --check`。
 - 公开树扫描未发现公司链接、本机用户名、真实 Session 标识、常见凭据模式、私钥或数据库文件；依赖安装报告 6 个既有漏洞（1 low / 1 moderate / 4 high），未在本次文档与脱敏范围内升级依赖。
 - 提交信息：`docs: 准备公开仓库快照`
+
+## T3 Code 会话数据源第一阶段
+
+实现只读 v2 线程枚举和快照读取，保留 provider 原生 ID 关联及消息作者。定向单测 3 项通过，真实库中按标题命中单条线程并回读消息。下一阶段接入扫描、查询、实时读取及别名去重。
