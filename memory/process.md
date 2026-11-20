@@ -3944,3 +3944,7 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 - 本机未安装 Grok Build，且没有 `~/.grok/sessions` 或 `~/.gemini/tmp`；本轮只通过真实格式的隔离 fixture 验收，
   未验证个人真实会话。实现提交 `b005145` 与个人 Skills 合同同步提交 `f5f0f3c` 已分别推送到各自功能分支，尚未合并 `main`。
 - 提交信息：`feat: 支持 Grok Build 与 Gemini CLI Session`
+
+## T3 Code 会话数据源第一阶段
+
+实现只读 v2 线程枚举和快照读取，保留 provider 原生 ID 关联及消息作者。定向单测 3 项通过，真实库中按标题命中单条线程并回读消息。下一阶段接入扫描、查询、实时读取及别名去重。
