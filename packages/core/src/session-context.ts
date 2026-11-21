@@ -1,3 +1,5 @@
+import { antigravityTitle } from './antigravity-source.js'
+import { t3Title } from './t3-source.js'
 import Database from 'better-sqlite3'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -5,6 +7,7 @@ import { parse as parseYaml } from 'yaml'
 import { getDbPath, isDatabaseReady } from './db.js'
 import type { AgentName, SessionStatus } from './types.js'
 import { redactSecrets } from './redaction.js'
+import { grokSessionTitle } from './grok-session.js'
 
 export interface SessionContextQuery {
   homeDir?: string
@@ -200,9 +203,20 @@ export function resolveSessionDisplayNames(
   for (const session of sessions) {
     const key = sessionKey(session.agent, session.id)
     if (names.has(key)) continue
+    if (session.agent === 't3' || session.agent === 'antigravity') {
+      if (fs.existsSync(session.sourcePath)) {
+        const title = session.agent === 't3'
+          ? t3Title(session.sourcePath, decodeURIComponent(session.id.slice(3)))
+          : antigravityTitle(session.sourcePath, session.id)
+        if (title) names.set(key, title)
+      }
+      continue
+    }
     const title = session.agent === 'copilot'
       ? readCopilotTitle(session.sourcePath)
-      : readJsonlTitle(session.sourcePath, session.agent)
+      : session.agent === 'grok'
+        ? grokSessionTitle(session.sourcePath)
+        : readJsonlTitle(session.sourcePath, session.agent)
     if (title) names.set(key, title)
   }
   return names

@@ -2,14 +2,15 @@ import fs from 'node:fs'
 import Database from 'better-sqlite3'
 import { resolveWorkspace } from './workspace.js'
 
-const SCHEMA_VERSION = 6
+const SCHEMA_VERSION = 7
 
 /**
- * Schema v6：FS-first session 索引 + rule candidate 生成审计。
+ * Schema v7：FS-first session 索引 + rule candidate 生成审计。
  *
  * 表清单：
  *   - schema_meta：版本
  *   - sessions：session 状态机（slug / status / classified_at / rules_status）
+ *   - session_bindings：T3 线程与原生来源 ID 的关联
  *   - run_metadata：scan/reclassify/generate-rules 运行日志
  *   - rule_candidates：待人工 review 的结构化规则候选与 evidence
  *   - llm_runs：不含 prompt/response 原文的 LLM 调用 hash 审计
@@ -54,6 +55,14 @@ function applySchema(db: Database.Database): void {
       rules_status         TEXT,
       rules_generated_at   TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS session_bindings (
+      host_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      native_id TEXT NOT NULL,
+      PRIMARY KEY (host_id, provider, native_id)
+    );
+    CREATE INDEX IF NOT EXISTS session_bindings_native ON session_bindings(provider, native_id);
 
     CREATE TABLE IF NOT EXISTS run_metadata (
       id         TEXT PRIMARY KEY,

@@ -35,4 +35,18 @@ describe('buildSessionContextPrompt', () => {
   <added></added>
   <removed><session agent="codex" id="session-1" /></removed>`)
   })
+
+  it('允许把 Gemini 与 Grok Session 写入 Context 更新', () => {
+    const prompt = buildSessionContextPrompt({
+      revision: 5,
+      selected: [
+        { agent: 'gemini', id: 'gemini-session' },
+        { agent: 'grok', id: 'grok-session' },
+      ],
+      previous: [],
+    })
+
+    expect(prompt).toContain('<session agent="gemini" id="gemini-session">')
+    expect(prompt).toContain('<session agent="grok" id="grok-session">')
+  })
 })

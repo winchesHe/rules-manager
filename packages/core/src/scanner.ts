@@ -62,6 +62,12 @@ function defaultAgentSourceDir(agent: AgentAdapter['name'], homeDir?: string): s
   if (!homeDir && agent === 'codex' && process.env.CODEX_HOME) {
     return path.resolve(process.env.CODEX_HOME)
   }
+  if (!homeDir && agent === 'gemini' && process.env.GEMINI_CLI_HOME) {
+    return path.join(path.resolve(process.env.GEMINI_CLI_HOME), '.gemini')
+  }
+  if (!homeDir && agent === 'grok' && process.env.GROK_HOME) {
+    return path.resolve(process.env.GROK_HOME)
+  }
   if (agent === 'opencode') {
     const dataHome = !homeDir && process.env.XDG_DATA_HOME
       ? path.resolve(process.env.XDG_DATA_HOME)
@@ -77,6 +83,8 @@ function defaultAgentSourceDir(agent: AgentAdapter['name'], homeDir?: string): s
     }
     return path.join(home, '.pi', 'agent')
   }
+  if (agent === 'antigravity') return home
+  if (agent === 'grok') return path.join(home, '.grok')
   return path.join(home, `.${agent}`)
 }
 
@@ -261,58 +269,67 @@ export async function runScan(opts: ScanOptions): Promise<ScanSummary> {
       const state: SessionStatus = determineScanState(session, existing)
 
       try {
-        if (!existing) {
-          insertSession.run({
-            id: session.id,
-            agent: session.agent,
-            source_path: session.sourcePath,
-            workspace_link: workspaceLink,
-            slug,
-            content_hash: session.contentHash,
-            updated_at: session.updatedAt,
-            status: state,
-            first_seen_at: now,
-            last_seen_at: now,
-            classified_at: now,
-          })
-          summary.new++
-          summary.changes.new.push({
-            agent: session.agent,
-            id: session.id,
-            slug,
-          })
-        } else {
-          // 已存在 → 检查 slug 是否变化（classifier 可能给出不同 slug）
-          if (existing.slug !== slug) {
-            // 旧 slug 的 link 要移除（避免残留）
-            try {
-              removeLink(workspaceDir, existing.slug, session.id)
-            } catch {
-              // fs 已 reconcile 失败仅记日志，DB 仍按新 slug 写
+        db.transaction(() => {
+          if (session.nativeBindings) {
+            db.prepare('DELETE FROM session_bindings WHERE host_id = ?').run(session.id)
+            const insert = db.prepare('INSERT OR IGNORE INTO session_bindings VALUES (?, ?, ?)')
+            for (const binding of session.nativeBindings) {
+              if (binding.nativeId) insert.run(session.id, binding.provider, binding.nativeId)
             }
           }
-          updateSession.run({
-            id: session.id,
-            source_path: session.sourcePath,
-            workspace_link: workspaceLink,
-            slug,
-            content_hash: session.contentHash,
-            updated_at: session.updatedAt,
-            status: state,
-            last_seen_at: now,
-            classified_at: now,
-          })
-          if (state === 'updated') {
-            summary.updated++
-            summary.changes.updated.push({
+          if (!existing) {
+            insertSession.run({
+              id: session.id,
+              agent: session.agent,
+              source_path: session.sourcePath,
+              workspace_link: workspaceLink,
+              slug,
+              content_hash: session.contentHash,
+              updated_at: session.updatedAt,
+              status: state,
+              first_seen_at: now,
+              last_seen_at: now,
+              classified_at: now,
+            })
+            summary.new++
+            summary.changes.new.push({
               agent: session.agent,
               id: session.id,
               slug,
             })
           } else {
-            summary.unchanged++
+            // 已存在 → 检查 slug 是否变化（classifier 可能给出不同 slug）
+            if (existing.slug !== slug) {
+              // 旧 slug 的 link 要移除（避免残留）
+              try {
+                removeLink(workspaceDir, existing.slug, session.id)
+              } catch {
+                // fs 已 reconcile 失败仅记日志，DB 仍按新 slug 写
+              }
+            }
+            updateSession.run({
+              id: session.id,
+              source_path: session.sourcePath,
+              workspace_link: workspaceLink,
+              slug,
+              content_hash: session.contentHash,
+              updated_at: session.updatedAt,
+              status: state,
+              last_seen_at: now,
+              classified_at: now,
+            })
+            if (state === 'updated') {
+              summary.updated++
+              summary.changes.updated.push({
+                agent: session.agent,
+                id: session.id,
+                slug,
+              })
+            } else {
+              summary.unchanged++
+            }
           }
-        }
+        })()
       } catch (err) {
         summary.errors++
         errorLog.push({

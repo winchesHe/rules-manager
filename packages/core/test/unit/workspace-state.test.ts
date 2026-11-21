@@ -187,22 +187,22 @@ describe('initDatabase schema', () => {
     expect(row).toBeTruthy()
   })
 
-  it('schema v6 有 5 张表（llm_runs / rule_candidates / run_metadata / schema_meta / sessions）', () => {
+  it('schema v7 包含会话来源关联表', () => {
     const db = initDatabase(home)
     const tables = (db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
       .all() as Array<{ name: string }>).map((r) => r.name)
     db.close()
-    expect(tables).toEqual(['llm_runs', 'rule_candidates', 'run_metadata', 'schema_meta', 'sessions'])
+    expect(tables).toEqual(['llm_runs', 'rule_candidates', 'run_metadata', 'schema_meta', 'session_bindings', 'sessions'])
   })
 
-  it('schema_meta.version = 6', () => {
+  it('schema_meta.version = 7', () => {
     const db = initDatabase(home)
     const row = db
       .prepare("SELECT value FROM schema_meta WHERE key = 'version'")
       .get() as { value: string }
     db.close()
-    expect(row.value).toBe('6')
+    expect(row.value).toBe('7')
   })
 
   it('不应保存完整 content 字段（sessions 表无 content 列）', () => {

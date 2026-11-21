@@ -339,7 +339,7 @@ export function buildEvidenceBundle(
   }
 }
 
-const JSONL_AGENTS = new Set(['claude', 'codex', 'cursor', 'pi'])
+const JSONL_AGENTS = new Set(['claude', 'codex', 'cursor', 'gemini', 'grok', 'pi'])
 
 function legacyEvidenceMessages(
   result: SessionSourceReadResult,

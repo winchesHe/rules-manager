@@ -15,7 +15,7 @@ export const SESSION_QUERY_VERSION = 2 as const
 export const SESSION_QUERY_LEGACY_VERSION = 1 as const
 export const TOOL_REGISTRY_VERSION = 2 as const
 
-const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'opencode', 'pi'])
+const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 't3', 'antigravity', 'opencode', 'pi'])
 const statusSchema = z.enum(['new', 'updated', 'unchanged', 'missing', 'error'])
 const keywordFieldSchema = z.enum([
   'user',
@@ -954,8 +954,16 @@ function loadCandidates(
       clauses.push('updated_at <= ?')
       parameters.push(window.until)
     }
+    const hasBindings = Boolean(db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_bindings'",
+    ).get())
     if (query.scope?.agents) {
-      clauses.push(`agent IN (${placeholders(query.scope.agents.length)})`)
+      const slots = placeholders(query.scope.agents.length)
+      if (hasBindings) {
+        clauses.push(`(agent IN (${slots}) OR (agent = 't3' AND id IN
+          (SELECT host_id FROM session_bindings WHERE provider IN (${slots}))))`)
+        parameters.push(...query.scope.agents)
+      } else clauses.push(`agent IN (${slots})`)
       parameters.push(...query.scope.agents)
     }
     if (query.scope?.projects) {
@@ -968,9 +976,13 @@ function loadCandidates(
     }
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
     return db.prepare(`
-      SELECT id, agent, slug, updated_at, status
-      FROM sessions
-      ${where}
+      WITH candidates AS (SELECT id, agent, slug, updated_at, status FROM sessions ${where})
+      SELECT * FROM candidates c
+      ${hasBindings ? `WHERE NOT EXISTS (
+        SELECT 1 FROM session_bindings b JOIN candidates host ON host.id = b.host_id
+        WHERE b.provider = c.agent AND b.native_id = c.id AND host.agent = 't3'
+          AND host.status NOT IN ('error','missing')
+      )` : ''}
       ORDER BY updated_at DESC, id ASC
     `).all(...parameters) as CandidateRow[]
   } finally {

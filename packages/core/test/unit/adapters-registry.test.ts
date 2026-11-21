@@ -12,7 +12,7 @@ describe('getAdapters', () => {
       /Unknown agents?: foo, bar/,
     )
     expect(() => getAdapters(['foo'] as unknown as AgentName[])).toThrow(
-      /available: claude, codex, copilot, cursor, opencode, pi/,
+      /available: claude, codex, copilot, cursor, gemini, grok, opencode, pi/,
     )
   })
 
@@ -20,14 +20,18 @@ describe('getAdapters', () => {
     expect(getAdapters([])).toEqual([])
   })
 
-  it('ALL_ADAPTERS 涵盖所有 6 个内置 agent', () => {
+  it('ALL_ADAPTERS 涵盖所有 10 个内置 agent', () => {
     expect(ALL_ADAPTERS.map((a) => a.name).sort()).toEqual([
+      'antigravity',
       'claude',
       'codex',
       'copilot',
       'cursor',
+      'gemini',
+      'grok',
       'opencode',
       'pi',
+      't3',
     ])
   })
 })

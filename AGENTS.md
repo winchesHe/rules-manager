@@ -2,7 +2,7 @@
 
 ## 项目本质
 
-本地优先 AI agent session 管理工具。扫描 6 个 agent（claude / codex / copilot / cursor / opencode / pi）的本地 session，聚合成 project 归类，并支持生成、审核与发布 rule 文件。OpenCode 的权威来源是 SQLite，其余主要是 JSONL/YAML。
+本地优先 AI agent session 管理工具。扫描 Claude、Codex、Copilot、Cursor、Gemini CLI、Grok Build、T3 Code、Antigravity、OpenCode 和 Pi 的本地会话，按项目归类，并支持生成、审核与发布规则。
 
 ## 红线
 
@@ -77,7 +77,7 @@ console.log(db.prepare('SELECT slug, COUNT(*) AS c FROM sessions GROUP BY slug')
 SCRATCH="$(pwd)/.scratch" && rm -rf "$SCRATCH" && mkdir -p "$SCRATCH"
 HOME="$SCRATCH" node dist/cli.js init --non-interactive
 mkdir -p "$SCRATCH/.memory-manager/sources"
-for a in claude codex copilot cursor; do
+for a in claude codex copilot cursor gemini grok; do
   ln -sfn ~/.$a "$SCRATCH/.memory-manager/sources/$a"
 done
 ln -sfn ~/.local/share/opencode "$SCRATCH/.memory-manager/sources/opencode"
@@ -94,7 +94,7 @@ HOME="$SCRATCH" node dist/cli.js projects list
 src/
   cli.ts                 Commander 入口（命令注册）
   commands/              命令实现层（init / scan / sessions / projects）
-  adapters/{claude,codex,copilot,cursor,opencode,pi}.ts  6 内置 adapter
+  adapters/{claude,codex,copilot,cursor,gemini,grok,opencode,pi}.ts  8 内置 adapter
   adapters/shared.ts     fileHash / readJsonlObjects / defaultNormalize
   scanner.ts             discover → parse → normalize → 写库 + 归类
   classifier.ts          hints → slug 纯函数（classify + normalizeSlug）
