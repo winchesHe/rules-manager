@@ -195,7 +195,8 @@ function classifyOrigin(draft: EventDraft): Pick<SessionEvent, 'origin' | 'origi
   ) {
     return { origin: 'host_context', originEvidence: 'explicit-marker' }
   }
-  if (/^<session_message(?:\s|>)/i.test(text)) {
+  const forwardedByT3 = /^\[Historical user; user_message; thread=[^;\]\n]+; run=[^;\]\n]+; item=[^;\]\n]+[;\]]/.test(text)
+  if (forwardedByT3 || /^<session_message(?:\s|>)/i.test(text)) {
     return { origin: 'historical_forward', originEvidence: 'explicit-marker' }
   }
   return { origin: 'human_user', originEvidence: 'source-envelope' }

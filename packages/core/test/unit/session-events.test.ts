@@ -122,6 +122,10 @@ describe('Session Event Reader', () => {
       },
       {
         type: 'response_item',
+        payload: { type: 'message', role: 'user', content: '[Historical user; user_message; thread=parent; run=r1; item=m1; status=completed]\n原线程正文' },
+      },
+      {
+        type: 'response_item',
         payload: { type: 'message', role: 'user', content: '请总结 chrome-use 联调踩坑' },
       },
       {
@@ -145,6 +149,7 @@ describe('Session Event Reader', () => {
       { origin: 'host_context', originEvidence: 'explicit-marker' },
       { origin: 'skill_instruction', originEvidence: 'explicit-marker' },
       { origin: 'internal_job', originEvidence: 'explicit-marker' },
+      { origin: 'historical_forward', originEvidence: 'explicit-marker' },
       { origin: 'historical_forward', originEvidence: 'explicit-marker' },
       { origin: 'human_user', originEvidence: 'source-envelope' },
       { origin: 'assistant_output', originEvidence: 'source-envelope' },
