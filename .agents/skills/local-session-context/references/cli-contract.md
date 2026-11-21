@@ -32,6 +32,21 @@ memory-manager context close <run-id>
 
 `--query-json` 与 `--query-file` 互斥。分页响应存在 `nextCursor` 时继续请求，直到该字段消失。
 
+## Scan Gate 合同
+
+`scan --all` 是候选索引刷新命令。以下 Query 在 prepare 前必须有一次成功且近期的 scan：
+
+- 使用 `lastDays`、`since`/`until` 的“最近/最新/期间”检索；
+- 省略 `where` 的全量检索；
+- 按关键词、tool family、mention 或项目筛选候选；
+- 用户要求“完整覆盖”“全部相关 Session”或 coverage 证明。
+
+一次 retrieval run 只需 scan 一次，scan receipt 至少包含 `completedAt`、索引 revision/时间、扫描来源或候选数量、error 数量和 limitations。`context prepare` 应校验该 receipt；缺失或过期时返回结构化 `scan_required`，并在 `nextAction` 指向 `memory-manager scan --all`。scan 错误不得被解释为零命中。
+
+已知 `sessionId`/event/part 的定向回读可以走显式 stale/degraded 路径，但输出必须带 `indexFreshness=stale` 和原因；该路径不能声称候选集合完整，也不能替代最新/全量 Query 的 scan。
+
+scan receipt 只证明候选索引刷新，不证明正文已读取。`contentMode=live-source` 仍由 `context read`/`context locate` 负责；source revision 变化、selection change 和 scan 后索引变化必须分别披露。
+
 ## Query JSON v2
 
 ```json
