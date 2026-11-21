@@ -4,7 +4,7 @@ export interface Project {
   agents: string[]
 }
 
-export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'gemini' | 'grok' | 'opencode' | 'pi'
+export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'gemini' | 'grok' | 't3' | 'antigravity' | 'opencode' | 'pi'
 export type SessionStatus = 'new' | 'updated' | 'unchanged' | 'missing' | 'error'
 
 export interface ProjectSession {

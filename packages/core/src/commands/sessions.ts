@@ -1,3 +1,4 @@
+import { readSessionEventSources } from '../session-events.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import readline from 'node:readline'
@@ -332,6 +333,13 @@ export async function runSessionsShow(
 ): Promise<void> {
   const session = loadStoredSession(sessionId, opts.homeDir)
   const writeOutput = deps.writeOutput ?? writeStdout
+  if (session.agent === 't3' || session.agent === 'antigravity') {
+    const [source] = await readSessionEventSources([{ id: sessionId, agent: session.agent }], { homeDir: opts.homeDir })
+    if (source.errorCode && source.status !== 'empty') throw new Error(source.errorMessage)
+    if (opts.stream) return streamRecords(sessionId, session.agent, source.events, writeOutput, '会话为空')
+    console.log(JSON.stringify({ sessionId, agent: session.agent, records: source.events }, null, 2))
+    return
+  }
   if (JSONL_AGENTS.has(session.agent)) {
     if (opts.stream) {
       await streamJsonlRecords(sessionId, session.agent, session.source_path, writeOutput)

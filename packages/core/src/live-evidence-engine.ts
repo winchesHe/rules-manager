@@ -187,7 +187,7 @@ const TARGETED_STOP_TERMS = new Set([
 const TARGETED_HAN_BREAKS = /(?:一下|以及|什么|全部|所有|总结|有关|相关|帮我|需要|怎么|如何|完成|快速|避免|下次|经验|里面|之前|找出|查找)/u
 
 const COMPLETE_CLAIM = /(?:全部(?:读取|处理|总结|覆盖)|完整(?:读取|处理|总结|覆盖)|所有会话(?:都|均)?(?:已)?(?:读取|处理|总结|覆盖)|(?:已)?(?:读取|处理|总结|覆盖)(?:了)?(?:全部|所有)(?:会话|sessions?)|没有遗漏|无遗漏|all sessions|complete coverage|reviewed all sessions|no omissions?)/i
-const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 'opencode', 'pi'])
+const agentSchema = z.enum(['claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 't3', 'antigravity', 'opencode', 'pi'])
 const locatorSchema = z.object({
   sessionId: z.string().min(1),
   agent: agentSchema,

@@ -1,7 +1,7 @@
 import type { NativeSessionReference } from './chat-store.js'
 
 const AGENTS = new Set([
-  'claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 'opencode', 'pi',
+  'claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 't3', 'antigravity', 'opencode', 'pi',
 ])
 
 export function buildSessionContextPrompt(input: {

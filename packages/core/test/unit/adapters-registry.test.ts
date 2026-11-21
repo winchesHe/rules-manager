@@ -20,8 +20,9 @@ describe('getAdapters', () => {
     expect(getAdapters([])).toEqual([])
   })
 
-  it('ALL_ADAPTERS 涵盖所有 8 个内置 agent', () => {
+  it('ALL_ADAPTERS 涵盖所有 10 个内置 agent', () => {
     expect(ALL_ADAPTERS.map((a) => a.name).sort()).toEqual([
+      'antigravity',
       'claude',
       'codex',
       'copilot',
@@ -30,6 +31,7 @@ describe('getAdapters', () => {
       'grok',
       'opencode',
       'pi',
+      't3',
     ])
   })
 })

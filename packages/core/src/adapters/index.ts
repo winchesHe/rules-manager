@@ -8,6 +8,8 @@ import { grokAdapter } from './grok.js'
 import { opencodeAdapter } from './opencode.js'
 import { piAdapter } from './pi.js'
 
+import { t3Adapter, antigravityAdapter } from './conversation-sources.js'
+
 export const ALL_ADAPTERS: AgentAdapter[] = [
   claudeAdapter,
   codexAdapter,
@@ -17,6 +19,8 @@ export const ALL_ADAPTERS: AgentAdapter[] = [
   grokAdapter,
   opencodeAdapter,
   piAdapter,
+  t3Adapter,
+  antigravityAdapter,
 ]
 
 const ADAPTER_MAP = new Map<AgentName, AgentAdapter>(

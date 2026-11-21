@@ -1,6 +1,8 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { readT3Thread } from './t3-source.js'
+import { antigravityTitle } from './antigravity-source.js'
 import readline from 'node:readline'
 import Database from 'better-sqlite3'
 import { collectFilesRecursive } from './adapters/shared.js'
@@ -838,6 +840,25 @@ async function readGeminiEvents(
   return { events: assignIndexes(drafts), sourceRevision }
 }
 
+function nativeUserDrafts(content: unknown, timestamp: string | undefined, locator: string): EventDraft[] {
+  if (typeof content !== 'string') return contentDrafts(content, 'user', timestamp, locator)
+  const envelope = /^\s*<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/.exec(content)
+  const text = (envelope?.[1] ?? content).trim()
+  if (!text.startsWith('<t3_code_instructions>')) return contentDrafts(text, 'user', timestamp, locator)
+  const request = /<\/t3_code_instructions>\s*<user_request>([\s\S]*?)<\/user_request>/.exec(text)
+  if (!request) return [{ kind: 'metadata', content, timestamp, sourceLocator: locator }]
+  const input = request[1].trim()
+  if (!input.startsWith('Context handoff (')) return contentDrafts(input, 'user', timestamp, locator)
+  // T3 侧聊首轮把父线程历史放在同一个 user envelope 中。
+  const marker = '\nUser message:\n'
+  const boundary = input.lastIndexOf(marker)
+  const history = boundary < 0 ? input : input.slice(0, boundary)
+  return [
+    { kind: 'metadata', content: history, timestamp, sourceLocator: locator + ':handoff' },
+    ...(boundary < 0 ? [] : contentDrafts(input.slice(boundary + marker.length), 'user', timestamp, locator)),
+  ]
+}
+
 async function readGrokEvents(
   sourcePath: string,
   sessionId: string,
@@ -859,12 +880,9 @@ async function readGrokEvents(
     }
     for (const event of session.events) {
       if (event.kind === 'message') {
-        drafts.push(...contentDrafts(
-          event.content,
-          event.role,
-          event.timestamp,
-          event.sourceLocator,
-        ))
+        drafts.push(...(event.role === 'user'
+          ? nativeUserDrafts(event.content, event.timestamp, event.sourceLocator)
+          : contentDrafts(event.content, event.role, event.timestamp, event.sourceLocator)))
       } else if (event.kind === 'tool_call') {
         drafts.push(toolCallDraft({
           toolCallId: event.toolCallId,
@@ -886,11 +904,97 @@ async function readGrokEvents(
   }
 }
 
+export function readAntigravityEvents(file: string, id: string): EventReadAttempt {
+  const drafts: EventDraft[] = []
+  const title = antigravityTitle(file, id)
+  if (title) drafts.push({ kind: 'metadata', content: { title }, sourceLocator: 'summary:title' })
+  const start = fs.statSync(file)
+  if (file.endsWith('.db')) {
+    const db = new Database(file, { readonly: true, fileMustExist: true })
+    try {
+      if (db.prepare('SELECT 1 FROM steps LIMIT 1').get()) {
+        throw new SessionEventReaderError('SOURCE_FORMAT_INVALID', '原生库已有步骤，但完整 transcript 尚不可用')
+      }
+    } finally { db.close() }
+  } else {
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+      if (!line.trim()) continue
+      const step = JSON.parse(line)
+      if (!step || !Number.isInteger(step.step_index) || typeof step.type !== 'string') {
+        throw new SessionEventReaderError('SOURCE_FORMAT_INVALID', 'Antigravity transcript 步骤格式错误')
+      }
+      const locator = 'step:' + step.step_index
+      const timestamp = step.created_at
+      if (step.type === 'USER_INPUT') {
+        drafts.push(...nativeUserDrafts(step.content, timestamp, locator))
+      } else if (step.type === 'PLANNER_RESPONSE') {
+        if (step.content) drafts.push(...contentDrafts(step.content, 'assistant', timestamp, locator))
+        for (const [i, call] of (step.tool_calls ?? []).entries()) {
+          drafts.push(toolCallDraft(call, timestamp, locator + ':call:' + i))
+        }
+      } else if (step.content !== undefined || step.error !== undefined) {
+        const metadata = ['SYSTEM_MESSAGE', 'CHECKPOINT', 'GENERIC'].includes(step.type)
+        drafts.push(metadata
+          ? { kind: 'metadata', content: step.content ?? step.error, timestamp, sourceLocator: locator }
+          : toolResultDraft({ name: step.type, output: step.content ?? step.error }, timestamp, locator))
+      }
+    }
+  }
+  const end = fs.statSync(file)
+  return { events: assignIndexes(drafts), sourceRevision: {
+    kind: file.endsWith('.db') ? 'sqlite-transaction' : 'jsonl-watermark',
+    fingerprint: sha256([title, start.size, start.mtimeMs]), changedDuringRun: start.size !== end.size || start.mtimeMs !== end.mtimeMs,
+  } }
+}
+
 async function readStoredSession(
   session: StoredSessionRow,
   options: SessionEventReaderOptions,
   deps: SessionEventReaderDeps,
 ): Promise<EventReadAttempt> {
+  if (session.agent === 'antigravity') return readAntigravityEvents(session.source_path, session.id)
+  if (session.agent === 't3') {
+    const snapshot = readT3Thread(session.source_path, decodeURIComponent(session.id.slice(3)))
+    if (!snapshot) throw sourceMissing('t3', session.id)
+    const events = assignIndexes([{ kind: 'metadata', content: { title: snapshot.thread.title },
+      sourceLocator: 'thread:title' }])
+    for (const message of snapshot.messages) {
+      const role = message.role === 'assistant' ? 'assistant' : 'user'
+      for (const event of assignIndexes(contentDrafts(message.text, role, message.createdAt, 'message:' + message.id))) {
+        if (role === 'user' && message.createdBy !== 'user') {
+          event.origin = message.createdBy === 'agent' ? 'host_context' : 'unknown'
+        }
+        events.push({ ...event, index: events.length })
+      }
+    }
+    for (const tool of snapshot.tools) {
+      const call = { toolCallId: tool.id, name: tool.name, input: tool.input }
+      const locator = 'turn_item:' + tool.id
+      const drafts = [toolCallDraft(call, tool.startedAt, locator)]
+      if (tool.output !== undefined && tool.output !== null) {
+        drafts.push(toolResultDraft({ ...call, output: tool.output }, tool.completedAt, locator + ':result'))
+      }
+      events.push(...assignIndexes(drafts))
+    }
+    const revisions = [sha256(snapshot)]
+    let changedDuringRun = false
+    const refs = snapshot.bindings.flatMap(b => b.nativeId && (b.provider === 'antigravity' || b.provider === 'grok')
+      ? [{ id: b.nativeId, agent: b.provider as AgentName }] : [])
+    const rows = loadSessions(refs, options.homeDir)
+    for (const ref of refs) {
+      const native = rows.get(ref.id)
+      if (!native || native.agent !== ref.agent || native.status === 'missing') continue
+      const part = await readStoredSession(native, options, deps)
+      revisions.push(part.sourceRevision.fingerprint)
+      changedDuringRun ||= part.sourceRevision.changedDuringRun
+      for (const event of part.events) {
+        events.push({ ...event, index: events.length, sourceLocator: native.agent + ':' + native.id + ':' + event.sourceLocator })
+      }
+    }
+    events.sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
+    events.forEach((event, index) => { event.index = index })
+    return { events, sourceRevision: { kind: 'sqlite-transaction', fingerprint: sha256(revisions), changedDuringRun } }
+  }
   if (session.agent === 'gemini') {
     return readGeminiEvents(
       session.source_path,

@@ -29,8 +29,8 @@ describe('schema v6 与 LLM config', () => {
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all() as Array<{ name: string }>).map((row) => row.name)
     db.close()
 
-    expect(version.value).toBe('6')
-    expect(tables).toEqual(['llm_runs', 'rule_candidates', 'run_metadata', 'schema_meta', 'sessions'])
+    expect(version.value).toBe('7')
+    expect(tables).toEqual(['llm_runs', 'rule_candidates', 'run_metadata', 'schema_meta', 'session_bindings', 'sessions'])
   })
 
   it('v5 数据库原地迁移且保留 sessions 数据', () => {
@@ -59,7 +59,7 @@ describe('schema v6 与 LLM config', () => {
 
     const db = initDatabase(home)
     expect(db.prepare('SELECT slug FROM sessions WHERE id = ?').get('s1')).toEqual({ slug: 'demo' })
-    expect((db.prepare("SELECT value FROM schema_meta WHERE key = 'version'").get() as { value: string }).value).toBe('6')
+    expect((db.prepare("SELECT value FROM schema_meta WHERE key = 'version'").get() as { value: string }).value).toBe('7')
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'rule_candidates'").get()).toBeTruthy()
     db.close()
   })

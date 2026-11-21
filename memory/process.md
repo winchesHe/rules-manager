@@ -3948,3 +3948,9 @@ feat: FS-first 重构 步 5-8（assign / merge / reclassify + 文档同步）
 ## T3 Code 会话数据源第一阶段
 
 实现只读 v2 线程枚举和快照读取，保留 provider 原生 ID 关联及消息作者。定向单测 3 项通过，真实库中按标题命中单条线程并回读消息。下一阶段接入扫描、查询、实时读取及别名去重。
+
+## T3 Code、Antigravity 与 Grok 的统一搜索
+
+在扫描索引中保存 T3 的 provider 与原生 ID 关联，统一查询按宿主线程归并，实时回读宿主消息、结构化工具事件与已索引的原生内容。Antigravity 支持桌面端、CLI、T3 管理目录及完整 transcript；非空步骤库缺少 transcript 时报告未知。Grok 侧聊中的父线程历史与本轮用户输入分开判定。
+
+本机对三个来源使用隔离索引执行 scan --all，通过独立的标题、正文查询分别验证唯一命中、proof 定位和内容回读；随后在日常索引定向扫描三个来源并逐个验证 sessions show。Core 定向测试 80 项、App 定向测试 6 项及 Core 构建通过。

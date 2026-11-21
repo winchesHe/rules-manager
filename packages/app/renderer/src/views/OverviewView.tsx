@@ -23,7 +23,7 @@ import type {
 } from '../types'
 import { groupScanChanges } from '../view-models'
 
-const agents: AgentName[] = ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 'opencode', 'pi']
+const agents: AgentName[] = ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'grok', 't3', 'antigravity', 'opencode', 'pi']
 type AgentState = ScanProgress | { agent: AgentName; phase: 'waiting' }
 type ScanPage = 'latest' | 'create' | 'history'
 type ChangeFilter = 'all' | 'new' | 'updated' | 'missing'

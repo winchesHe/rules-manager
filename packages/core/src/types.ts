@@ -1,4 +1,4 @@
-export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'gemini' | 'grok' | 'opencode' | 'pi'
+export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'gemini' | 'grok' | 't3' | 'antigravity' | 'opencode' | 'pi'
 
 /**
  * scan session 的状态机：
@@ -11,6 +11,8 @@ export type AgentName = 'claude' | 'codex' | 'copilot' | 'cursor' | 'gemini' | '
 export type SessionStatus = 'new' | 'updated' | 'unchanged' | 'missing' | 'error'
 
 export interface DiscoveredSession {
+  cwd?: string
+  nativeBindings?: Array<{ provider: string; nativeId: string | null }>
   id: string
   agent: AgentName
   sourcePath: string

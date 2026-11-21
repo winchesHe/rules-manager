@@ -1,3 +1,4 @@
+import { readSessionEventSources } from './session-events.js'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -610,7 +611,16 @@ export async function readSessionSources(
     try {
       const descriptor = sqliteDescriptor(session)
       let readAttempt: SourceReadAttempt
-      if (descriptor) {
+      if (session.agent === 't3' || session.agent === 'antigravity') {
+        const [source] = await readSessionEventSources([reference], { homeDir: options.homeDir, signal: options.signal })
+        if (!source.sourceRevision || source.status === 'failed' || source.status === 'unavailable') {
+          throw new SourceReaderError(source.errorCode ?? 'SOURCE_READ_FAILED', source.errorMessage ?? '无法读取会话')
+        }
+        readAttempt = { sourceRevision: source.sourceRevision, messages: source.events
+          .filter(event => event.kind !== 'metadata')
+          .map(event => ({ role: event.role === 'user' ? 'user' : 'assistant', content: event.kind === 'message'
+            ? event.content : event, timestamp: event.timestamp, origin: event.origin })) }
+      } else if (descriptor) {
         const groupKey = sqliteGroupKey(descriptor)
         if (!completedSqliteGroups.has(groupKey)) {
           const group = sqliteGroups.get(groupKey)!

@@ -39,7 +39,7 @@ memory-manager context close <run-id>
   "version": 2,
   "time": { "lastDays": 30 },
   "scope": {
-    "agents": ["claude", "codex", "copilot", "cursor", "gemini", "grok", "opencode", "pi"],
+    "agents": ["claude", "codex", "copilot", "cursor", "gemini", "grok", "t3", "antigravity", "opencode", "pi"],
     "projects": ["optional-project-slug"],
     "statuses": ["new", "updated", "unchanged"],
     "includeInternal": false
@@ -63,11 +63,13 @@ memory-manager context close <run-id>
 
 时间：`lastDays` 为正整数；也可使用 ISO 8601 `since` / `until`，但不能和 `lastDays` 混用。
 
-范围：`scope` 可省略；Agent 只允许 `claude|codex|copilot|cursor|gemini|grok|opencode|pi`。`includeInternal` 默认 false。未明确要求状态限制时，不要自行添加 `statuses`。
+范围：`scope` 可省略；Agent 只允许 `claude|codex|copilot|cursor|gemini|grok|t3|antigravity|opencode|pi`。`includeInternal` 默认 false。未明确要求状态限制时，不要自行添加 `statuses`。
 
 本地会话来源：Gemini CLI 位于 `~/.gemini/tmp/<project>/chats/session-*.jsonl`；Grok Build 位于
 `${GROK_HOME:-~/.grok}/sessions/<encoded-cwd>/<session-id>/`，优先读取权威 `updates.jsonl`，其中没有对话内容时回退到
 `chat_history.jsonl`。Grok 的 `summary.json` 只提供标题和项目元数据。搜索范围是本地 CLI 历史，不包含 Gemini 或 Grok 网页产品的云端对话。
+
+T3 Code 扫描本机 `~/.t3/userdata/statev2.sqlite` 的 v2 线程。Antigravity 扫描桌面端、CLI 和 T3 管理目录中的原生会话，从 `transcript_full.jsonl` 读取消息和工具事件。统一查询按 T3 保存的 provider 与原生 ID 归并 Grok 和 Antigravity，结果使用 T3 线程 ID，内容可从宿主和已索引的原生来源实时读取。仅有非空二进制步骤库且缺少完整 transcript 时，正文读取报告来源不可读。按标题检索用 `mentions.fields=["title"]`，按正文用 `["message"]`。
 
 布尔谓词：
 
